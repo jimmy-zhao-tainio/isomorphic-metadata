@@ -1,0 +1,15 @@
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\Samples\SampleModel.xml
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\Samples\SampleInstance.xml
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\Samples.Console.exe.config
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\Samples.Console.exe
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\Samples.Console.pdb
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\Metadata.Framework.Generic.dll
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\SampleModel.dll
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\Metadata.Framework.Generic.pdb
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\bin\Debug\net48\SampleModel.pdb
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\obj\Debug\net48\Samples.Console.csproj.AssemblyReference.cache
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\obj\Debug\net48\Samples.Console.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\obj\Debug\net48\Samples.Console.csproj.CoreCompileInputs.cache
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\obj\Debug\net48\Samples..38AC9500.Up2Date
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\obj\Debug\net48\Samples.Console.exe
+C:\Users\jimmy\Desktop\Metadata\Samples.Console\obj\Debug\net48\Samples.Console.pdb

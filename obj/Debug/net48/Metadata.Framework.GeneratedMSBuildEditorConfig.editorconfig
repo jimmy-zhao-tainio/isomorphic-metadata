@@ -1,0 +1,8 @@
+is_global = true
+build_property.RootNamespace = Metadata.Framework
+build_property.ProjectDir = C:\Users\jimmy\Desktop\Metadata\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 

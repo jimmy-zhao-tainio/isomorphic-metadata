@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ModelInstance modelName="EnterpriseBIPlatform">
+  <Entities>
+    <Entity name="Cube">
+      <Record id="1">
+        <Property name="CubeName" value="Sales Performance" />
+        <Property name="Purpose" value="Monthly revenue and margin tracking." />
+        <Property name="RefreshMode" value="Scheduled" />
+      </Record>
+      <Record id="2">
+        <Property name="CubeName" value="Finance Overview" />
+        <Property name="Purpose" value="Quarterly financial statements." />
+        <Property name="RefreshMode" value="Manual" />
+      </Record>
+    </Entity>
+    <Entity name="Dimension">
+      <Record id="1">
+        <Property name="DimensionName" value="Customer" />
+        <Property name="IsConformed" value="True" />
+        <Property name="HierarchyCount" value="2" />
+      </Record>
+      <Record id="2">
+        <Property name="DimensionName" value="Product" />
+        <Property name="IsConformed" value="False" />
+        <Property name="HierarchyCount" value="1" />
+      </Record>
+    </Entity>
+    <Entity name="Fact">
+      <Record id="1">
+        <Property name="FactName" value="SalesFact" />
+        <Property name="Grain" value="Order Line" />
+        <Property name="MeasureCount" value="12" />
+      </Record>
+    </Entity>
+    <Entity name="System">
+      <Record id="1">
+        <Property name="SystemName" value="Enterprise Analytics Platform" />
+        <Property name="Version" value="2.1" />
+        <Property name="DeploymentDate" value="2024-11-15" />
+        <Property name="SystemTypeId" value="1" />
+        <Relationship name="SystemType" target="1" />
+      </Record>
+      <Record id="2">
+        <Property name="SystemName" value="Analytics Sandbox" />
+        <Property name="Version" value="1.4" />
+        <Property name="DeploymentDate" value="2023-06-01" />
+        <Property name="SystemTypeId" value="2" />
+        <Relationship name="SystemType" target="2" />
+      </Record>
+    </Entity>
+    <Entity name="SystemCube">
+      <Record id="1">
+        <Property name="ProcessingMode" value="InMemory" />
+        <Property name="SystemId" value="1" />
+        <Property name="CubeId" value="1" />
+        <Relationship name="Cube" target="1" />
+        <Relationship name="System" target="1" />
+      </Record>
+      <Record id="2">
+        <Property name="ProcessingMode" value="DirectQuery" />
+        <Property name="SystemId" value="2" />
+        <Property name="CubeId" value="2" />
+        <Relationship name="Cube" target="2" />
+        <Relationship name="System" target="2" />
+      </Record>
+    </Entity>
+    <Entity name="SystemDimension">
+      <Record id="1">
+        <Property name="ConformanceLevel" value="Enterprise" />
+        <Property name="SystemId" value="1" />
+        <Property name="DimensionId" value="1" />
+        <Relationship name="Dimension" target="1" />
+        <Relationship name="System" target="1" />
+      </Record>
+      <Record id="2">
+        <Property name="ConformanceLevel" value="Sandbox" />
+        <Property name="SystemId" value="2" />
+        <Property name="DimensionId" value="2" />
+        <Relationship name="Dimension" target="2" />
+        <Relationship name="System" target="2" />
+      </Record>
+    </Entity>
+    <Entity name="SystemFact">
+      <Record id="1">
+        <Property name="LoadPattern" value="Incremental" />
+        <Property name="SystemId" value="1" />
+        <Property name="FactId" value="1" />
+        <Relationship name="Fact" target="1" />
+        <Relationship name="System" target="1" />
+      </Record>
+    </Entity>
+    <Entity name="SystemType">
+      <Record id="1">
+        <Property name="TypeName" value="Internal" />
+        <Property name="Description" value="Managed within the corporate data center." />
+      </Record>
+      <Record id="2">
+        <Property name="TypeName" value="External" />
+        <Property name="Description" value="Hosted by a third-party vendor." />
+      </Record>
+    </Entity>
+  </Entities>
+</ModelInstance>

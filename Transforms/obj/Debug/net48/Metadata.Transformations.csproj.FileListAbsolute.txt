@@ -1,0 +1,10 @@
+C:\Users\jimmy\Desktop\Metadata\Transforms\bin\Debug\net48\Metadata.Framework.Transformations.dll
+C:\Users\jimmy\Desktop\Metadata\Transforms\bin\Debug\net48\Metadata.Framework.Transformations.pdb
+C:\Users\jimmy\Desktop\Metadata\Transforms\bin\Debug\net48\Metadata.Framework.Generic.dll
+C:\Users\jimmy\Desktop\Metadata\Transforms\bin\Debug\net48\Metadata.Framework.Generic.pdb
+C:\Users\jimmy\Desktop\Metadata\Transforms\obj\Debug\net48\Metadata.Transformations.csproj.AssemblyReference.cache
+C:\Users\jimmy\Desktop\Metadata\Transforms\obj\Debug\net48\Metadata.Transformations.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jimmy\Desktop\Metadata\Transforms\obj\Debug\net48\Metadata.Transformations.csproj.CoreCompileInputs.cache
+C:\Users\jimmy\Desktop\Metadata\Transforms\obj\Debug\net48\Metadata.4318D10F.Up2Date
+C:\Users\jimmy\Desktop\Metadata\Transforms\obj\Debug\net48\Metadata.Framework.Transformations.dll
+C:\Users\jimmy\Desktop\Metadata\Transforms\obj\Debug\net48\Metadata.Framework.Transformations.pdb

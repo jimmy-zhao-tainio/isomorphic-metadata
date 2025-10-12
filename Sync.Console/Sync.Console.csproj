@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>Metadata.Framework.SyncConsole</RootNamespace>
+    <AssemblyName>Metadata.Framework.SyncConsole</AssemblyName>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Generic\Metadata.Framework.Generic.csproj" />
+    <ProjectReference Include="..\Transforms\Metadata.Transformations.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Samples\SampleModel.xml">
+      <Link>Samples\SampleModel.xml</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Samples\SampleInstance.xml">
+      <Link>Samples\SampleInstance.xml</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

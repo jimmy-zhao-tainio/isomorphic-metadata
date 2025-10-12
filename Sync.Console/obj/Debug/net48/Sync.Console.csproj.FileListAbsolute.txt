@@ -1,0 +1,15 @@
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Samples\SampleModel.xml
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Samples\SampleInstance.xml
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Metadata.Framework.SyncConsole.exe.config
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Metadata.Framework.SyncConsole.exe
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Metadata.Framework.SyncConsole.pdb
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Metadata.Framework.Generic.dll
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Metadata.Framework.Transformations.dll
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Metadata.Framework.Generic.pdb
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\bin\Debug\net48\Metadata.Framework.Transformations.pdb
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\obj\Debug\net48\Sync.Console.csproj.AssemblyReference.cache
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\obj\Debug\net48\Sync.Console.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\obj\Debug\net48\Sync.Console.csproj.CoreCompileInputs.cache
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\obj\Debug\net48\Sync.Con.9917F6F1.Up2Date
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\obj\Debug\net48\Metadata.Framework.SyncConsole.exe
+C:\Users\jimmy\Desktop\Metadata\Sync.Console\obj\Debug\net48\Metadata.Framework.SyncConsole.pdb

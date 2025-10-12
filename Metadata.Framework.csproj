@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>Metadata.Framework</RootNamespace>
+    <AssemblyName>Metadata.Framework</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Generic\**" />
+    <Compile Remove="Transforms\**" />
+    <Compile Remove="Transforms.Console\**" />
+    <Compile Remove="Generated\**" />
+    <Compile Remove="Samples\**" />
+    <Compile Remove="Samples.Console\**" />
+    <Compile Remove="Sync.Console\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Samples\SampleModel.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Samples\SampleInstance.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Generic\Metadata.Framework.Generic.csproj" />
+  </ItemGroup>
+</Project>

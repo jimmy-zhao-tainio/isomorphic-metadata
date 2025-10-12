@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Model name="EnterpriseBIPlatform">
+  <Entities>
+    <Entity name="Cube">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="CubeName" dataType="string" isNullable="false" />
+        <Property name="Purpose" dataType="string" isNullable="true" />
+        <Property name="RefreshMode" dataType="string" isNullable="true" />
+      </Properties>
+    </Entity>
+    <Entity name="Dimension">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="DimensionName" dataType="string" isNullable="false" />
+        <Property name="IsConformed" dataType="bool" isNullable="false" />
+        <Property name="HierarchyCount" dataType="string" isNullable="true" />
+      </Properties>
+    </Entity>
+    <Entity name="Fact">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="FactName" dataType="string" isNullable="false" />
+        <Property name="Grain" dataType="string" isNullable="true" />
+        <Property name="MeasureCount" dataType="string" isNullable="true" />
+        <Property name="BusinessArea" dataType="string" isNullable="true" />
+      </Properties>
+    </Entity>
+    <Entity name="Measure">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="MeasureName" dataType="string" isNullable="false" />
+        <Property name="MDX" dataType="string" isNullable="true" />
+        <Property name="CubeId" dataType="string" isNullable="false" />
+      </Properties>
+      <Relationships>
+        <Relationship target="Cube" />
+      </Relationships>
+    </Entity>
+    <Entity name="System">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="SystemName" dataType="string" isNullable="false" />
+        <Property name="Version" dataType="string" isNullable="true" />
+        <Property name="DeploymentDate" dataType="string" isNullable="true" />
+        <Property name="SystemTypeId" dataType="string" isNullable="false" />
+      </Properties>
+      <Relationships>
+        <Relationship target="SystemType" />
+      </Relationships>
+    </Entity>
+    <Entity name="SystemCube">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="ProcessingMode" dataType="string" isNullable="true" />
+        <Property name="SystemId" dataType="string" isNullable="false" />
+        <Property name="CubeId" dataType="string" isNullable="false" />
+      </Properties>
+      <Relationships>
+        <Relationship target="Cube" />
+        <Relationship target="System" />
+      </Relationships>
+    </Entity>
+    <Entity name="SystemDimension">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="ConformanceLevel" dataType="string" isNullable="true" />
+        <Property name="SystemId" dataType="string" isNullable="false" />
+        <Property name="DimensionId" dataType="string" isNullable="false" />
+      </Properties>
+      <Relationships>
+        <Relationship target="Dimension" />
+        <Relationship target="System" />
+      </Relationships>
+    </Entity>
+    <Entity name="SystemFact">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="LoadPattern" dataType="string" isNullable="true" />
+        <Property name="SystemId" dataType="string" isNullable="false" />
+        <Property name="FactId" dataType="string" isNullable="false" />
+      </Properties>
+      <Relationships>
+        <Relationship target="Fact" />
+        <Relationship target="System" />
+      </Relationships>
+    </Entity>
+    <Entity name="SystemType">
+      <Properties>
+        <Property name="Id" dataType="string" isNullable="false" />
+        <Property name="TypeName" dataType="string" isNullable="false" />
+        <Property name="Description" dataType="string" isNullable="true" />
+      </Properties>
+    </Entity>
+  </Entities>
+</Model>
