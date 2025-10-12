@@ -2,7 +2,7 @@
 
 > Round-trip metadata definitions across XML, C# POCOs, and SQL Server while keeping database instances in sync.
 
-This repo shows how to treat metadata and the data it governs as *isomorphic* representations. It lets you move seamlessly between a generic metadata model, generated code, SQL schema/data, and a live SQL Server database.
+This repo shows how to treat metadata and the data it governs as \*isomorphic\* representations. It lets you move seamlessly between a generic metadata model, generated typed code, SQL schema/data, and a live SQL Server database.
 
 ## Highlights
 
@@ -84,3 +84,4 @@ Keep custom domain helpers outside the generated file. For example, Samples/Samp
 
 - .NET SDK (net48 target).
 - SQL Server (Developer or Express/LocalDB). Update connection strings in Sync.Console or pass them as args.
+
