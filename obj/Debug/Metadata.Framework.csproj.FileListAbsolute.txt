@@ -1,9 +1,0 @@
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\Metadata.Framework.exe.config
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\Metadata.Framework.exe
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\Metadata.Framework.pdb
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.Framework.csproj.AssemblyReference.cache
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.Framework.csproj.CoreCompileInputs.cache
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.Framework.exe
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.Framework.pdb
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\SampleMetadataModel.xml
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\SampleMetadataInstance.xml

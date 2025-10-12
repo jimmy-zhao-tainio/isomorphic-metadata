@@ -1,7 +1,0 @@
-C:\Users\jimmy\Desktop\Metadata\Generic\bin\Debug\net48\Metadata.Framework.Generic.dll
-C:\Users\jimmy\Desktop\Metadata\Generic\bin\Debug\net48\Metadata.Framework.Generic.pdb
-C:\Users\jimmy\Desktop\Metadata\Generic\obj\Debug\net48\Metadata.Framework.Generic.csproj.AssemblyReference.cache
-C:\Users\jimmy\Desktop\Metadata\Generic\obj\Debug\net48\Metadata.Framework.Generic.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\jimmy\Desktop\Metadata\Generic\obj\Debug\net48\Metadata.Framework.Generic.csproj.CoreCompileInputs.cache
-C:\Users\jimmy\Desktop\Metadata\Generic\obj\Debug\net48\Metadata.Framework.Generic.dll
-C:\Users\jimmy\Desktop\Metadata\Generic\obj\Debug\net48\Metadata.Framework.Generic.pdb

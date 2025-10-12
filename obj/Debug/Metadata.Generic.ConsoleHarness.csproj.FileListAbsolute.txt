@@ -1,8 +1,0 @@
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.Generic.ConsoleHarness.csproj.AssemblyReference.cache
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.Generic.ConsoleHarness.csproj.CoreCompileInputs.cache
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\SampleMetadata.xml
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\Metadata.GenericModel.ConsoleHarness.exe.config
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\Metadata.GenericModel.ConsoleHarness.exe
-C:\Users\jimmy\Desktop\Metadata\bin\Debug\Metadata.GenericModel.ConsoleHarness.pdb
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.GenericModel.ConsoleHarness.exe
-C:\Users\jimmy\Desktop\Metadata\obj\Debug\Metadata.GenericModel.ConsoleHarness.pdb
