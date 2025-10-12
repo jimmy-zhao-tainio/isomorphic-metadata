@@ -2,7 +2,7 @@
 
 > Round-trip metadata definitions across XML, C# POCOs, and SQL Server while keeping database instances in sync.
 
-This repo shows how to treat metadata and the data it governs as \*isomorphic\* representations. It lets you move seamlessly between a generic metadata model, generated typed code, SQL schema/data, and a live SQL Server database.
+This repo shows how to treat metadata and the data it governs as *isomorphic* representations. It lets you move seamlessly between a generic metadata model, generated typed code, SQL schema/data, and a live SQL Server database.
 
 ## Highlights
 
@@ -22,19 +22,19 @@ This repo shows how to treat metadata and the data it governs as \*isomorphic\* 
 | Transforms.Console | CLI that reads XML and regenerates C#/SQL artifacts. |
 | Samples | Generated POCO sources compiled into the SampleModel assembly for reuse. |
 | Samples.Console | Harness that loads SampleModel.xml and SampleInstance.xml, materializes the generated classes, and prints them. |
-| Sync.Console | Orchestrates the SQL -> metadata -> XML/code round trip and prints schema diffs. |
+| Sync.Console | Orchestrates the SQL → metadata → XML/code round trip and prints schema diffs. |
 
 ## Sample workflow
 
 1. **Build everything**
 
-   `powershell
+   `ash
    dotnet build Metadata.Framework.sln
    `
 
 2. **Generate classes/schema/data from XML**
 
-   `powershell
+   `ash
    dotnet run --project Transforms.Console/Metadata.Transformations.Console.csproj
    `
 
@@ -42,14 +42,14 @@ This repo shows how to treat metadata and the data it governs as \*isomorphic\* 
 
 3. **Apply to SQL Server**
 
-   `powershell
+   `ash
    sqlcmd -S localhost -i Samples/SampleModel.sql
    sqlcmd -S localhost -d EnterpriseBIPlatform -i Samples/SampleInstance.sql
    `
 
 4. **Round-trip back from SQL**
 
-   `powershell
+   `ash
    dotnet run --project Sync.Console/Sync.Console.csproj
    `
 
@@ -60,7 +60,7 @@ This repo shows how to treat metadata and the data it governs as \*isomorphic\* 
 
 5. **Inspect the typed model**
 
-   `powershell
+   `ash
    dotnet run --project Samples.Console/Samples.Console.csproj
    `
 
@@ -84,4 +84,3 @@ Keep custom domain helpers outside the generated file. For example, Samples/Samp
 
 - .NET SDK (net48 target).
 - SQL Server (Developer or Express/LocalDB). Update connection strings in Sync.Console or pass them as args.
-
