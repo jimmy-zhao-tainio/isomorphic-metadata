@@ -12,12 +12,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Generic\**" />
-    <Compile Remove="Transforms\**" />
-    <Compile Remove="Transforms.Console\**" />
     <Compile Remove="Generated\**" />
     <Compile Remove="Samples\**" />
     <Compile Remove="Samples.Console\**" />
-    <Compile Remove="Sync.Console\**" />
     <Compile Remove="MetadataStudio.Core\**" />
     <Compile Remove="MetadataStudio.Adapters\**" />
     <Compile Remove="MetadataStudio.Cli\**" />

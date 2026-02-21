@@ -314,6 +314,8 @@ Mental model:
 
 - `meta instance diff <left> <right>` produces a diff artifact that describes how to transform Left instance data into Right instance data.
 - `meta instance merge <target> <diffWorkspace>` applies that Left -> Right transformation to a target workspace (typically the same workspace used as Left when the diff was created).
+- The diff artifact is a deterministic, scoped change-set: it captures only row/property/relationship differences, not a full copy of the right workspace instance.
+- Merge applies that scoped change-set to the target workspace and validates integrity while applying.
 
 What the diff captures:
 
@@ -345,6 +347,7 @@ Aligned mode supports model differences by introducing an explicit alignment wor
 - `meta instance diff-aligned` includes only aligned scope in the diff artifact.
 - `meta instance merge-aligned` applies only within that aligned scope on the target workspace.
 - Integrity rules still apply; merge-aligned fails hard on invalid operations.
+- In practice this means aligned mode can merge mapped subsets across different models while leaving out-of-scope data unchanged.
 
 ```powershell
 meta instance diff-aligned .\LeftWs .\RightWs .\AlignmentWs
