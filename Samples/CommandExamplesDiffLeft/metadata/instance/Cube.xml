@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <EnterpriseBIPlatform>
-  <CubeList>
+  <Cubes>
     <Cube Id="1">
       <CubeName>Sales Performance</CubeName>
       <Purpose>Monthly revenue and margin tracking.</Purpose>
@@ -21,5 +21,5 @@
       <Purpose>Diff sample</Purpose>
       <RefreshMode>Manual</RefreshMode>
     </Cube>
-  </CubeList>
+  </Cubes>
 </EnterpriseBIPlatform>

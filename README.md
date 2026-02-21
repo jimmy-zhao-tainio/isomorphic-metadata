@@ -77,6 +77,7 @@ meta status --workspace .\Samples\MyWorkspace
 - `dataType="string"` is default and omitted.
 - `isRequired="true"` is default and omitted.
 - `isRequired` replaces legacy `isNullable`.
+- `Entity plural="..."` is optional; if omitted, plural defaults to `<EntityName>s`.
 
 Example:
 
@@ -255,11 +256,49 @@ meta instance merge-aligned .\TargetWs .\RightWs.instance-diff-aligned
 - Missing value and explicit empty value are distinct.
 - Relationship targets are single-target and validated.
 
+## Generated C# API usage
+
+Generated model API shape:
+
+- Root singleton class named by model (example: `EnterpriseBIPlatform`)
+- Loader class `<ModelName>Model` (example: `EnterpriseBIPlatformModel`)
+- Entity collections exposed as plural names (`<EntityName>s` by default, or model `plural=` override)
+- Rows expose `Id`, scalar properties, `<TargetEntity>Id`, and `<TargetEntity>` navigation
+
+Example:
+
+```csharp
+using GeneratedModel;
+using System;
+using System.Data.Common;
+
+// Load immutable singleton snapshot from XML workspace:
+EnterpriseBIPlatformModel.LoadFromXml(@"C:\repo\Metadata\Samples");
+
+// Or load from SQL:
+// DbConnection conn = ...;
+// EnterpriseBIPlatformModel.LoadFromSql(conn, "dbo");
+
+foreach (var m in EnterpriseBIPlatform.Measures)
+{
+    Console.WriteLine(m.Id);
+    Console.WriteLine(m.Cube?.Name);
+}
+
+var m0 = EnterpriseBIPlatform.Measures.GetId(1);
+var cubeName = m0.Cube?.Name;
+```
+
+Notes:
+
+- Accessing `EnterpriseBIPlatform.Measures` before load throws:
+  `EnterpriseBIPlatform is not loaded. Call EnterpriseBIPlatformModel.LoadFromXml/LoadFromSql first.`
+- Collections implement `IEnumerable<T>` and provide `GetId(int)` / `TryGetId(int, out T)`.
+
 ## Command references
 
 - Full surface and contracts: `COMMANDS.md`
 - Real command transcript examples: `COMMANDS-EXAMPLES.md`
-- Human output grammar: `OUTPUT-GRAMMAR.md`
 
 ## Tests
 

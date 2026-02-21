@@ -40,6 +40,7 @@ namespace Metadata.Framework.Generic
             ValidateIdentifier(model.Name, "Model name", result.Errors);
 
             var entityLookup = new Dictionary<string, Entity>(StringComparer.OrdinalIgnoreCase);
+            var entityContainerLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var entitiesElement = modelElement.Element("Entities");
             if (entitiesElement == null)
             {
@@ -54,8 +55,16 @@ namespace Metadata.Framework.Generic
 
                 var entity = new Entity
                 {
-                    Name = entityName
+                    Name = entityName,
+                    Plural = GetAttributeValue(entityElement, "plural").Trim()
                 };
+                if (!string.IsNullOrWhiteSpace(entity.Plural))
+                {
+                    ValidateIdentifier(
+                        entity.Plural,
+                        $"Entity plural name on '{entity.Name}'",
+                        result.Errors);
+                }
 
                 EnsureProperties(entity, entityElement.Element("Properties"), result.Errors);
 
@@ -68,6 +77,18 @@ namespace Metadata.Framework.Generic
                     }
 
                     entityLookup[entity.Name] = entity;
+
+                    var containerName = entity.GetPluralName();
+                    string existingEntityName;
+                    if (entityContainerLookup.TryGetValue(containerName, out existingEntityName))
+                    {
+                        result.Errors.Add(
+                            $"Duplicate entity container name '{containerName}' for entities '{existingEntityName}' and '{entity.Name}'.");
+                    }
+                    else
+                    {
+                        entityContainerLookup[containerName] = entity.Name;
+                    }
                 }
             }
 

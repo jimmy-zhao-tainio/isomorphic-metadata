@@ -56,6 +56,7 @@ public static class WorkspaceSnapshotCloner
             var entityClone = new EntityDefinition
             {
                 Name = entity.Name,
+                Plural = entity.Plural,
             };
 
             foreach (var property in entity.Properties)

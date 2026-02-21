@@ -309,6 +309,7 @@ internal sealed partial class CliRuntime
             var entity = new EntityDefinition
             {
                 Name = ((string?)entityElement.Attribute("name") ?? string.Empty).Trim(),
+                Plural = ((string?)entityElement.Attribute("plural") ?? string.Empty).Trim(),
             };
             var propertiesElement = entityElement.Element("Properties");
             if (propertiesElement != null)
@@ -375,7 +376,10 @@ internal sealed partial class CliRuntime
 
         foreach (var entity in model.Entities.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
         {
-            lines.Add("entity|" + EscapeCanonicalPart(entity.Name));
+            lines.Add(
+                "entity|" +
+                EscapeCanonicalPart(entity.Name) + "|" +
+                EscapeCanonicalPart(entity.GetPluralName()));
             foreach (var property in entity.Properties.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
             {
                 lines.Add(
@@ -417,6 +421,7 @@ internal sealed partial class CliRuntime
             var entityClone = new EntityDefinition
             {
                 Name = entity.Name ?? string.Empty,
+                Plural = entity.Plural ?? string.Empty,
             };
             foreach (var property in entity.Properties)
             {

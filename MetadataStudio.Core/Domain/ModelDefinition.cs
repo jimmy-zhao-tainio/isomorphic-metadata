@@ -17,8 +17,14 @@ public sealed class ModelDefinition
 public sealed class EntityDefinition
 {
     public string Name { get; set; } = string.Empty;
+    public string Plural { get; set; } = string.Empty;
     public List<PropertyDefinition> Properties { get; } = new();
     public List<RelationshipDefinition> Relationships { get; } = new();
+
+    public string GetPluralName()
+    {
+        return string.IsNullOrWhiteSpace(Plural) ? Name + "s" : Plural;
+    }
 }
 
 public sealed class PropertyDefinition

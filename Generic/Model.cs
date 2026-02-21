@@ -11,8 +11,14 @@ namespace Metadata.Framework.Generic
     public class Entity
     {
         public string Name { get; set; } = "";
+        public string Plural { get; set; } = "";
         public List<Property> Properties { get; set; } = new List<Property>();
         public List<RelationshipDefinition> Relationship { get; set; } = new List<RelationshipDefinition>();
+
+        public string GetPluralName()
+        {
+            return string.IsNullOrWhiteSpace(Plural) ? (Name ?? string.Empty) + "s" : Plural;
+        }
     }
 
     public class Property

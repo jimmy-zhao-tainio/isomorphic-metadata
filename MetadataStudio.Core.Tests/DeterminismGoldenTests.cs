@@ -16,20 +16,20 @@ public sealed class DeterminismGoldenTests
     private static readonly IReadOnlyDictionary<string, string> ExpectedXmlMetadataHashes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["instance/Cube.xml"] = "38e2870cc216605b3864a8937d2db7f203cf8efdfa244f1cc69f92edb8a64dc4",
-            ["instance/Dimension.xml"] = "1d57f85733c3c88804a9709bfbb9ee4db50fb786022a5c9aa532646d55539e75",
-            ["instance/Fact.xml"] = "71274cc995b3a9205e068c64c3a24780c03e0ae3cd29bae53af3fc41fbbc8aeb",
-            ["instance/Measure.xml"] = "d5a07951a904f842a85cf9b582b07bbba29c3a030f46bf2d7b6160a50208406b",
-            ["instance/System.xml"] = "68e51da68ae30019c92eaf03e1faac85600198b5e1b01eb5b8651830c535ec83",
-            ["instance/SystemCube.xml"] = "c99e0e66d48be557b784a872db25d44cfb9097b22b278c21af0c291ab346685f",
-            ["instance/SystemDimension.xml"] = "c6be74169de98a90be91cb9f111eef2781908878b3615765e93cba597a6ac63b",
-            ["instance/SystemFact.xml"] = "6791fd3221d121de46492e1a8bd6431c8dc833c11b3efb3141600231f49413ff",
-            ["instance/SystemType.xml"] = "fdb6db2b2b03c595fcd682803aa09ca11e8d21d752551e797c75a999a9f40f2d",
+            ["instance/Cube.xml"] = "7e1cdd9d9e3ef20bf50dda876e4ce435809019c4d6d3dbbd2f2fc885c3af1858",
+            ["instance/Dimension.xml"] = "0465171623420221211b6a4aceb597227fcfb06d79dc489d495994faf9b635d7",
+            ["instance/Fact.xml"] = "03482418a41841181a954ab3bd23d93a78f6f7afef652eebf585e4270737de1f",
+            ["instance/Measure.xml"] = "9805a5fe77a8952bb1bed8f274e8f37a52ec55b3409c6da6706e39141e69796f",
+            ["instance/System.xml"] = "da7a807995ff53dfc337f344f8b7173c011c718f5b64ee880c91554781dfce12",
+            ["instance/SystemCube.xml"] = "0d012bd20081ed6ae31d2a38cd8b687ba4381f13cae1a5aabe264c04366b702d",
+            ["instance/SystemDimension.xml"] = "c8c495f17a6db14cccf0e000097b73cbdccdb1e0be29e21e057fa6e414831439",
+            ["instance/SystemFact.xml"] = "33b7bba7b37768b09b8e3b19122fe29ad063473835ed9155561aa53f5ed5d583",
+            ["instance/SystemType.xml"] = "61bd50d754f2a26b860ba877eb5429174ea26e567766dc634b78ed3f5848fb4e",
             ["model.xml"] = "6e473c65afd30cac887e822980f4ba541760da99e87ea4ec9c70c89f75b16c09",
             ["workspace.json"] = "e2b6e148a5fc8321c12054eddd6522c826b23f99b691f9de55ceb6c6ca9fa1ce",
         };
 
-    private const string ExpectedXmlMetadataCombinedHash = "9a34be9d371f2a000a566dce83ea065d0cedfa266535a9a132aab7ba6d068d35";
+    private const string ExpectedXmlMetadataCombinedHash = "b1a47b6034ed471a232c7c6e9cc24c80bd31b0178c98c44d1a019b90aa22820b";
 
     private static readonly IReadOnlyDictionary<string, string> ExpectedSqlHashes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

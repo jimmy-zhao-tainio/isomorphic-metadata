@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <EnterpriseBIPlatform>
-  <DimensionList>
+  <Dimensions>
     <Dimension Id="1">
       <DimensionName>Customer</DimensionName>
       <HierarchyCount>2</HierarchyCount>
@@ -11,5 +11,5 @@
       <HierarchyCount>1</HierarchyCount>
       <IsConformed>False</IsConformed>
     </Dimension>
-  </DimensionList>
+  </Dimensions>
 </EnterpriseBIPlatform>

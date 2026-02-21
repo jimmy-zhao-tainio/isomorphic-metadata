@@ -512,19 +512,18 @@ public sealed class WorkspaceService : IWorkspaceService
             instance.ModelName = root.Name.LocalName;
         }
 
-        var entityByName = model.Entities.ToDictionary(entity => entity.Name, StringComparer.OrdinalIgnoreCase);
+        var entityByContainer = BuildEntityByContainerLookup(model);
 
         foreach (var listElement in root.Elements())
         {
             var listName = listElement.Name.LocalName;
-            var entityName = listName.EndsWith("List", StringComparison.OrdinalIgnoreCase)
-                ? listName[..^4]
-                : listName;
-            if (!entityByName.TryGetValue(entityName, out var modelEntity))
+            if (!entityByContainer.TryGetValue(listName, out var modelEntity))
             {
                 throw new InvalidDataException(
-                    $"Instance XML list '{listName}' references unknown entity '{entityName}'.");
+                    $"Instance XML list '{listName}' references unknown entity.");
             }
+
+            var entityName = modelEntity.Name;
 
             var records = instance.GetOrCreateEntityRecords(entityName);
             foreach (var rowElement in listElement.Elements())
@@ -709,7 +708,7 @@ public sealed class WorkspaceService : IWorkspaceService
             .ToList();
 
         var root = new XElement(rootName);
-        var listElement = new XElement(entityName + "List");
+        var listElement = new XElement(modelEntity.GetPluralName());
         root.Add(listElement);
 
         var records = workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var entityRecords)
@@ -992,6 +991,7 @@ public sealed class WorkspaceService : IWorkspaceService
             var entity = new EntityDefinition
             {
                 Name = (string?)entityElement.Attribute("name") ?? string.Empty,
+                Plural = ((string?)entityElement.Attribute("plural") ?? string.Empty).Trim(),
             };
 
             var propertiesElement = entityElement.Element("Properties");
@@ -1075,6 +1075,12 @@ public sealed class WorkspaceService : IWorkspaceService
         foreach (var entity in model.Entities.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
         {
             var entityElement = new XElement("Entity", new XAttribute("name", entity.Name ?? string.Empty));
+            var defaultPlural = (entity.Name ?? string.Empty) + "s";
+            if (!string.IsNullOrWhiteSpace(entity.Plural) &&
+                !string.Equals(entity.Plural, defaultPlural, StringComparison.Ordinal))
+            {
+                entityElement.Add(new XAttribute("plural", entity.Plural));
+            }
 
             var nonIdProperties = OrderProperties(entity.Properties)
                 .Where(item => !string.Equals(item.Name, "Id", StringComparison.OrdinalIgnoreCase))
@@ -1127,6 +1133,28 @@ public sealed class WorkspaceService : IWorkspaceService
         return properties
             .OrderBy(item => string.Equals(item.Name, "Id", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static Dictionary<string, EntityDefinition> BuildEntityByContainerLookup(ModelDefinition model)
+    {
+        var lookup = new Dictionary<string, EntityDefinition>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entity in model.Entities.Where(item => !string.IsNullOrWhiteSpace(item.Name)))
+        {
+            var containerName = entity.GetPluralName();
+            if (!lookup.TryAdd(containerName, entity))
+            {
+                throw new InvalidDataException(
+                    $"Model has duplicate instance container name '{containerName}' for multiple entities.");
+            }
+
+            var legacyListName = entity.Name + "List";
+            if (!string.Equals(containerName, legacyListName, StringComparison.OrdinalIgnoreCase))
+            {
+                lookup.TryAdd(legacyListName, entity);
+            }
+        }
+
+        return lookup;
     }
 
     private static void WriteXmlToFile(XDocument document, string path, bool indented)

@@ -49,7 +49,10 @@ namespace Metadata.Framework.Transformations
                 return null;
             }
 
-            var collectionElement = new XElement(entityName + "List");
+            var collectionName = entityInstance.Entity != null
+                ? entityInstance.Entity.GetPluralName()
+                : entityName + "s";
+            var collectionElement = new XElement(collectionName);
             foreach (var record in entityInstance.Records
                 .OrderBy(r => r.Id ?? string.Empty, StringComparer.OrdinalIgnoreCase))
             {

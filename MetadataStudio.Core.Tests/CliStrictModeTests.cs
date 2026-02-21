@@ -14,6 +14,9 @@ namespace MetadataStudio.Core.Tests;
 
 public sealed class CliStrictModeTests
 {
+    private static readonly SemaphoreSlim CliBuildGate = new(1, 1);
+    private static string? cliAssemblyPath;
+
     [Fact]
     public void CommandExamples_DoNotContainLegacyHumanErrorTokens()
     {
@@ -2359,7 +2362,7 @@ public sealed class CliStrictModeTests
         params string[] arguments)
     {
         var repoRoot = FindRepositoryRoot();
-        var cliProject = Path.Combine(repoRoot, "MetadataStudio.Cli", "MetadataStudio.Cli.csproj");
+        var cliPath = await EnsureCliAssemblyAsync(repoRoot).ConfigureAwait(false);
 
         var startInfo = new ProcessStartInfo
         {
@@ -2371,10 +2374,7 @@ public sealed class CliStrictModeTests
             WorkingDirectory = repoRoot,
         };
 
-        startInfo.ArgumentList.Add("run");
-        startInfo.ArgumentList.Add("--project");
-        startInfo.ArgumentList.Add(cliProject);
-        startInfo.ArgumentList.Add("--");
+        startInfo.ArgumentList.Add(cliPath);
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -2391,6 +2391,76 @@ public sealed class CliStrictModeTests
         var stdOut = await stdOutTask.ConfigureAwait(false);
         var stdErr = await stdErrTask.ConfigureAwait(false);
         return (process.ExitCode, stdOut, stdErr, stdOut + Environment.NewLine + stdErr);
+    }
+
+    private static async Task<string> EnsureCliAssemblyAsync(string repoRoot)
+    {
+        if (!string.IsNullOrWhiteSpace(cliAssemblyPath) && File.Exists(cliAssemblyPath))
+        {
+            return cliAssemblyPath;
+        }
+
+        await CliBuildGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(cliAssemblyPath) && File.Exists(cliAssemblyPath))
+            {
+                return cliAssemblyPath;
+            }
+
+            var candidate = Path.Combine(repoRoot, "MetadataStudio.Cli", "bin", "Debug", "net9.0", "meta.dll");
+            if (!File.Exists(candidate))
+            {
+                var cliProject = Path.Combine(repoRoot, "MetadataStudio.Cli", "MetadataStudio.Cli.csproj");
+                var buildInfo = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = repoRoot,
+                };
+                buildInfo.ArgumentList.Add("build");
+                buildInfo.ArgumentList.Add(cliProject);
+                buildInfo.ArgumentList.Add("-c");
+                buildInfo.ArgumentList.Add("Debug");
+                buildInfo.ArgumentList.Add("-v");
+                buildInfo.ArgumentList.Add("quiet");
+                buildInfo.ArgumentList.Add("--nologo");
+
+                using var buildProcess = new Process { StartInfo = buildInfo };
+                buildProcess.Start();
+                var buildStdOutTask = buildProcess.StandardOutput.ReadToEndAsync();
+                var buildStdErrTask = buildProcess.StandardError.ReadToEndAsync();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                await buildProcess.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+                var buildStdOut = await buildStdOutTask.ConfigureAwait(false);
+                var buildStdErr = await buildStdErrTask.ConfigureAwait(false);
+
+                if (buildProcess.ExitCode != 0)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to build MetadataStudio.Cli for tests." +
+                        Environment.NewLine +
+                        buildStdOut +
+                        Environment.NewLine +
+                        buildStdErr);
+                }
+            }
+
+            if (!File.Exists(candidate))
+            {
+                throw new FileNotFoundException($"Could not find compiled CLI assembly at '{candidate}'.");
+            }
+
+            cliAssemblyPath = candidate;
+            return candidate;
+        }
+        finally
+        {
+            CliBuildGate.Release();
+        }
     }
 
     private static HashSet<string> AssertIdentityIds(string workspacePath, string entityName)

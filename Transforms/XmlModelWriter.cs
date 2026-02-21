@@ -33,6 +33,11 @@ namespace Metadata.Framework.Transformations
         {
             var element = new XElement("Entity",
                 new XAttribute("name", entity.Name ?? string.Empty));
+            var plural = entity.GetPluralName();
+            if (!string.Equals(plural, (entity.Name ?? string.Empty) + "s", System.StringComparison.Ordinal))
+            {
+                element.Add(new XAttribute("plural", entity.Plural ?? string.Empty));
+            }
 
             var properties = entity.Properties
                 .FindAll(property => !string.Equals(property.Name, "Id", System.StringComparison.OrdinalIgnoreCase));

@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <EnterpriseBIPlatform>
-  <SystemTypeList>
+  <SystemTypes>
     <SystemType Id="1">
       <Description>Managed within the corporate data center.</Description>
       <TypeName>Internal</TypeName>
@@ -9,5 +9,5 @@
       <Description>Hosted by a third-party vendor.</Description>
       <TypeName>External</TypeName>
     </SystemType>
-  </SystemTypeList>
+  </SystemTypes>
 </EnterpriseBIPlatform>

@@ -1,8 +1,5 @@
 using System;
-using System.Collections;
 using System.IO;
-using System.Linq;
-using Metadata.Framework.Generic;
 
 namespace Samples.ConsoleApp
 {
@@ -10,55 +7,55 @@ namespace Samples.ConsoleApp
     {
         private static void Main(string[] args)
         {
-            var modelPath = ResolveModelPath(args);
+            var workspacePath = ResolveWorkspacePath(args);
+            var modelPath = ResolveModelPath(workspacePath);
             if (!File.Exists(modelPath))
             {
                 Console.WriteLine($"Sample model not found at '{modelPath}'.");
                 return;
             }
 
-            var reader = new Reader();
-            var modelResult = reader.Read(modelPath);
-            if (modelResult.Errors.Count > 0)
-            {
-                Console.WriteLine("Errors detected while reading sample model metadata:");
-                foreach (var error in modelResult.Errors)
-                {
-                    Console.WriteLine($"  - {error}");
-                }
-                return;
-            }
-
-            var instancePath = ResolveInstancePath(args);
-            if (!File.Exists(instancePath))
+            var instancePath = ResolveInstancePath(workspacePath);
+            if (!File.Exists(instancePath) && !Directory.Exists(Path.Combine(workspacePath, "metadata", "instance")))
             {
                 Console.WriteLine($"Sample instance not found at '{instancePath}'.");
                 return;
             }
 
-            var instanceReader = new InstanceReader();
-            var instanceResult = instanceReader.Read(instancePath, modelResult.Model);
-            if (instanceResult.Errors.Count > 0)
+            GeneratedModel.EnterpriseBIPlatformModel.LoadFromXml(workspacePath);
+
+            Console.WriteLine("Model: EnterpriseBIPlatform");
+            Console.WriteLine();
+            Console.WriteLine("Measures:");
+            foreach (var measure in GeneratedModel.EnterpriseBIPlatform.Measures)
             {
-                Console.WriteLine("Errors detected while reading sample instance:");
-                foreach (var error in instanceResult.Errors)
-                {
-                    Console.WriteLine($"  - {error}");
-                }
-                return;
+                Console.WriteLine($"  Measure Id={measure.Id}, Name={measure.Name}, Cube={measure.Cube?.Name ?? "(null)"}");
             }
 
-            var typedModel = ReflectionModelMaterializer.Materialize<GeneratedModel.Model>(instanceResult.ModelInstance);
-
-            Console.WriteLine($"Model: {typedModel.Name}");
-            DisplayCollections(typedModel);
+            Console.WriteLine();
+            Console.WriteLine("Lookup example:");
+            try
+            {
+                var measure1 = GeneratedModel.EnterpriseBIPlatform.Measures.GetId(1);
+                Console.WriteLine($"  Measure 1 cube = {measure1.Cube?.Name ?? "(null)"}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Lookup failed: {ex.Message}");
+            }
         }
 
-        private static string ResolveModelPath(string[] args)
+        private static string ResolveWorkspacePath(string[] args)
         {
             if (args != null && args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
             {
-                return Path.GetFullPath(args[0]);
+                var argPath = Path.GetFullPath(args[0]);
+                if (File.Exists(argPath))
+                {
+                    return Path.GetDirectoryName(argPath);
+                }
+
+                return argPath;
             }
 
             var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
@@ -66,102 +63,20 @@ namespace Samples.ConsoleApp
             var candidate = Path.GetFullPath(relativePath);
             if (File.Exists(candidate))
             {
-                return candidate;
+                return Path.GetDirectoryName(candidate);
             }
 
-            return Path.Combine(baseDirectory, "Samples", "SampleModel.xml");
+            return Path.Combine(baseDirectory, "Samples");
         }
 
-        private static string ResolveInstancePath(string[] args)
+        private static string ResolveModelPath(string workspacePath)
         {
-            if (args != null && args.Length > 1 && !string.IsNullOrWhiteSpace(args[1]))
-            {
-                return Path.GetFullPath(args[1]);
-            }
-
-            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            var relativePath = Path.Combine(baseDirectory, "..", "..", "..", "Samples", "SampleInstance.xml");
-            var candidate = Path.GetFullPath(relativePath);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            return Path.Combine(baseDirectory, "Samples", "SampleInstance.xml");
+            return Path.Combine(workspacePath, "metadata", "model.xml");
         }
 
-        private static void DisplayCollections(GeneratedModel.Model model)
+        private static string ResolveInstancePath(string workspacePath)
         {
-            var modelType = model.GetType();
-            foreach (var property in modelType.GetProperties().OrderBy(p => p.Name))
-            {
-                if (property.PropertyType == typeof(string))
-                {
-                    continue;
-                }
-
-                if (!typeof(IEnumerable).IsAssignableFrom(property.PropertyType))
-                {
-                    continue;
-                }
-
-                var collection = property.GetValue(model) as IEnumerable;
-                if (collection == null)
-                {
-                    continue;
-                }
-
-                Console.WriteLine();
-                Console.WriteLine($"{property.Name}:");
-                foreach (var item in collection)
-                {
-                    DisplayEntity(item);
-                }
-            }
-        }
-
-        private static void DisplayEntity(object entity)
-        {
-            if (entity == null)
-            {
-                Console.WriteLine("  (null entity)");
-                return;
-            }
-
-            var entityType = entity.GetType();
-            Console.WriteLine($"  {entityType.Name}:");
-
-            foreach (var property in entityType.GetProperties())
-            {
-                if (property.PropertyType == typeof(string) || property.PropertyType.IsValueType)
-                {
-                    var value = property.GetValue(entity);
-                    Console.WriteLine($"    {property.Name}: {value ?? "(null)"}");
-                    continue;
-                }
-
-                var related = property.GetValue(entity);
-                if (related == null)
-                {
-                    Console.WriteLine($"    {property.Name}: (null)");
-                    continue;
-                }
-
-                var relatedId = GetIdValue(related);
-                Console.WriteLine($"    {property.Name}: {related.GetType().Name} ({relatedId})");
-            }
-        }
-
-        private static string GetIdValue(object entity)
-        {
-            if (entity == null)
-            {
-                return "(null)";
-            }
-
-            var idProperty = entity.GetType().GetProperty("Id");
-            var value = idProperty?.GetValue(entity);
-            return value?.ToString() ?? "(no id)";
+            return Path.Combine(workspacePath, "metadata", "instance", "Measure.xml");
         }
     }
 }

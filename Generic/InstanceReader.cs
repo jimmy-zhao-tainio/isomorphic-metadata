@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,6 +14,11 @@ namespace Metadata.Framework.Generic
             if (string.IsNullOrWhiteSpace(path))
             {
                 throw new ArgumentException("Path must not be null or empty.", nameof(path));
+            }
+
+            if (Directory.Exists(path))
+            {
+                return ReadWorkspace(path, model);
             }
 
             using (var stream = File.OpenRead(path))
@@ -34,15 +40,77 @@ namespace Metadata.Framework.Generic
             }
 
             var result = new InstanceReadResult();
-            var instance = result.ModelInstance;
-            instance.Model = model;
+            result.ModelInstance.Model = model;
 
             var document = XDocument.Load(stream);
+            ParseMonolithicDocument(document, model, result);
+            ValidateRelationshipReferences(result.ModelInstance, result.Errors);
+            return result;
+        }
+
+        public InstanceReadResult ReadWorkspace(string workspacePath, Model model)
+        {
+            if (string.IsNullOrWhiteSpace(workspacePath))
+            {
+                throw new ArgumentException("Workspace path must not be null or empty.", nameof(workspacePath));
+            }
+
+            if (model == null)
+            {
+                throw new ArgumentNullException(nameof(model));
+            }
+
+            var fullWorkspacePath = Path.GetFullPath(workspacePath);
+            var result = new InstanceReadResult();
+            result.ModelInstance.Model = model;
+
+            var shardDirectory = Path.Combine(fullWorkspacePath, "metadata", "instance");
+            if (Directory.Exists(shardDirectory))
+            {
+                ParseShardedWorkspace(shardDirectory, model, result);
+                ValidateRelationshipReferences(result.ModelInstance, result.Errors);
+                return result;
+            }
+
+            var monolithicPath = ResolveMonolithicInstancePath(fullWorkspacePath);
+            if (string.IsNullOrWhiteSpace(monolithicPath))
+            {
+                result.Errors.Add($"Could not find instance XML under workspace '{fullWorkspacePath}'.");
+                return result;
+            }
+
+            var document = XDocument.Load(monolithicPath);
+            ParseMonolithicDocument(document, model, result);
+            ValidateRelationshipReferences(result.ModelInstance, result.Errors);
+            return result;
+        }
+
+        private static void ParseShardedWorkspace(string shardDirectory, Model model, InstanceReadResult result)
+        {
+            foreach (var entityDefinition in model.Entities.Where(item => !string.IsNullOrWhiteSpace(item.Name)))
+            {
+                var entityInstance = new EntityInstance { Entity = entityDefinition };
+                result.ModelInstance.Entities.Add(entityInstance);
+
+                var shardPath = Path.Combine(shardDirectory, entityDefinition.Name + ".xml");
+                if (!File.Exists(shardPath))
+                {
+                    continue;
+                }
+
+                var document = XDocument.Load(shardPath);
+                ParseEntityFromRoot(document.Root, entityDefinition, model, entityInstance, result.Errors);
+                SortEntityRecordsById(entityInstance, entityDefinition.Name);
+            }
+        }
+
+        private static void ParseMonolithicDocument(XDocument document, Model model, InstanceReadResult result)
+        {
             var root = document.Root;
             if (root == null)
             {
                 result.Errors.Add("Missing root model element.");
-                return result;
+                return;
             }
 
             if (!string.IsNullOrWhiteSpace(model.Name) &&
@@ -51,204 +119,300 @@ namespace Metadata.Framework.Generic
                 result.Errors.Add($"Model name mismatch. Expected '{model.Name}', found '{root.Name.LocalName}'.");
             }
 
-            var entityLookup = model.Entities
-                .Where(e => !string.IsNullOrWhiteSpace(e.Name))
-                .ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
-            var recordIdsByEntity = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var entityDefinition in model.Entities.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
+            foreach (var entityDefinition in model.Entities.Where(item => !string.IsNullOrWhiteSpace(item.Name)))
             {
-                var entityInstance = new EntityInstance
-                {
-                    Entity = entityDefinition
-                };
+                var entityInstance = new EntityInstance { Entity = entityDefinition };
+                result.ModelInstance.Entities.Add(entityInstance);
+                ParseEntityFromRoot(root, entityDefinition, model, entityInstance, result.Errors);
+                SortEntityRecordsById(entityInstance, entityDefinition.Name);
+            }
+        }
 
-                var collectionElement = root.Element(entityDefinition.Name + "List");
-                if (collectionElement == null)
-                {
-                    recordIdsByEntity[entityDefinition.Name] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    instance.Entities.Add(entityInstance);
-                    continue;
-                }
+        private static void ParseEntityFromRoot(
+            XElement root,
+            Entity entityDefinition,
+            Model model,
+            EntityInstance entityInstance,
+            List<string> errors)
+        {
+            if (root == null)
+            {
+                errors.Add($"Missing root model element in shard for entity '{entityDefinition.Name}'.");
+                return;
+            }
 
-                var propertyLookup = entityDefinition.Properties
-                    .Where(p => !string.IsNullOrWhiteSpace(p.Name))
-                    .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
-                var relationshipLookup = entityDefinition.Relationship
-                    .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Entity))
-                    .ToDictionary(r => r.Entity, StringComparer.OrdinalIgnoreCase);
-                var recordIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(model.Name) &&
+                !string.Equals(model.Name, root.Name.LocalName, StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"Model name mismatch for entity '{entityDefinition.Name}'. Expected '{model.Name}', found '{root.Name.LocalName}'.");
+            }
 
-                foreach (var recordElement in collectionElement.Elements(entityDefinition.Name))
+            var collectionElements = GetCollectionElements(root, entityDefinition).ToList();
+            if (collectionElements.Count == 0)
+            {
+                return;
+            }
+
+            var propertyLookup = entityDefinition.Properties
+                .Where(property => property != null && !string.IsNullOrWhiteSpace(property.Name))
+                .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
+            var relationshipLookup = entityDefinition.Relationship
+                .Where(relationship => relationship != null && !string.IsNullOrWhiteSpace(relationship.Entity))
+                .ToDictionary(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase);
+            var modelEntityLookup = model.Entities
+                .Where(entity => entity != null && !string.IsNullOrWhiteSpace(entity.Name))
+                .ToDictionary(entity => entity.Name, StringComparer.OrdinalIgnoreCase);
+            var recordIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var collectionElement in collectionElements)
+            {
+                foreach (var rowElement in collectionElement.Elements(entityDefinition.Name))
                 {
-                    var record = new RecordInstance
+                    var record = new RecordInstance();
+                    var idAttribute = rowElement.Attribute("Id");
+                    record.Id = idAttribute != null ? idAttribute.Value : string.Empty;
+
+                    if (!TryParsePositiveInt(record.Id, out _))
                     {
-                        Id = GetAttributeValue(recordElement, "Id")
-                    };
-                    if (string.IsNullOrWhiteSpace(record.Id))
-                    {
-                        result.Errors.Add($"Record in entity '{entityDefinition.Name}' is missing required Id.");
+                        errors.Add($"Entity '{entityDefinition.Name}' contains invalid Id '{record.Id}'. Id must be a positive integer.");
                     }
                     else if (!recordIds.Add(record.Id))
                     {
-                        result.Errors.Add($"Duplicate Id '{record.Id}' in entity '{entityDefinition.Name}'.");
+                        errors.Add($"Duplicate Id '{record.Id}' in entity '{entityDefinition.Name}'.");
                     }
 
-                    foreach (var attribute in recordElement.Attributes())
+                    ParseAttributes(entityDefinition, rowElement, record, relationshipLookup, modelEntityLookup, errors);
+                    ParsePropertyElements(entityDefinition, rowElement, record, propertyLookup, relationshipLookup, errors);
+                    ValidateRequiredProperties(entityDefinition, record, errors);
+
+                    entityInstance.Records.Add(record);
+                }
+            }
+        }
+
+        private static IEnumerable<XElement> GetCollectionElements(XElement root, Entity entityDefinition)
+        {
+            if (root == null || entityDefinition == null)
+            {
+                return Enumerable.Empty<XElement>();
+            }
+
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                entityDefinition.GetPluralName(),
+            };
+
+            var legacyName = entityDefinition.Name + "List";
+            names.Add(legacyName);
+
+            return root.Elements()
+                .Where(element => names.Contains(element.Name.LocalName));
+        }
+
+        private static void ParseAttributes(
+            Entity entityDefinition,
+            XElement rowElement,
+            RecordInstance record,
+            IDictionary<string, RelationshipDefinition> relationshipLookup,
+            IDictionary<string, Entity> modelEntityLookup,
+            List<string> errors)
+        {
+            var seenRelationships = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var attribute in rowElement.Attributes())
+            {
+                var attributeName = attribute.Name.LocalName;
+                if (string.Equals(attributeName, "Id", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (attributeName.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+                {
+                    var relationshipEntityName = attributeName.Substring(0, attributeName.Length - 2);
+                    if (relationshipLookup.ContainsKey(relationshipEntityName))
                     {
-                        var attributeName = attribute.Name.LocalName;
-                        var attributeValue = attribute.Value;
-
-                        if (string.Equals(attributeName, "Id", StringComparison.OrdinalIgnoreCase))
+                        if (!TryParsePositiveInt(attribute.Value, out _))
                         {
-                            continue;
-                        }
-
-                        if (!propertyLookup.TryGetValue(attributeName, out var propertyDefinition))
-                        {
-                            result.Errors.Add($"Unknown property '{attributeName}' for entity '{entityDefinition.Name}'.");
-                            continue;
-                        }
-
-                        record.Properties.Add(new PropertyValue
-                        {
-                            Property = propertyDefinition,
-                            Value = attributeValue
-                        });
-                    }
-
-                    foreach (var propertyDefinition in entityDefinition.Properties)
-                    {
-                        if (propertyDefinition == null ||
-                            string.IsNullOrWhiteSpace(propertyDefinition.Name) ||
-                            string.Equals(propertyDefinition.Name, "Id", StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        if (propertyDefinition.IsNullable)
-                        {
-                            continue;
-                        }
-
-                        var hasValue = record.Properties.Any(p =>
-                            p.Property != null &&
-                            string.Equals(p.Property.Name, propertyDefinition.Name, StringComparison.OrdinalIgnoreCase) &&
-                            !string.IsNullOrWhiteSpace(p.Value));
-
-                        if (!hasValue)
-                        {
-                            result.Errors.Add(
-                                $"Property '{propertyDefinition.Name}' on entity '{entityDefinition.Name}' is non-nullable and must have a value.");
-                        }
-                    }
-
-                    var seenRelationships = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var relationshipElement in recordElement.Elements())
-                    {
-                        var relationshipEntityName = relationshipElement.Name.LocalName;
-                        var relationshipId = GetAttributeValue(relationshipElement, "Id");
-
-                        if (string.IsNullOrWhiteSpace(relationshipEntityName) ||
-                            string.IsNullOrWhiteSpace(relationshipId))
-                        {
-                            result.Errors.Add($"Relationship element missing entity or Id in entity '{entityDefinition.Name}'.");
-                            continue;
-                        }
-
-                        if (!entityLookup.TryGetValue(relationshipEntityName, out var relatedEntity))
-                        {
-                            result.Errors.Add($"Unknown relationship entity '{relationshipEntityName}' in entity '{entityDefinition.Name}'.");
-                            continue;
-                        }
-
-                        if (!relationshipLookup.ContainsKey(relationshipEntityName))
-                        {
-                            result.Errors.Add($"Relationship entity '{relationshipEntityName}' not defined for entity '{entityDefinition.Name}'.");
+                            errors.Add($"Entity '{entityDefinition.Name}' row '{record.Id}' has invalid relationship value '{attribute.Value}' for '{attributeName}'.");
                             continue;
                         }
 
                         if (!seenRelationships.Add(relationshipEntityName))
                         {
-                            result.Errors.Add(
-                                $"Duplicate relationship '{entityDefinition.Name}' -> '{relationshipEntityName}' on record '{record.Id}'.");
+                            errors.Add($"Entity '{entityDefinition.Name}' row '{record.Id}' has duplicate relationship attribute '{attributeName}'.");
+                            continue;
+                        }
+
+                        Entity relatedEntity;
+                        if (!modelEntityLookup.TryGetValue(relationshipEntityName, out relatedEntity))
+                        {
+                            errors.Add($"Entity '{entityDefinition.Name}' row '{record.Id}' references unknown relationship entity '{relationshipEntityName}'.");
                             continue;
                         }
 
                         record.Relationships.Add(new RelationshipValue
                         {
                             Entity = relatedEntity,
-                            Value = relationshipId
+                            Value = attribute.Value,
                         });
+
+                        continue;
                     }
-
-                    foreach (var expectedRelationship in entityDefinition.Relationship)
-                    {
-                        if (expectedRelationship == null || string.IsNullOrWhiteSpace(expectedRelationship.Entity))
-                        {
-                            continue;
-                        }
-
-                        if (!seenRelationships.Contains(expectedRelationship.Entity))
-                        {
-                            result.Errors.Add(
-                                $"Missing required relationship '{entityDefinition.Name}' -> '{expectedRelationship.Entity}' on record '{record.Id}'.");
-                        }
-                    }
-
-                    entityInstance.Records.Add(record);
                 }
 
-                entityInstance.Records.Sort((left, right) =>
-                    StringComparer.OrdinalIgnoreCase.Compare(left.Id ?? string.Empty, right.Id ?? string.Empty));
-                recordIdsByEntity[entityDefinition.Name] = recordIds;
-                instance.Entities.Add(entityInstance);
+                errors.Add($"Entity '{entityDefinition.Name}' row '{record.Id}' uses unsupported attribute '{attributeName}'. Properties must be child elements.");
             }
-
-            ValidateRelationshipReferences(instance, recordIdsByEntity, result.Errors);
-
-            return result;
         }
 
-        private static string GetAttributeValue(XElement element, string attributeName)
-        {
-            var attribute = element.Attribute(attributeName);
-            return attribute != null ? attribute.Value : string.Empty;
-        }
-
-        private static void ValidateRelationshipReferences(
-            ModelInstance instance,
-            IDictionary<string, HashSet<string>> recordIdsByEntity,
+        private static void ParsePropertyElements(
+            Entity entityDefinition,
+            XElement rowElement,
+            RecordInstance record,
+            IDictionary<string, Property> propertyLookup,
+            IDictionary<string, RelationshipDefinition> relationshipLookup,
             List<string> errors)
         {
-            foreach (var entityInstance in instance.Entities)
+            var seenProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var childElement in rowElement.Elements())
             {
-                var sourceEntityName = entityInstance.Entity?.Name ?? string.Empty;
-                foreach (var record in entityInstance.Records)
+                var childName = childElement.Name.LocalName;
+                if (relationshipLookup.ContainsKey(childName) ||
+                    (childName.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
+                     relationshipLookup.ContainsKey(childName.Substring(0, childName.Length - 2))))
+                {
+                    errors.Add($"Entity '{entityDefinition.Name}' row '{record.Id}' contains relationship element '{childName}'. Relationships must be attributes.");
+                    continue;
+                }
+
+                Property property;
+                if (!propertyLookup.TryGetValue(childName, out property) || string.Equals(childName, "Id", StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add($"Unknown property element '{childName}' for entity '{entityDefinition.Name}'.");
+                    continue;
+                }
+
+                if (!seenProperties.Add(childName))
+                {
+                    errors.Add($"Entity '{entityDefinition.Name}' row '{record.Id}' has duplicate property element '{childName}'.");
+                    continue;
+                }
+
+                record.Properties.Add(new PropertyValue
+                {
+                    Property = property,
+                    Value = childElement.Value,
+                });
+            }
+        }
+
+        private static void ValidateRequiredProperties(Entity entityDefinition, RecordInstance record, List<string> errors)
+        {
+            foreach (var property in entityDefinition.Properties)
+            {
+                if (property == null ||
+                    string.IsNullOrWhiteSpace(property.Name) ||
+                    string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase) ||
+                    property.IsNullable)
+                {
+                    continue;
+                }
+
+                var value = record.Properties.FirstOrDefault(item =>
+                    item.Property != null &&
+                    string.Equals(item.Property.Name, property.Name, StringComparison.OrdinalIgnoreCase));
+                if (value == null || string.IsNullOrWhiteSpace(value.Value))
+                {
+                    errors.Add($"Property '{property.Name}' on entity '{entityDefinition.Name}' is required and must have a non-empty value.");
+                }
+            }
+        }
+
+        private static void ValidateRelationshipReferences(ModelInstance instance, List<string> errors)
+        {
+            var recordIdsByEntity = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entity in instance.Entities)
+            {
+                var entityName = entity.Entity != null ? entity.Entity.Name : string.Empty;
+                if (string.IsNullOrWhiteSpace(entityName))
+                {
+                    continue;
+                }
+
+                recordIdsByEntity[entityName] = entity.Records
+                    .Where(record => !string.IsNullOrWhiteSpace(record.Id))
+                    .Select(record => record.Id)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+
+            foreach (var entity in instance.Entities)
+            {
+                var sourceEntityName = entity.Entity != null ? entity.Entity.Name : string.Empty;
+                if (string.IsNullOrWhiteSpace(sourceEntityName))
+                {
+                    continue;
+                }
+
+                foreach (var record in entity.Records)
                 {
                     foreach (var relationship in record.Relationships)
                     {
-                        var relatedEntityName = relationship.Entity?.Name ?? string.Empty;
-                        if (string.IsNullOrWhiteSpace(relatedEntityName))
+                        var targetEntityName = relationship.Entity != null ? relationship.Entity.Name : string.Empty;
+                        if (string.IsNullOrWhiteSpace(targetEntityName))
                         {
                             continue;
                         }
 
-                        if (!recordIdsByEntity.TryGetValue(relatedEntityName, out var relatedRecordIds))
+                        HashSet<string> targetIds;
+                        if (!recordIdsByEntity.TryGetValue(targetEntityName, out targetIds))
                         {
-                            errors.Add(
-                                $"Relationship '{sourceEntityName}' -> '{relatedEntityName}' references unknown entity.");
+                            errors.Add($"Relationship '{sourceEntityName}->{targetEntityName}' references unknown target entity.");
                             continue;
                         }
 
-                        if (!relatedRecordIds.Contains(relationship.Value))
+                        if (!targetIds.Contains(relationship.Value))
                         {
-                            errors.Add(
-                                $"Relationship '{sourceEntityName}' -> '{relatedEntityName}' on record '{record.Id}' references missing Id '{relationship.Value}'.");
+                            errors.Add($"Relationship '{sourceEntityName}->{targetEntityName}' on row '{record.Id}' references missing Id '{relationship.Value}'.");
                         }
                     }
                 }
             }
+        }
+
+        private static void SortEntityRecordsById(EntityInstance entityInstance, string entityName)
+        {
+            entityInstance.Records.Sort((left, right) =>
+            {
+                int leftId;
+                int rightId;
+                var leftParsed = TryParsePositiveInt(left.Id, out leftId);
+                var rightParsed = TryParsePositiveInt(right.Id, out rightId);
+
+                if (leftParsed && rightParsed)
+                {
+                    return leftId.CompareTo(rightId);
+                }
+
+                return StringComparer.OrdinalIgnoreCase.Compare(left.Id ?? string.Empty, right.Id ?? string.Empty);
+            });
+        }
+
+        private static bool TryParsePositiveInt(string value, out int number)
+        {
+            return int.TryParse(value, out number) && number > 0;
+        }
+
+        private static string ResolveMonolithicInstancePath(string workspacePath)
+        {
+            var candidates = new[]
+            {
+                Path.Combine(workspacePath, "metadata", "instance.xml"),
+                Path.Combine(workspacePath, "SampleInstance.xml"),
+                Path.Combine(workspacePath, "instance.xml"),
+            };
+
+            return candidates.FirstOrDefault(File.Exists);
         }
     }
 }

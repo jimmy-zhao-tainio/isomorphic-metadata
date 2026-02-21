@@ -1,10 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <EnterpriseBIPlatform>
-  <FactList>
+  <Facts>
     <Fact Id="1">
       <FactName>SalesFact</FactName>
       <Grain>Order Line</Grain>
       <MeasureCount>12</MeasureCount>
     </Fact>
-  </FactList>
+  </Facts>
 </EnterpriseBIPlatform>

@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <EnterpriseBIPlatform>
-  <SystemList>
+  <Systems>
     <System Id="1" SystemTypeId="1">
       <DeploymentDate>2024-11-15</DeploymentDate>
       <SystemName>Enterprise Analytics Platform</SystemName>
@@ -11,5 +11,5 @@
       <SystemName>Analytics Sandbox</SystemName>
       <Version>1.4</Version>
     </System>
-  </SystemList>
+  </Systems>
 </EnterpriseBIPlatform>

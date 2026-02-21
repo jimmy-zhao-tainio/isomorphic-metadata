@@ -83,6 +83,13 @@ namespace Metadata.Framework.Generic
                                         $"Table '{schema}.{entity.Name}' contains an empty Id value.");
                                 }
 
+                                int parsedRecordId;
+                                if (!int.TryParse(record.Id, out parsedRecordId) || parsedRecordId <= 0)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Table '{schema}.{entity.Name}' contains non-numeric Id '{record.Id}'.");
+                                }
+
                                 if (!seenRecordIds.Add(record.Id))
                                 {
                                     throw new InvalidOperationException(
@@ -108,10 +115,15 @@ namespace Metadata.Framework.Generic
                                     }
 
                                     var value = reader[columnName];
+                                    if (value == DBNull.Value)
+                                    {
+                                        continue;
+                                    }
+
                                     record.Properties.Add(new PropertyValue
                                     {
                                         Property = property,
-                                        Value = value == DBNull.Value ? string.Empty : Convert.ToString(value) ?? string.Empty
+                                        Value = Convert.ToString(value) ?? string.Empty
                                     });
                                 }
 
@@ -139,14 +151,21 @@ namespace Metadata.Framework.Generic
                                         var fkValue = reader[columnName];
                                         if (fkValue == DBNull.Value)
                                         {
+                                            continue;
+                                        }
+
+                                        var relationshipIdText = Convert.ToString(fkValue) ?? string.Empty;
+                                        int relationshipId;
+                                        if (!int.TryParse(relationshipIdText, out relationshipId) || relationshipId <= 0)
+                                        {
                                             throw new InvalidOperationException(
-                                                $"Relationship column '{schema}.{entity.Name}.{columnName}' is null for record Id '{record.Id}'.");
+                                                $"Relationship column '{schema}.{entity.Name}.{columnName}' has invalid value '{relationshipIdText}' for record Id '{record.Id}'.");
                                         }
 
                                         record.Relationships.Add(new RelationshipValue
                                         {
                                             Entity = relatedEntity,
-                                            Value = Convert.ToString(fkValue) ?? string.Empty
+                                            Value = relationshipIdText
                                         });
                                     }
                                 }
