@@ -7,17 +7,18 @@ namespace MetadataStudio.Core.Tests;
 public sealed class ValidationServiceTests
 {
     [Fact]
-    public void Validate_ReservedKeywords_AreErrors()
+    public void Validate_InvalidIdentifiers_AreErrors()
     {
         var workspace = BuildWorkspace(
-            modelName: "select",
-            entityName: "class",
-            propertyName: "from");
+            modelName: "Bad Name",
+            entityName: "Entity$",
+            propertyName: "Property-Name");
 
         var diagnostics = new ValidationService().Validate(workspace);
 
-        Assert.Contains(diagnostics.Issues, issue => issue.Code == "name.reserved.csharp");
-        Assert.Contains(diagnostics.Issues, issue => issue.Code == "name.reserved.sql");
+        Assert.Contains(diagnostics.Issues, issue => issue.Code == "model.name.invalid");
+        Assert.Contains(diagnostics.Issues, issue => issue.Code == "entity.name.invalid");
+        Assert.Contains(diagnostics.Issues, issue => issue.Code == "property.name.invalid");
         Assert.True(diagnostics.HasErrors);
     }
 

@@ -9,43 +9,6 @@ namespace MetadataStudio.Core.Services;
 public sealed class ValidationService : IValidationService
 {
     private static readonly Regex NamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
-    private static readonly HashSet<string> CSharpReservedWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
-        "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
-        "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
-        "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock",
-        "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
-        "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
-        "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true",
-        "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual",
-        "void", "volatile", "while",
-    };
-
-    private static readonly HashSet<string> SqlReservedWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "add", "all", "alter", "and", "any", "as", "asc", "authorization", "backup", "begin", "between",
-        "break", "browse", "bulk", "by", "cascade", "case", "check", "checkpoint", "close", "clustered",
-        "coalesce", "collate", "column", "commit", "compute", "constraint", "contains", "containstable",
-        "continue", "convert", "create", "cross", "current", "current_date", "current_time",
-        "current_timestamp", "current_user", "cursor", "database", "dbcc", "deallocate", "declare",
-        "default", "delete", "deny", "desc", "disk", "distinct", "distributed", "double", "drop", "dump",
-        "else", "end", "errlvl", "escape", "except", "exec", "execute", "exists", "exit", "external",
-        "fetch", "file", "fillfactor", "for", "foreign", "freetext", "freetexttable", "from", "full",
-        "function", "goto", "grant", "group", "having", "holdlock", "identity", "identity_insert",
-        "identitycol", "if", "in", "index", "inner", "insert", "intersect", "into", "is", "join", "key",
-        "kill", "left", "like", "lineno", "load", "merge", "national", "nocheck", "nonclustered", "not",
-        "null", "nullif", "of", "off", "offsets", "on", "open", "opendatasource", "openquery",
-        "openrowset", "openxml", "option", "or", "order", "outer", "over", "percent", "pivot", "plan",
-        "precision", "primary", "print", "proc", "procedure", "public", "raiserror", "read", "readtext",
-        "reconfigure", "references", "replication", "restore", "restrict", "return", "revert", "revoke",
-        "right", "rollback", "rowcount", "rowguidcol", "rule", "save", "schema", "securityaudit",
-        "select", "semantickeyphrasetable", "semanticsimilaritydetailstable", "semanticsimilaritytable",
-        "session_user", "set", "setuser", "shutdown", "some", "statistics", "system_user", "table",
-        "tablesample", "textsize", "then", "to", "top", "tran", "transaction", "trigger", "truncate",
-        "try_convert", "tsequal", "union", "unique", "unpivot", "update", "updatetext", "use", "user",
-        "values", "varying", "view", "waitfor", "when", "where", "while", "with", "writetext",
-    };
 
     public WorkspaceDiagnostics Validate(Workspace workspace)
     {
@@ -108,11 +71,6 @@ public sealed class ValidationService : IValidationService
                 Location = "model/@name",
             });
         }
-        else
-        {
-            ValidateReservedName(model.Name, "model", "model/@name", diagnostics);
-        }
-
         var entityNameMap = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var entityContainerNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entity in model.Entities)
@@ -139,15 +97,6 @@ public sealed class ValidationService : IValidationService
                     Location = $"model/entity/{entity.Name}/@plural",
                 });
             }
-            else
-            {
-                ValidateReservedName(
-                    containerName,
-                    $"entity plural '{entity.Name}.{containerName}'",
-                    $"model/entity/{entity.Name}/@plural",
-                    diagnostics);
-            }
-
             if (entityContainerNameMap.TryGetValue(containerName, out var existingEntity))
             {
                 diagnostics.Issues.Add(new DiagnosticIssue
@@ -178,11 +127,6 @@ public sealed class ValidationService : IValidationService
                     Location = $"model/entity/{entity.Name}",
                 });
             }
-            else
-            {
-                ValidateReservedName(entity.Name, $"entity '{entity.Name}'", $"model/entity/{entity.Name}", diagnostics);
-            }
-
             if (string.Equals(model.Name, entity.Name, StringComparison.OrdinalIgnoreCase))
             {
                 diagnostics.Issues.Add(new DiagnosticIssue
@@ -229,15 +173,6 @@ public sealed class ValidationService : IValidationService
                     Location = $"model/entity/{entity.Name}/property/{property.Name}",
                 });
             }
-            else
-            {
-                ValidateReservedName(
-                    property.Name,
-                    $"property '{entity.Name}.{property.Name}'",
-                    $"model/entity/{entity.Name}/property/{property.Name}",
-                    diagnostics);
-            }
-
             if (string.IsNullOrWhiteSpace(property.DataType))
             {
                 diagnostics.Issues.Add(new DiagnosticIssue
@@ -650,32 +585,4 @@ public sealed class ValidationService : IValidationService
         return !string.IsNullOrWhiteSpace(value) && NamePattern.IsMatch(value);
     }
 
-    private static void ValidateReservedName(
-        string value,
-        string subject,
-        string location,
-        WorkspaceDiagnostics diagnostics)
-    {
-        if (CSharpReservedWords.Contains(value))
-        {
-            diagnostics.Issues.Add(new DiagnosticIssue
-            {
-                Code = "name.reserved.csharp",
-                Message = $"{subject} uses reserved C# keyword '{value}'.",
-                Severity = IssueSeverity.Error,
-                Location = location,
-            });
-        }
-
-        if (SqlReservedWords.Contains(value))
-        {
-            diagnostics.Issues.Add(new DiagnosticIssue
-            {
-                Code = "name.reserved.sql",
-                Message = $"{subject} uses reserved SQL keyword '{value}'.",
-                Severity = IssueSeverity.Error,
-                Location = location,
-            });
-        }
-    }
 }
