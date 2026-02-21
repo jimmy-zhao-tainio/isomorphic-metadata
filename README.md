@@ -8,6 +8,120 @@ The project is built around one workspace contract:
 - `metadata/model.xml`
 - `metadata/instance/<Entity>.xml`
 
+## Format first: one sample across XML, SQL, and C#
+
+### XML model (`metadata/model.xml`)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Model name="EnterpriseBIPlatform">
+  <Entities>
+    <Entity name="Cube" plural="Cubes">
+      <Properties>
+        <Property name="CubeName" />
+        <Property name="Purpose" isRequired="false" />
+        <Property name="RefreshMode" isRequired="false" />
+      </Properties>
+    </Entity>
+    <Entity name="Measure" plural="Measures">
+      <Properties>
+        <Property name="MeasureName" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="Cube" />
+      </Relationships>
+    </Entity>
+  </Entities>
+</Model>
+```
+
+### XML instance (`metadata/instance/*.xml`)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<EnterpriseBIPlatform>
+  <Cubes>
+    <Cube Id="1">
+      <CubeName>Sales Performance</CubeName>
+      <Purpose>Monthly revenue and margin tracking.</Purpose>
+      <RefreshMode>Scheduled</RefreshMode>
+    </Cube>
+  </Cubes>
+  <Measures>
+    <Measure Id="1" CubeId="1">
+      <MeasureName>Sales Amount</MeasureName>
+    </Measure>
+  </Measures>
+</EnterpriseBIPlatform>
+```
+
+### Equivalent SQL model + instance
+
+```sql
+CREATE TABLE [dbo].[Cube] (
+  [Id] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  [CubeName] NVARCHAR(256) NOT NULL,
+  [Purpose] NVARCHAR(256) NULL,
+  [RefreshMode] NVARCHAR(256) NULL
+);
+
+CREATE TABLE [dbo].[Measure] (
+  [Id] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  [MeasureName] NVARCHAR(256) NOT NULL,
+  [CubeId] INT NOT NULL
+);
+
+ALTER TABLE [dbo].[Measure]
+ADD CONSTRAINT [FK_Measure_Cube_CubeId]
+FOREIGN KEY ([CubeId]) REFERENCES [dbo].[Cube]([Id]);
+
+INSERT INTO [dbo].[Cube] ([CubeName], [Purpose], [RefreshMode])
+VALUES (N'Sales Performance', N'Monthly revenue and margin tracking.', N'Scheduled');
+
+INSERT INTO [dbo].[Measure] ([MeasureName], [CubeId])
+VALUES (N'Sales Amount', 1);
+```
+
+### Equivalent generated C# shape
+
+```csharp
+public sealed class Cube
+{
+    public int Id { get; }
+    public string CubeName { get; }
+    public string Purpose { get; }
+    public string RefreshMode { get; }
+    public string Name { get; } // alias from CubeName
+}
+
+public sealed class Measure
+{
+    public int Id { get; }
+    public string MeasureName { get; }
+    public int? CubeId { get; }
+    public Cube Cube { get; }
+    public string Name { get; } // alias from MeasureName
+}
+
+public sealed class Cubes : IEnumerable<Cube>
+{
+    public Cube GetId(int id);
+    public bool TryGetId(int id, out Cube row);
+}
+
+public sealed class Measures : IEnumerable<Measure>
+{
+    public Measure GetId(int id);
+    public bool TryGetId(int id, out Measure row);
+}
+
+public static class EnterpriseBIPlatform
+{
+    public static Cubes Cubes { get; }
+    public static Measures Measures { get; }
+}
+```
+
 ## Why this exists
 
 - Keep metadata in git as plain XML.
@@ -50,10 +164,12 @@ meta help
 Main groups:
 
 - Workspace: `init`, `status`
-- Model/Inspect: `check`, `list`, `view`, `query`, `graph`, `model`
-- Instance mutations: `insert`, `bulk-insert`, `row update`, `row relationship`, `delete`
-- Diff/merge: `instance diff`, `instance merge`, `instance diff-aligned`, `instance merge-aligned`
+- Model: `check`, `graph`, `list`, `model`, `view`
+- Instance: `instance`, `insert`, `delete`, `query`, `bulk-insert`, `row`
 - Pipeline: `import`, `generate`
+- Utility: `random`
+
+README examples use the canonical top-level forms from `meta help` (for example `meta init`, `meta status`, `meta delete Cube 10`).
 
 ## Workspace quick start
 
@@ -69,70 +185,31 @@ Inspect it:
 meta status --workspace .\Samples\MyWorkspace
 ```
 
-## Model XML contract (current)
+## XML contracts summary
 
-`Id` is implicit on every entity.
+Model XML:
 
-- `Property name="Id"` is not written.
 - `dataType="string"` is default and omitted.
 - `isRequired="true"` is default and omitted.
-- `isRequired` replaces legacy `isNullable`.
-- `Entity plural="..."` is optional; if omitted, plural defaults to `<EntityName>s`.
+- `Entity plural="..."` is optional; default is `<EntityName>s`.
 
-Example:
+Instance XML (strict contract):
 
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<Model name="EnterpriseBIPlatform">
-  <Entities>
-    <Entity name="Cube">
-      <Properties>
-        <Property name="CubeName" />
-        <Property name="Purpose" isRequired="false" />
-        <Property name="RefreshMode" isRequired="false" />
-      </Properties>
-    </Entity>
-    <Entity name="Measure">
-      <Properties>
-        <Property name="MeasureName" />
-      </Properties>
-      <Relationships>
-        <Relationship entity="Cube" />
-      </Relationships>
-    </Entity>
-  </Entities>
-</Model>
-```
+- Root element is the model name (for example `<EnterpriseBIPlatform>`).
+- Under root, each entity uses a plural container element (for example `<Cubes>`, `<Measures>`).
+- Inside each container, each row uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
+- Direct row elements under root are invalid; rows must be inside their plural container.
+- Row `Id` attribute is mandatory.
+- Relationship values are row attributes named `<TargetEntity>Id`.
+- Scalar properties are child elements.
+- Missing property element means unset; empty property element means explicit empty string.
 
-## Instance XML contract (current)
+Compatibility read mode (migration only):
 
-Per row:
-
-- Mandatory `Id` attribute.
-- Relationship usages are attributes named `<TargetEntity>Id`.
-- Non-relationship properties are child elements.
-- Missing element means unset.
-- Empty element means explicit empty string.
-
-Example:
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<EnterpriseBIPlatform>
-  <Cubes>
-    <Cube Id="1">
-      <CubeName>Sales Performance</CubeName>
-      <Purpose>Monthly revenue and margin tracking.</Purpose>
-      <RefreshMode>Scheduled</RefreshMode>
-    </Cube>
-  </Cubes>
-  <Measures>
-    <Measure Id="1" CubeId="1">
-      <MeasureName>Sales Amount</MeasureName>
-    </Measure>
-  </Measures>
-</EnterpriseBIPlatform>
-```
+- Environment variable: `METADATASTUDIO_COMPAT_READ_LEGACY_INSTANCE_ATTRIBUTES`.
+- Accepted true values: `1`, `true`, `yes`.
+- Enables reading legacy attribute-based property input and legacy relationship child elements during load, so old files can be migrated.
+- Writer output remains the current strict contract (plural containers, relationship attributes, property elements).
 
 ## Core workflows with examples
 
@@ -193,7 +270,7 @@ meta delete Cube 10 --workspace .\Samples\CommandExamples
 
 ### 4) Bulk insert
 
-TSV example file (`cube-upsert.tsv`):
+TSV example file (`cube-insert.tsv`):
 
 ```text
 CubeName	Purpose	RefreshMode
@@ -204,7 +281,7 @@ Daily Ops	Daily operational cube	Scheduled
 Load with auto identity:
 
 ```powershell
-meta bulk-insert Cube --from tsv --file .\cube-upsert.tsv --auto-id --workspace .\Samples\CommandExamples
+meta bulk-insert Cube --from tsv --file .\cube-insert.tsv --auto-id --workspace .\Samples\CommandExamples
 ```
 
 ### 5) Import and generate
@@ -233,7 +310,27 @@ meta generate ssdt --out .\out\ssdt --workspace .\Samples\CommandExamples
 
 ### Equal-model mode
 
-Requires left and right `model.xml` files to be identical.
+Mental model:
+
+- `meta instance diff <left> <right>` produces a diff artifact that describes how to transform Left instance data into Right instance data.
+- `meta instance merge <target> <diffWorkspace>` applies that Left -> Right transformation to a target workspace (typically the same workspace used as Left when the diff was created).
+
+What the diff captures:
+
+- Row identity by `(Entity, Id)`.
+- Scalar property value differences.
+- Relationship usage differences via `<TargetEntity>Id` attributes.
+- Row-level insert/update/delete outcomes implied by Left-only and Right-only identities.
+
+Instance semantics are preserved:
+
+- Unset property (missing element) and explicit empty string (`<PropertyName></PropertyName>`) are different states.
+- Diff and merge preserve that distinction; they do not collapse missing into empty.
+
+Constraints and failure modes:
+
+- Left and Right `model.xml` files must be identical for equal-model mode.
+- Merge fails hard if preconditions or integrity rules are violated (for example, applying a change that would delete a referenced row).
 
 ```powershell
 meta instance diff .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDiffRight
@@ -242,12 +339,22 @@ meta instance merge .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesD
 
 ### Aligned mode
 
-Compares mapped subsets across different models using an explicit alignment workspace.
+Aligned mode supports model differences by introducing an explicit alignment workspace.
+
+- The alignment workspace defines correspondence (and therefore comparison scope) between left and right models.
+- `meta instance diff-aligned` includes only aligned scope in the diff artifact.
+- `meta instance merge-aligned` applies only within that aligned scope on the target workspace.
+- Integrity rules still apply; merge-aligned fails hard on invalid operations.
 
 ```powershell
 meta instance diff-aligned .\LeftWs .\RightWs .\AlignmentWs
 meta instance merge-aligned .\TargetWs .\RightWs.instance-diff-aligned
 ```
+
+Determinism:
+
+- Diff artifacts are written with stable ordering and formatting.
+- Merged instance output is produced by deterministic writers, so identical logical state yields stable file output.
 
 ## Determinism and integrity notes
 
@@ -293,6 +400,7 @@ Notes:
 
 - Accessing `EnterpriseBIPlatform.Measures` before load throws:
   `EnterpriseBIPlatform is not loaded. Call EnterpriseBIPlatformModel.LoadFromXml/LoadFromSql first.`
+- `LoadFromXml` / `LoadFromSql` installs a process-wide immutable loaded snapshot that backs the static `EnterpriseBIPlatform` root; call load first, then use the root.
 - Collections implement `IEnumerable<T>` and provide `GetId(int)` / `TryGetId(int, out T)`.
 
 ## Command references
