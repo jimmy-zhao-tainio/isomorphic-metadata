@@ -89,13 +89,13 @@ namespace Metadata.Framework.Generic
             }
 
             var originalRelationships = original.Relationship
-                .Where(r => !string.IsNullOrWhiteSpace(r.Name))
-                .Select(r => r.Name)
+                .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Entity))
+                .Select(r => BuildRelationshipSignature(r))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var updatedRelationships = updated.Relationship
-                .Where(r => !string.IsNullOrWhiteSpace(r.Name))
-                .Select(r => r.Name)
+                .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Entity))
+                .Select(r => BuildRelationshipSignature(r))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -114,6 +114,11 @@ namespace Metadata.Framework.Generic
                     result.RemovedRelationships.Add($"{entityName}->{relationship}");
                 }
             }
+        }
+
+        private static string BuildRelationshipSignature(RelationshipDefinition relationship)
+        {
+            return relationship.Entity;
         }
     }
 

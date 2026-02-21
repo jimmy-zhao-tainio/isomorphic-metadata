@@ -103,13 +103,13 @@ namespace Metadata.Framework.Transformations
 
             foreach (var relatedEntity in entity.Relationship)
             {
-                if (relatedEntity == null || string.IsNullOrWhiteSpace(relatedEntity.Name))
+                if (relatedEntity == null || string.IsNullOrWhiteSpace(relatedEntity.Entity))
                 {
                     continue;
                 }
 
-                var propertyName = CSharpGenerationUtilities.EnsureUniqueName(relatedEntity.Name, memberNames);
-                builder.AppendLine($"        public {relatedEntity.Name} {propertyName} {{ get; set; }}");
+                var propertyName = CSharpGenerationUtilities.EnsureUniqueName(relatedEntity.Entity, memberNames);
+                builder.AppendLine($"        public {relatedEntity.Entity} {propertyName} {{ get; set; }}");
             }
         }
     }

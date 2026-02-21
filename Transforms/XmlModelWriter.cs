@@ -34,18 +34,20 @@ namespace Metadata.Framework.Transformations
             var element = new XElement("Entity",
                 new XAttribute("name", entity.Name ?? string.Empty));
 
-            if (entity.Properties.Count > 0)
+            var properties = entity.Properties
+                .FindAll(property => !string.Equals(property.Name, "Id", System.StringComparison.OrdinalIgnoreCase));
+            if (properties.Count > 0)
             {
                 element.Add(new XElement("Properties",
-                    entity.Properties.ConvertAll(CreatePropertyElement)));
+                    properties.ConvertAll(CreatePropertyElement)));
             }
 
             if (entity.Relationship.Count > 0)
             {
                 element.Add(new XElement("Relationships",
-                    entity.Relationship.ConvertAll(related =>
+                    entity.Relationship.ConvertAll(relationship =>
                         new XElement("Relationship",
-                            new XAttribute("target", related.Name ?? string.Empty)))));
+                            new XAttribute("entity", relationship.Entity ?? string.Empty)))));
             }
 
             return element;
@@ -53,10 +55,21 @@ namespace Metadata.Framework.Transformations
 
         private static XElement CreatePropertyElement(Property property)
         {
-            return new XElement("Property",
-                new XAttribute("name", property.Name ?? string.Empty),
-                new XAttribute("dataType", property.DataType ?? string.Empty),
-                new XAttribute("isNullable", property.IsNullable.ToString().ToLowerInvariant()));
+            var element = new XElement("Property",
+                new XAttribute("name", property.Name ?? string.Empty));
+
+            var dataType = string.IsNullOrWhiteSpace(property.DataType) ? "string" : property.DataType;
+            if (!string.Equals(dataType, "string", System.StringComparison.OrdinalIgnoreCase))
+            {
+                element.Add(new XAttribute("dataType", dataType));
+            }
+
+            if (property.IsNullable)
+            {
+                element.Add(new XAttribute("isRequired", "false"));
+            }
+
+            return element;
         }
     }
 }

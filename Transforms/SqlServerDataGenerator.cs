@@ -36,7 +36,8 @@ namespace Metadata.Framework.Transformations
                     continue;
                 }
 
-                foreach (var record in entityInstance.Records)
+                foreach (var record in entityInstance.Records
+                    .OrderBy(r => r.Id ?? string.Empty, StringComparer.OrdinalIgnoreCase))
                 {
                     AppendInsertStatement(commands, entity, record);
                 }
@@ -51,18 +52,20 @@ namespace Metadata.Framework.Transformations
             var result = new List<Entity>();
             var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var path = new List<string>();
             var entityLookup = model.Entities
                 .Where(e => !string.IsNullOrWhiteSpace(e.Name))
                 .ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
 
-            foreach (var entity in model.Entities)
+            foreach (var entity in model.Entities
+                .OrderBy(e => e.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase))
             {
                 if (string.IsNullOrWhiteSpace(entity.Name))
                 {
                     continue;
                 }
 
-                Visit(entity, entityLookup, visited, visiting, result);
+                Visit(entity, entityLookup, visited, visiting, path, result);
             }
 
             return result;
@@ -73,6 +76,7 @@ namespace Metadata.Framework.Transformations
             IDictionary<string, Entity> entityLookup,
             HashSet<string> visited,
             HashSet<string> visiting,
+            List<string> path,
             List<Entity> result)
         {
             if (visited.Contains(entity.Name))
@@ -82,29 +86,39 @@ namespace Metadata.Framework.Transformations
 
             if (visiting.Contains(entity.Name))
             {
-                // Cycle detected; skip further traversal to avoid infinite recursion.
-                return;
+                var cycleStart = path.FindIndex(n => string.Equals(n, entity.Name, StringComparison.OrdinalIgnoreCase));
+                var cycle = cycleStart >= 0
+                    ? path.Skip(cycleStart).Concat(new[] { entity.Name })
+                    : new[] { entity.Name };
+                throw new InvalidOperationException("Relationship cycle detected: " + string.Join(" -> ", cycle) + ".");
             }
 
             visiting.Add(entity.Name);
+            path.Add(entity.Name);
 
             if (entity.Relationship != null)
             {
                 foreach (var related in entity.Relationship)
                 {
-                    if (related == null || string.IsNullOrWhiteSpace(related.Name))
+                    if (related == null || string.IsNullOrWhiteSpace(related.Entity))
                     {
                         continue;
                     }
 
-                    Entity target;
-                    if (entityLookup.TryGetValue(related.Name, out target))
+                    Entity relatedEntity;
+                    if (entityLookup.TryGetValue(related.Entity, out relatedEntity))
                     {
-                        Visit(target, entityLookup, visited, visiting, result);
+                        Visit(relatedEntity, entityLookup, visited, visiting, path, result);
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException(
+                            $"Entity '{entity.Name}' references unknown relationship entity '{related.Entity}'.");
                     }
                 }
             }
 
+            path.RemoveAt(path.Count - 1);
             visiting.Remove(entity.Name);
             visited.Add(entity.Name);
             result.Add(entity);
@@ -144,8 +158,13 @@ namespace Metadata.Framework.Transformations
                     continue;
                 }
 
-                var baseName = $"{relationship.Entity.Name}Id";
-                var columnName = EnsureUniqueName(baseName, existingColumns);
+                var columnName = $"{relationship.Entity.Name}Id";
+
+                if (existingColumns.Contains(columnName))
+                {
+                    continue;
+                }
+
                 columns.Add($"[{EscapeIdentifier(columnName)}]");
                 existingColumns.Add(columnName);
                 values.Add(ToSqlLiteral(relationship.Value));
@@ -154,32 +173,11 @@ namespace Metadata.Framework.Transformations
             builder.AppendLine($"INSERT INTO [dbo].[{EscapeIdentifier(entity.Name)}] ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)});");
         }
 
-        private static string EnsureUniqueName(string baseName, HashSet<string> existing)
-        {
-            var candidate = baseName;
-            var suffix = 1;
-
-            while (existing.Contains(candidate))
-            {
-                suffix++;
-                candidate = baseName + suffix;
-            }
-
-            return candidate;
-        }
-
         private static string ToSqlLiteral(string value)
         {
             if (value == null)
             {
                 return "NULL";
-            }
-
-            // Attempt to detect boolean literals
-            bool boolValue;
-            if (bool.TryParse(value, out boolValue))
-            {
-                return boolValue ? "1" : "0";
             }
 
             return "N'" + value.Replace("'", "''") + "'";

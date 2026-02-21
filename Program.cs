@@ -47,7 +47,7 @@ namespace Metadata.Framework.ConsoleHarness
                 Console.WriteLine("    Relationships:");
                 foreach (var relationship in entity.Relationship)
                 {
-                    Console.WriteLine($"      -> {relationship.Name}");
+                    Console.WriteLine($"      -> {relationship.Entity}");
                 }
             }
         }

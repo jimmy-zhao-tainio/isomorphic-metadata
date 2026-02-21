@@ -12,13 +12,18 @@ namespace Metadata.Framework.Generic
     {
         public string Name { get; set; } = "";
         public List<Property> Properties { get; set; } = new List<Property>();
-        public List<Entity> Relationship { get; set; } = new List<Entity>();
+        public List<RelationshipDefinition> Relationship { get; set; } = new List<RelationshipDefinition>();
     }
 
     public class Property
     {
         public string Name { get; set; } = "";
-        public string DataType { get; set; } = "";
+        public string DataType { get; set; } = "string";
         public bool IsNullable { get; set; }
+    }
+
+    public class RelationshipDefinition
+    {
+        public string Entity { get; set; } = "";
     }
 }

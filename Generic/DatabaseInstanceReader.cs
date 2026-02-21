@@ -22,6 +22,14 @@ namespace Metadata.Framework.Generic
 
             var instance = new ModelInstance { Model = model };
             var entityLookup = new Dictionary<string, EntityInstance>(StringComparer.OrdinalIgnoreCase);
+            var modelEntityLookup = new Dictionary<string, Entity>(StringComparer.OrdinalIgnoreCase);
+            foreach (var modelEntity in model.Entities)
+            {
+                if (modelEntity != null && !string.IsNullOrWhiteSpace(modelEntity.Name))
+                {
+                    modelEntityLookup[modelEntity.Name] = modelEntity;
+                }
+            }
 
             using (var connection = new SqlConnection(connectionString))
             {
@@ -40,7 +48,7 @@ namespace Metadata.Framework.Generic
 
                     using (var command = connection.CreateCommand())
                     {
-                        command.CommandText = $"SELECT * FROM [{schema}].[{entity.Name}]";
+                        command.CommandText = $"SELECT * FROM [{schema}].[{entity.Name}] ORDER BY [Id]";
                         using (var reader = command.ExecuteReader())
                         {
                             var columnCount = reader.FieldCount;
@@ -50,12 +58,35 @@ namespace Metadata.Framework.Generic
                                 columnNames[i] = reader.GetName(i);
                             }
 
+                            var hasIdColumn = reader.ColumnExists("Id");
+                            if (!hasIdColumn)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Table '{schema}.{entity.Name}' does not include an 'Id' column. This framework requires 'Id' for instance hydration.");
+                            }
+
+                            var seenRecordIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                             while (reader.Read())
                             {
                                 var record = new RecordInstance();
-                                if (reader["Id"] != DBNull.Value)
+                                if (reader["Id"] == DBNull.Value)
                                 {
-                                    record.Id = Convert.ToString(reader["Id"]) ?? string.Empty;
+                                    throw new InvalidOperationException(
+                                        $"Table '{schema}.{entity.Name}' contains a null Id value.");
+                                }
+
+                                record.Id = Convert.ToString(reader["Id"]) ?? string.Empty;
+                                if (string.IsNullOrWhiteSpace(record.Id))
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Table '{schema}.{entity.Name}' contains an empty Id value.");
+                                }
+
+                                if (!seenRecordIds.Add(record.Id))
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Table '{schema}.{entity.Name}' contains duplicate Id '{record.Id}'.");
                                 }
 
                                 foreach (var property in entity.Properties)
@@ -86,14 +117,20 @@ namespace Metadata.Framework.Generic
 
                                 if (entity.Relationship != null)
                                 {
-                                    foreach (var relatedEntity in entity.Relationship)
+                                    foreach (var relationship in entity.Relationship)
                                     {
-                                        if (relatedEntity == null || string.IsNullOrWhiteSpace(relatedEntity.Name))
+                                        if (relationship == null || string.IsNullOrWhiteSpace(relationship.Entity))
+                                        {
+                                            continue;
+                                        }
+
+                                        if (!modelEntityLookup.TryGetValue(relationship.Entity, out var relatedEntity))
                                         {
                                             continue;
                                         }
 
                                         var columnName = $"{relatedEntity.Name}Id";
+
                                         if (!reader.ColumnExists(columnName))
                                         {
                                             continue;
@@ -102,7 +139,8 @@ namespace Metadata.Framework.Generic
                                         var fkValue = reader[columnName];
                                         if (fkValue == DBNull.Value)
                                         {
-                                            continue;
+                                            throw new InvalidOperationException(
+                                                $"Relationship column '{schema}.{entity.Name}.{columnName}' is null for record Id '{record.Id}'.");
                                         }
 
                                         record.Relationships.Add(new RelationshipValue

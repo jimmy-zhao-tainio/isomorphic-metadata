@@ -1,0 +1,98 @@
+internal sealed partial class CliRuntime
+{
+    async Task<int> InstanceDiffAlignedAsync(string[] commandArgs)
+    {
+        if (commandArgs.Length != 5)
+        {
+            return PrintUsageError("Usage: instance diff-aligned <leftWorkspace> <rightWorkspace> <alignmentWorkspace>");
+        }
+
+        var leftPath = Path.GetFullPath(commandArgs[2]);
+        var rightPath = Path.GetFullPath(commandArgs[3]);
+        var alignmentPath = Path.GetFullPath(commandArgs[4]);
+
+        var leftWorkspace = await services.WorkspaceService.LoadAsync(leftPath, searchUpward: false).ConfigureAwait(false);
+        var rightWorkspace = await services.WorkspaceService.LoadAsync(rightPath, searchUpward: false).ConfigureAwait(false);
+        var alignmentWorkspace = await services.WorkspaceService.LoadAsync(alignmentPath, searchUpward: false).ConfigureAwait(false);
+        PrintContractCompatibilityWarning(leftWorkspace.Manifest);
+        PrintContractCompatibilityWarning(rightWorkspace.Manifest);
+        PrintContractCompatibilityWarning(alignmentWorkspace.Manifest);
+
+        AlignmentCatalog alignment;
+        try
+        {
+            alignment = ParseAlignmentCatalog(
+                alignmentWorkspace,
+                InstanceDiffAlignmentModelName,
+                InstanceDiffAlignmentModelSignature.Value);
+            ValidateWorkspaceMatchesAlignment(
+                leftWorkspace,
+                alignment.ModelLeftName,
+                alignment.LeftEntityNameById,
+                alignment.LeftPropertyNameById,
+                alignment.LeftPropertyEntityIdByPropertyId);
+            ValidateWorkspaceMatchesAlignment(
+                rightWorkspace,
+                alignment.ModelRightName,
+                alignment.RightEntityNameById,
+                alignment.RightPropertyNameById,
+                alignment.RightPropertyEntityIdByPropertyId);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return PrintDataError("E_OPERATION", exception.Message);
+        }
+
+        var diff = BuildAlignedInstanceDiffWorkspace(
+            leftWorkspace,
+            rightWorkspace,
+            alignmentWorkspace,
+            alignment,
+            rightPath);
+        if (Directory.Exists(diff.DiffWorkspacePath))
+        {
+            Directory.Delete(diff.DiffWorkspacePath, recursive: true);
+        }
+
+        ApplyImplicitNormalization(diff.DiffWorkspace);
+        var diagnostics = services.ValidationService.Validate(diff.DiffWorkspace);
+        diff.DiffWorkspace.Diagnostics = diagnostics;
+        if (diagnostics.HasErrors || (globalStrict && diagnostics.WarningCount > 0))
+        {
+            return PrintOperationValidationFailure("instance diff-aligned", Array.Empty<WorkspaceOp>(), diagnostics);
+        }
+
+        await services.WorkspaceService.SaveAsync(diff.DiffWorkspace).ConfigureAwait(false);
+        var diffPath = Path.GetFullPath(diff.DiffWorkspacePath);
+
+        if (globalJson)
+        {
+            WriteJson(new
+            {
+                command = "instance.diff-aligned",
+                status = diff.HasDifferences ? "differences" : "clean",
+                hasDifferences = diff.HasDifferences,
+                diffWorkspace = diffPath,
+                leftRows = diff.LeftRowCount,
+                rightRows = diff.RightRowCount,
+                leftProperties = diff.LeftPropertyCount,
+                rightProperties = diff.RightPropertyCount,
+                leftNotInRight = diff.LeftNotInRightCount,
+                rightNotInLeft = diff.RightNotInLeftCount,
+            });
+        }
+        else
+        {
+            presenter.WriteInfo(diff.HasDifferences
+                ? "Instance diff-aligned: differences found."
+                : "Instance diff-aligned: no differences.");
+            presenter.WriteInfo($"DiffWorkspace: {diffPath}");
+            presenter.WriteInfo(
+                $"Rows: left={diff.LeftRowCount}, right={diff.RightRowCount}  Properties: left={diff.LeftPropertyCount}, right={diff.RightPropertyCount}");
+            presenter.WriteInfo(
+                $"NotIn: left-not-in-right={diff.LeftNotInRightCount}, right-not-in-left={diff.RightNotInLeftCount}");
+        }
+
+        return diff.HasDifferences ? 1 : 0;
+    }
+}

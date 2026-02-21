@@ -21,6 +21,10 @@ namespace Metadata.Framework.SyncConsole
                 ? args[1]
                 : DefaultSchema;
 
+            var importPlanPath = args != null && args.Length > 2 && !string.IsNullOrWhiteSpace(args[2])
+                ? Path.GetFullPath(args[2])
+                : string.Empty;
+
             Console.WriteLine($"Reading database schema from {connectionString} (schema: {schema})...");
 
             var reader = new Reader();
@@ -45,6 +49,13 @@ namespace Metadata.Framework.SyncConsole
             var samplesDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Samples");
             var sampleModelPath = Path.GetFullPath(Path.Combine(samplesDirectory, "SampleModel.xml"));
             var sampleInstancePath = Path.GetFullPath(Path.Combine(samplesDirectory, "SampleInstance.xml"));
+            if (string.IsNullOrWhiteSpace(importPlanPath))
+            {
+                importPlanPath = Path.GetFullPath(Path.Combine(samplesDirectory, "import-plan.json"));
+            }
+
+            var importIssuesPath = Path.GetFullPath(Path.Combine(samplesDirectory, "import-issues.json"));
+            var importSummaryPath = Path.GetFullPath(Path.Combine(samplesDirectory, "import-summary.txt"));
 
             Model existingModel = null;
             if (File.Exists(sampleModelPath))
@@ -56,6 +67,42 @@ namespace Metadata.Framework.SyncConsole
                     if (existingResult.Errors.Count == 0)
                     {
                         existingModel = existingResult.Model;
+                        var issueReport = ImportIssueEngine.Build(existingModel, readResult.Model);
+                        if (File.Exists(importPlanPath))
+                        {
+                            Console.WriteLine($"Applying import plan from {importPlanPath}...");
+                            var importPlan = ImportPlanStore.Load(importPlanPath);
+                            var planWarnings = ImportIssueEngine.ApplyPlan(issueReport, importPlan, readResult.Model);
+                            issueReport = ImportIssueEngine.Build(existingModel, readResult.Model);
+                            ImportIssueEngine.AttachPlanSelections(issueReport, importPlan, planWarnings);
+                            foreach (var warning in planWarnings)
+                            {
+                                Console.WriteLine($"  [plan warning] {warning}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"No import plan found at {importPlanPath}. Auto 1:1 mappings only.");
+                            ImportPlanStore.Save(importPlanPath, new ImportPlan());
+                            Console.WriteLine($"Created empty import plan template at {importPlanPath}.");
+                        }
+
+                        ImportIssueReportStore.Save(importIssuesPath, issueReport);
+                        Console.WriteLine($"Import issues written to {importIssuesPath}.");
+                        var summary = issueReport.Summary ?? new ImportIssueSummary();
+                        File.WriteAllLines(importSummaryPath, summary.Lines ?? new List<string>());
+                        Console.WriteLine($"Import summary written to {importSummaryPath}.");
+                        Console.WriteLine($"Import issues summary: total={summary.TotalIssues}, unresolved={summary.UnresolvedIssues}, dataLossRisk={summary.DataLossRiskIssues}, unresolvedDataLossRisk={summary.UnresolvedDataLossRiskIssues}.");
+                        foreach (var line in summary.Lines)
+                        {
+                            Console.WriteLine($"  {line}");
+                        }
+
+                        if (issueReport.UnresolvedCount > 0)
+                        {
+                            Console.WriteLine("Unresolved issues require one of: ignore / map / custom_logic in import-plan.json.");
+                        }
+
                         var comparer = new ModelComparer();
                         var comparison = comparer.Compare(existingModel, readResult.Model);
                         if (comparison.HasDifferences)

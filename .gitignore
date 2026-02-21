@@ -1,0 +1,28 @@
+# Build outputs
+**/bin/
+**/obj/
+bin/
+obj/
+
+# Local tooling/cache
+.meta/
+.vscode/
+*.user
+*.suo
+*.tmp
+
+# Local workspace file
+Metadata.code-workspace
+
+# Generated/local sample scratch areas
+Samples/Tmp*/
+Samples/tmp-*/
+Samples/metadata/
+Samples/reconcile/
+Samples/import-issues.json
+Samples/import-plan.json
+Samples/import-summary.txt
+Samples/CommandExamplesOut/
+Samples/CommandExamplesDiffRight.diff.*/
+Samples/CommandExamplesDiffRight.instance-diff/
+Samples/Random100/

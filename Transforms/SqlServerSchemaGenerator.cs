@@ -36,8 +36,9 @@ namespace Metadata.Framework.Transformations
                 builder.AppendLine("-- Foreign keys");
                 foreach (var relationship in relationships)
                 {
+                    var constraintName = $"FK_{relationship.SourceEntity}_{relationship.RelatedEntity}_{relationship.ColumnName}";
                     builder.AppendLine(
-                        $"ALTER TABLE [dbo].[{EscapeIdentifier(relationship.SourceEntity)}] WITH CHECK ADD CONSTRAINT [FK_{EscapeIdentifier(relationship.SourceEntity)}_{EscapeIdentifier(relationship.TargetEntity)}] FOREIGN KEY([{EscapeIdentifier(relationship.ColumnName)}]) REFERENCES [dbo].[{EscapeIdentifier(relationship.TargetEntity)}]([Id]);");
+                        $"ALTER TABLE [dbo].[{EscapeIdentifier(relationship.SourceEntity)}] WITH CHECK ADD CONSTRAINT [{EscapeIdentifier(constraintName)}] FOREIGN KEY([{EscapeIdentifier(relationship.ColumnName)}]) REFERENCES [dbo].[{EscapeIdentifier(relationship.RelatedEntity)}]([Id]);");
                     builder.AppendLine("GO");
                     builder.AppendLine();
                 }
@@ -65,6 +66,20 @@ namespace Metadata.Framework.Transformations
         {
             var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var columnDefinitions = new List<string>();
+            var relationshipColumnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (entity.Relationship != null)
+            {
+                foreach (var relationship in entity.Relationship)
+                {
+                    if (relationship == null || string.IsNullOrWhiteSpace(relationship.Entity))
+                    {
+                        continue;
+                    }
+
+                    relationshipColumnNames.Add(GetRelationshipColumnName(relationship.Entity));
+                }
+            }
 
             // Ensure Id column exists first.
             if (!entity.Properties.Any(p => string.Equals(p.Name, "Id", StringComparison.OrdinalIgnoreCase)))
@@ -77,6 +92,12 @@ namespace Metadata.Framework.Transformations
             {
                 if (string.IsNullOrWhiteSpace(property.Name))
                 {
+                    continue;
+                }
+
+                if (relationshipColumnNames.Contains(property.Name))
+                {
+                    // Relationship FK columns are implied by relationship definitions.
                     continue;
                 }
 
@@ -97,19 +118,29 @@ namespace Metadata.Framework.Transformations
             {
                 foreach (var relationshipEntity in entity.Relationship)
                 {
-                    if (relationshipEntity == null || string.IsNullOrWhiteSpace(relationshipEntity.Name))
+                    if (relationshipEntity == null || string.IsNullOrWhiteSpace(relationshipEntity.Entity))
                     {
                         continue;
                     }
 
-                    var columnName = GetRelationshipColumnName(relationshipEntity.Name, existingColumns);
-                    columnDefinitions.Add($"    [{EscapeIdentifier(columnName)}] {GetIdSqlType()} NOT NULL");
-                    relationships.Add(new RelationshipDefinition
+                    var columnName = GetRelationshipColumnName(relationshipEntity.Entity);
+                    if (existingColumns.Add(columnName))
                     {
-                        SourceEntity = entity.Name,
-                        TargetEntity = relationshipEntity.Name,
-                        ColumnName = columnName
-                    });
+                        columnDefinitions.Add($"    [{EscapeIdentifier(columnName)}] {GetIdSqlType()} NOT NULL");
+                    }
+
+                    if (!relationships.Any(r =>
+                        string.Equals(r.SourceEntity, entity.Name, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(r.RelatedEntity, relationshipEntity.Entity, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(r.ColumnName, columnName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        relationships.Add(new RelationshipDefinition
+                        {
+                            SourceEntity = entity.Name,
+                            RelatedEntity = relationshipEntity.Entity,
+                            ColumnName = columnName
+                        });
+                    }
                 }
             }
 
@@ -123,20 +154,9 @@ namespace Metadata.Framework.Transformations
             builder.AppendLine();
         }
 
-        private static string GetRelationshipColumnName(string targetEntityName, HashSet<string> existingColumns)
+        private static string GetRelationshipColumnName(string relatedEntityName)
         {
-            var baseName = $"{targetEntityName}Id";
-            var candidate = baseName;
-            var index = 1;
-
-            while (existingColumns.Contains(candidate))
-            {
-                index++;
-                candidate = $"{baseName}{index}";
-            }
-
-            existingColumns.Add(candidate);
-            return candidate;
+            return $"{relatedEntityName}Id";
         }
 
         private static string GetSqlType(Property property)
@@ -146,16 +166,9 @@ namespace Metadata.Framework.Transformations
                 return "NVARCHAR(256)";
             }
 
-            var dataType = property.DataType ?? string.Empty;
             if (string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
             {
                 return GetIdSqlType();
-            }
-
-            if (string.Equals(dataType, "bool", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(dataType, "boolean", StringComparison.OrdinalIgnoreCase))
-            {
-                return "BIT";
             }
 
             return "NVARCHAR(256)";
@@ -179,7 +192,7 @@ namespace Metadata.Framework.Transformations
         private class RelationshipDefinition
         {
             public string SourceEntity { get; set; }
-            public string TargetEntity { get; set; }
+            public string RelatedEntity { get; set; }
             public string ColumnName { get; set; }
         }
     }

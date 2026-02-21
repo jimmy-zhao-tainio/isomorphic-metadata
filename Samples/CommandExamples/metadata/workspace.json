@@ -1,0 +1,14 @@
+{
+  "contractVersion": "1.0",
+  "modelFile": "metadata/model.xml",
+  "instanceDir": "metadata/instance",
+  "encoding": "utf-8-no-bom",
+  "newlines": "lf",
+  "canonicalSort": {
+    "entities": "name-ordinal",
+    "properties": "name-ordinal",
+    "relationships": "name-ordinal",
+    "rows": "id-ordinal",
+    "attributes": "id-first-then-name-ordinal"
+  }
+}

@@ -18,6 +18,10 @@
     <Compile Remove="Samples\**" />
     <Compile Remove="Samples.Console\**" />
     <Compile Remove="Sync.Console\**" />
+    <Compile Remove="MetadataStudio.Core\**" />
+    <Compile Remove="MetadataStudio.Adapters\**" />
+    <Compile Remove="MetadataStudio.Cli\**" />
+    <Compile Remove="MetadataStudio.Core.Tests\**" />
   </ItemGroup>
   <ItemGroup>
     <None Update="Samples\SampleModel.xml">

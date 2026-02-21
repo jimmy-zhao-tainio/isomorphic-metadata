@@ -199,23 +199,23 @@ namespace Metadata.Framework.Generic
 
                     foreach (var relationship in record.Relationships)
                     {
-                        var targetName = relationship.Entity?.Name;
-                        if (string.IsNullOrWhiteSpace(targetName))
+                        var relatedName = relationship.Entity?.Name;
+                        if (string.IsNullOrWhiteSpace(relatedName))
                         {
                             continue;
                         }
 
-                        if (!entityStore.TryGetValue(targetName, out var targetStore))
+                        if (!entityStore.TryGetValue(relatedName, out var relatedStore))
                         {
                             continue;
                         }
 
-                        if (!targetStore.TryGetValue(relationship.Value, out var related))
+                        if (!relatedStore.TryGetValue(relationship.Value, out var related))
                         {
                             continue;
                         }
 
-                        var referenceProperty = FindReferenceProperty(context.PropertyLookup, targetName);
+                        var referenceProperty = FindReferenceProperty(context.PropertyLookup, relatedName);
                         if (referenceProperty == null || !referenceProperty.CanWrite)
                         {
                             continue;
@@ -229,10 +229,10 @@ namespace Metadata.Framework.Generic
 
         private static PropertyInfo FindReferenceProperty(
             Dictionary<string, PropertyInfo> propertyLookup,
-            string targetEntityName)
+            string relatedEntityName)
         {
             // Prefer direct name match first.
-            if (propertyLookup.TryGetValue(targetEntityName, out var property))
+            if (propertyLookup.TryGetValue(relatedEntityName, out var property))
             {
                 return property;
             }
@@ -241,7 +241,7 @@ namespace Metadata.Framework.Generic
             return propertyLookup.Values.FirstOrDefault(p =>
                 !p.PropertyType.IsValueType &&
                 p.PropertyType != typeof(string) &&
-                string.Equals(p.PropertyType.Name, targetEntityName, StringComparison.OrdinalIgnoreCase));
+                string.Equals(p.PropertyType.Name, relatedEntityName, StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool IsCollectionProperty(PropertyInfo property, out Type itemType)
@@ -268,21 +268,6 @@ namespace Metadata.Framework.Generic
             if (propertyType == typeof(string))
             {
                 return value ?? string.Empty;
-            }
-
-            if (propertyType == typeof(bool))
-            {
-                return bool.TryParse(value, out var result) && result;
-            }
-
-            if (propertyType == typeof(bool?))
-            {
-                if (bool.TryParse(value, out var result))
-                {
-                    return (bool?)result;
-                }
-
-                return null;
             }
 
             return value;

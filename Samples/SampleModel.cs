@@ -42,7 +42,7 @@ namespace GeneratedModel
     {
         public string Id { get; set; }
         public string DimensionName { get; set; }
-        public bool IsConformed { get; set; }
+        public string IsConformed { get; set; }
         public string HierarchyCount { get; set; }
     }
 
@@ -60,7 +60,6 @@ namespace GeneratedModel
         public string Id { get; set; }
         public string MeasureName { get; set; }
         public string MDX { get; set; }
-        public string CubeId { get; set; }
         public Cube Cube { get; set; }
     }
 
@@ -70,7 +69,6 @@ namespace GeneratedModel
         public string SystemName { get; set; }
         public string Version { get; set; }
         public string DeploymentDate { get; set; }
-        public string SystemTypeId { get; set; }
         public SystemType SystemType { get; set; }
     }
 
@@ -78,8 +76,6 @@ namespace GeneratedModel
     {
         public string Id { get; set; }
         public string ProcessingMode { get; set; }
-        public string SystemId { get; set; }
-        public string CubeId { get; set; }
         public Cube Cube { get; set; }
         public System System { get; set; }
     }
@@ -88,8 +84,6 @@ namespace GeneratedModel
     {
         public string Id { get; set; }
         public string ConformanceLevel { get; set; }
-        public string SystemId { get; set; }
-        public string DimensionId { get; set; }
         public Dimension Dimension { get; set; }
         public System System { get; set; }
     }
@@ -98,8 +92,6 @@ namespace GeneratedModel
     {
         public string Id { get; set; }
         public string LoadPattern { get; set; }
-        public string SystemId { get; set; }
-        public string FactId { get; set; }
         public Fact Fact { get; set; }
         public System System { get; set; }
     }

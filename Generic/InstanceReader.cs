@@ -38,123 +38,174 @@ namespace Metadata.Framework.Generic
             instance.Model = model;
 
             var document = XDocument.Load(stream);
-            var root = document.Element("ModelInstance");
+            var root = document.Root;
             if (root == null)
             {
-                result.Errors.Add("Missing ModelInstance element.");
+                result.Errors.Add("Missing root model element.");
                 return result;
             }
 
-            var modelName = GetAttributeValue(root, "modelName");
             if (!string.IsNullOrWhiteSpace(model.Name) &&
-                !string.IsNullOrWhiteSpace(modelName) &&
-                !string.Equals(model.Name, modelName, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(model.Name, root.Name.LocalName, StringComparison.OrdinalIgnoreCase))
             {
-                result.Errors.Add($"Model name mismatch. Expected '{model.Name}', found '{modelName}'.");
-            }
-
-            var entitiesElement = root.Element("Entities");
-            if (entitiesElement == null)
-            {
-                result.Errors.Add("Missing Entities element.");
-                return result;
+                result.Errors.Add($"Model name mismatch. Expected '{model.Name}', found '{root.Name.LocalName}'.");
             }
 
             var entityLookup = model.Entities
                 .Where(e => !string.IsNullOrWhiteSpace(e.Name))
                 .ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
+            var recordIdsByEntity = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var entityElement in entitiesElement.Elements("Entity"))
+            foreach (var entityDefinition in model.Entities.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
             {
-                var entityName = GetAttributeValue(entityElement, "name");
-                if (string.IsNullOrWhiteSpace(entityName))
-                {
-                    result.Errors.Add("Entity element missing name attribute.");
-                    continue;
-                }
-
-                if (!entityLookup.TryGetValue(entityName, out var entityDefinition))
-                {
-                    result.Errors.Add($"Unknown entity '{entityName}' in instance document.");
-                    continue;
-                }
-
                 var entityInstance = new EntityInstance
                 {
                     Entity = entityDefinition
                 };
 
+                var collectionElement = root.Element(entityDefinition.Name + "List");
+                if (collectionElement == null)
+                {
+                    recordIdsByEntity[entityDefinition.Name] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    instance.Entities.Add(entityInstance);
+                    continue;
+                }
+
                 var propertyLookup = entityDefinition.Properties
                     .Where(p => !string.IsNullOrWhiteSpace(p.Name))
                     .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+                var relationshipLookup = entityDefinition.Relationship
+                    .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Entity))
+                    .ToDictionary(r => r.Entity, StringComparer.OrdinalIgnoreCase);
+                var recordIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                foreach (var recordElement in entityElement.Elements("Record"))
+                foreach (var recordElement in collectionElement.Elements(entityDefinition.Name))
                 {
                     var record = new RecordInstance
                     {
-                        Id = GetAttributeValue(recordElement, "id")
+                        Id = GetAttributeValue(recordElement, "Id")
                     };
-
-                    foreach (var propertyElement in recordElement.Elements("Property"))
+                    if (string.IsNullOrWhiteSpace(record.Id))
                     {
-                        var propertyName = GetAttributeValue(propertyElement, "name");
-                        var propertyValue = GetAttributeValue(propertyElement, "value");
+                        result.Errors.Add($"Record in entity '{entityDefinition.Name}' is missing required Id.");
+                    }
+                    else if (!recordIds.Add(record.Id))
+                    {
+                        result.Errors.Add($"Duplicate Id '{record.Id}' in entity '{entityDefinition.Name}'.");
+                    }
 
-                        if (string.IsNullOrWhiteSpace(propertyName))
+                    foreach (var attribute in recordElement.Attributes())
+                    {
+                        var attributeName = attribute.Name.LocalName;
+                        var attributeValue = attribute.Value;
+
+                        if (string.Equals(attributeName, "Id", StringComparison.OrdinalIgnoreCase))
                         {
-                            result.Errors.Add($"Property element missing name attribute in entity '{entityName}'.");
                             continue;
                         }
 
-                        if (!propertyLookup.TryGetValue(propertyName, out var propertyDefinition))
+                        if (!propertyLookup.TryGetValue(attributeName, out var propertyDefinition))
                         {
-                            result.Errors.Add($"Unknown property '{propertyName}' for entity '{entityName}'.");
+                            result.Errors.Add($"Unknown property '{attributeName}' for entity '{entityDefinition.Name}'.");
                             continue;
                         }
 
                         record.Properties.Add(new PropertyValue
                         {
                             Property = propertyDefinition,
-                            Value = propertyValue
+                            Value = attributeValue
                         });
                     }
 
-                    foreach (var relationshipElement in recordElement.Elements("Relationship"))
+                    foreach (var propertyDefinition in entityDefinition.Properties)
                     {
-                        var relationshipName = GetAttributeValue(relationshipElement, "name");
-                        var targetIdentifier = GetAttributeValue(relationshipElement, "target");
-
-                        if (string.IsNullOrWhiteSpace(relationshipName) ||
-                            string.IsNullOrWhiteSpace(targetIdentifier))
+                        if (propertyDefinition == null ||
+                            string.IsNullOrWhiteSpace(propertyDefinition.Name) ||
+                            string.Equals(propertyDefinition.Name, "Id", StringComparison.OrdinalIgnoreCase))
                         {
-                            result.Errors.Add($"Relationship element missing name or target in entity '{entityName}'.");
                             continue;
                         }
 
-                        if (!entityLookup.TryGetValue(relationshipName, out var targetEntity))
+                        if (propertyDefinition.IsNullable)
                         {
-                            targetEntity = entityDefinition.Relationship
-                                .FirstOrDefault(r => string.Equals(r.Name, relationshipName, StringComparison.OrdinalIgnoreCase));
+                            continue;
                         }
 
-                        if (targetEntity == null)
+                        var hasValue = record.Properties.Any(p =>
+                            p.Property != null &&
+                            string.Equals(p.Property.Name, propertyDefinition.Name, StringComparison.OrdinalIgnoreCase) &&
+                            !string.IsNullOrWhiteSpace(p.Value));
+
+                        if (!hasValue)
                         {
-                            result.Errors.Add($"Relationship target '{relationshipName}' not defined for entity '{entityName}'.");
+                            result.Errors.Add(
+                                $"Property '{propertyDefinition.Name}' on entity '{entityDefinition.Name}' is non-nullable and must have a value.");
+                        }
+                    }
+
+                    var seenRelationships = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var relationshipElement in recordElement.Elements())
+                    {
+                        var relationshipEntityName = relationshipElement.Name.LocalName;
+                        var relationshipId = GetAttributeValue(relationshipElement, "Id");
+
+                        if (string.IsNullOrWhiteSpace(relationshipEntityName) ||
+                            string.IsNullOrWhiteSpace(relationshipId))
+                        {
+                            result.Errors.Add($"Relationship element missing entity or Id in entity '{entityDefinition.Name}'.");
+                            continue;
+                        }
+
+                        if (!entityLookup.TryGetValue(relationshipEntityName, out var relatedEntity))
+                        {
+                            result.Errors.Add($"Unknown relationship entity '{relationshipEntityName}' in entity '{entityDefinition.Name}'.");
+                            continue;
+                        }
+
+                        if (!relationshipLookup.ContainsKey(relationshipEntityName))
+                        {
+                            result.Errors.Add($"Relationship entity '{relationshipEntityName}' not defined for entity '{entityDefinition.Name}'.");
+                            continue;
+                        }
+
+                        if (!seenRelationships.Add(relationshipEntityName))
+                        {
+                            result.Errors.Add(
+                                $"Duplicate relationship '{entityDefinition.Name}' -> '{relationshipEntityName}' on record '{record.Id}'.");
                             continue;
                         }
 
                         record.Relationships.Add(new RelationshipValue
                         {
-                            Entity = targetEntity,
-                            Value = targetIdentifier
+                            Entity = relatedEntity,
+                            Value = relationshipId
                         });
+                    }
+
+                    foreach (var expectedRelationship in entityDefinition.Relationship)
+                    {
+                        if (expectedRelationship == null || string.IsNullOrWhiteSpace(expectedRelationship.Entity))
+                        {
+                            continue;
+                        }
+
+                        if (!seenRelationships.Contains(expectedRelationship.Entity))
+                        {
+                            result.Errors.Add(
+                                $"Missing required relationship '{entityDefinition.Name}' -> '{expectedRelationship.Entity}' on record '{record.Id}'.");
+                        }
                     }
 
                     entityInstance.Records.Add(record);
                 }
 
+                entityInstance.Records.Sort((left, right) =>
+                    StringComparer.OrdinalIgnoreCase.Compare(left.Id ?? string.Empty, right.Id ?? string.Empty));
+                recordIdsByEntity[entityDefinition.Name] = recordIds;
                 instance.Entities.Add(entityInstance);
             }
+
+            ValidateRelationshipReferences(instance, recordIdsByEntity, result.Errors);
 
             return result;
         }
@@ -163,6 +214,41 @@ namespace Metadata.Framework.Generic
         {
             var attribute = element.Attribute(attributeName);
             return attribute != null ? attribute.Value : string.Empty;
+        }
+
+        private static void ValidateRelationshipReferences(
+            ModelInstance instance,
+            IDictionary<string, HashSet<string>> recordIdsByEntity,
+            List<string> errors)
+        {
+            foreach (var entityInstance in instance.Entities)
+            {
+                var sourceEntityName = entityInstance.Entity?.Name ?? string.Empty;
+                foreach (var record in entityInstance.Records)
+                {
+                    foreach (var relationship in record.Relationships)
+                    {
+                        var relatedEntityName = relationship.Entity?.Name ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(relatedEntityName))
+                        {
+                            continue;
+                        }
+
+                        if (!recordIdsByEntity.TryGetValue(relatedEntityName, out var relatedRecordIds))
+                        {
+                            errors.Add(
+                                $"Relationship '{sourceEntityName}' -> '{relatedEntityName}' references unknown entity.");
+                            continue;
+                        }
+
+                        if (!relatedRecordIds.Contains(relationship.Value))
+                        {
+                            errors.Add(
+                                $"Relationship '{sourceEntityName}' -> '{relatedEntityName}' on record '{record.Id}' references missing Id '{relationship.Value}'.");
+                        }
+                    }
+                }
+            }
         }
     }
 }
