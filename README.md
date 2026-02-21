@@ -1,86 +1,276 @@
-﻿# Isomorphic Metadata
+# MetadataStudio
 
-> Round-trip metadata definitions across XML, C# POCOs, and SQL Server while keeping database instances in sync.
+MetadataStudio is a deterministic CLI for editing metadata models and metadata instance data, then generating artifacts (SQL, C#, SSDT).
 
-This repo shows how to treat metadata and the data it governs as *isomorphic* representations. It lets you move seamlessly between a generic metadata model, generated typed code, SQL schema/data, and a live SQL Server database.
+The project is built around one workspace contract:
 
-## Highlights
+- `metadata/workspace.json`
+- `metadata/model.xml`
+- `metadata/instance/<Entity>.xml`
 
-- **Generic metadata model:** Plain classes (`Model`, `Entity`, `Property`, `ModelInstance`, etc.) with XML readers/writers.
-- **SQL Server integration:** Schema generator, data generator, and readers that rebuild metadata from an existing database.
-- **Generated code:** `Transforms.Console` emits strongly typed POCOs from XML metadata.
-- **Reflection materializer:** Hydrates generated classes from a `ModelInstance` without regenerating materializers per schema.
-- **Sync console:** One command to pull a SQL database into XML, regenerate code/scripts, and (optionally) compare with the prior metadata snapshot.
-- **Extensibility hooks:** Partial classes and extension files make it easy to add domain helpers without touching generated code.
+## Why this exists
 
-## Projects
+- Keep metadata in git as plain XML.
+- Make model and data edits fast and scriptable.
+- Fail hard on integrity issues.
+- Generate stable outputs with minimal diff noise.
 
-| Project | Description |
-| --- | --- |
-| `Generic` | Core metadata types, XML reader (`Reader`), SQL reader (`ReadFromDatabase`), reflection materializer, model comparer, database instance reader. |
-| `Transforms` | Code generators: C# converter, SQL Server schema/data emitters, XML writers. |
-| `Transforms.Console` | CLI that reads XML and regenerates C#/SQL artifacts. |
-| `Samples` | Generated POCO sources compiled into the `SampleModel` assembly for reuse. |
-| `Samples.Console` | Harness that loads `SampleModel.xml` and `SampleInstance.xml`, materializes the generated classes, and prints them. |
-| `Sync.Console` | Orchestrates the SQL → metadata → XML/code round trip and prints schema diffs. |
+## Install and run
 
-## Sample workflow
+Build:
 
-1. **Build everything**
+```powershell
+dotnet build Metadata.Framework.sln
+```
 
-   ```
-   dotnet build Metadata.Framework.sln
-   ```
+Run directly:
 
-2. **Generate classes/schema/data from XML**
+```powershell
+dotnet run --project MetadataStudio.Cli/MetadataStudio.Cli.csproj -- help
+```
 
-   ```
-   dotnet run --project Transforms.Console/Metadata.Transformations.Console.csproj
-   ```
+Or use the launcher in repo root:
 
-   Produces `Samples/SampleModel.cs`, `Samples/SampleModel.sql`, and `Samples/SampleInstance.sql`.
+```powershell
+.\meta.cmd help
+```
 
-3. **Apply to SQL Server**
+Optional PowerShell profile install (so `meta ...` works without `./`):
 
-   ```
-   sqlcmd -S localhost -i Samples/SampleModel.sql
-   sqlcmd -S localhost -d EnterpriseBIPlatform -i Samples/SampleInstance.sql
-   ```
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-meta.ps1
+```
 
-4. **Round-trip back from SQL**
+## Top-level command map
 
-   ```
-   dotnet run --project Sync.Console/Sync.Console.csproj
-   ```
+```powershell
+meta help
+```
 
-   - Reads schema/data from SQL.
-   - Compares to existing XML.
-   - Writes updated `SampleModel.xml` and `SampleInstance.xml`.
-   - Regenerates `SampleModel.cs`, `SampleModel.sql`, and `SampleInstance.sql`.
+Main groups:
 
-5. **Inspect the typed model**
+- Workspace: `init`, `status`
+- Model/Inspect: `check`, `list`, `view`, `query`, `graph`, `model`
+- Instance mutations: `insert`, `bulk-insert`, `row update`, `row relationship`, `delete`
+- Diff/merge: `instance diff`, `instance merge`, `instance diff-aligned`, `instance merge-aligned`
+- Pipeline: `import`, `generate`
 
-   ```
-   dotnet run --project Samples.Console/Samples.Console.csproj
-   ```
+## Workspace quick start
 
-   Uses the reflection materializer to print the hydrated POCO graph.
+Create a workspace:
 
-## Reflection materializer
+```powershell
+meta init .\Samples\MyWorkspace
+```
 
-`ReflectionModelMaterializer.Materialize<T>` constructs the generated classes from a `ModelInstance`, reusing the same object for each record and wiring relationships via foreign keys. That means you can hydrate the model without generating a new materializer each time.
+Inspect it:
 
-## Schema & data analysis
+```powershell
+meta status --workspace .\Samples\MyWorkspace
+```
 
-- `SqlServerSchemaGenerator` walks the generic model and emits deterministic DDL.
-- `SqlServerDataGenerator` topologically sorts entities so foreign keys are populated safely.
-- `ModelComparer` surfaces differences between two metadata definitions (added/removed/changed entities, properties, relationships).
+## Model XML contract (current)
 
-## Custom logic
+`Id` is implicit on every entity.
 
-Keep custom domain helpers outside the generated file. For example, `Samples/SampleModelExtensions.cs` adds `SystemsWithCube()` without touching the regenerated POCOs.
+- `Property name="Id"` is not written.
+- `dataType="string"` is default and omitted.
+- `isRequired="true"` is default and omitted.
+- `isRequired` replaces legacy `isNullable`.
 
-## Requirements
+Example:
 
-- .NET SDK (net48 target).
-- SQL Server (Developer or Express/LocalDB). Update connection strings in `Sync.Console` or pass them as args.
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Model name="EnterpriseBIPlatform">
+  <Entities>
+    <Entity name="Cube">
+      <Properties>
+        <Property name="CubeName" />
+        <Property name="Purpose" isRequired="false" />
+        <Property name="RefreshMode" isRequired="false" />
+      </Properties>
+    </Entity>
+    <Entity name="Measure">
+      <Properties>
+        <Property name="MeasureName" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="Cube" />
+      </Relationships>
+    </Entity>
+  </Entities>
+</Model>
+```
+
+## Instance XML contract (current)
+
+Per row:
+
+- Mandatory `Id` attribute.
+- Relationship usages are attributes named `<TargetEntity>Id`.
+- Non-relationship properties are child elements.
+- Missing element means unset.
+- Empty element means explicit empty string.
+
+Example:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<EnterpriseBIPlatform>
+  <Cubes>
+    <Cube Id="1">
+      <CubeName>Sales Performance</CubeName>
+      <Purpose>Monthly revenue and margin tracking.</Purpose>
+      <RefreshMode>Scheduled</RefreshMode>
+    </Cube>
+  </Cubes>
+  <Measures>
+    <Measure Id="1" CubeId="1">
+      <MeasureName>Sales Amount</MeasureName>
+    </Measure>
+  </Measures>
+</EnterpriseBIPlatform>
+```
+
+## Core workflows with examples
+
+### 1) Inspect
+
+```powershell
+meta status --workspace .\Samples\CommandExamples
+meta list entities --workspace .\Samples\CommandExamples
+meta view entity Cube --workspace .\Samples\CommandExamples
+meta view row Cube 1 --workspace .\Samples\CommandExamples
+meta query Cube --contains CubeName Sales --workspace .\Samples\CommandExamples
+meta graph stats --workspace .\Samples\CommandExamples
+meta check --workspace .\Samples\CommandExamples
+```
+
+### 2) Model edits
+
+```powershell
+meta model add-entity SourceSystem --workspace .\Samples\CommandExamples
+meta model add-property SourceSystem Name --required true --workspace .\Samples\CommandExamples
+meta model add-relationship System SourceSystem --workspace .\Samples\CommandExamples
+meta model rename-property Cube Purpose BusinessPurpose --workspace .\Samples\CommandExamples
+```
+
+### 3) Row edits
+
+Insert explicit Id:
+
+```powershell
+meta insert Cube 10 --set "CubeName=Ops Cube" --set "RefreshMode=Manual" --workspace .\Samples\CommandExamples
+```
+
+Insert with identity allocation:
+
+```powershell
+meta insert Cube --auto-id --set "CubeName=Auto Cube" --workspace .\Samples\CommandExamples
+```
+
+Update one row:
+
+```powershell
+meta row update Cube 10 --set "Purpose=Operations reporting" --workspace .\Samples\CommandExamples
+```
+
+Set/clear/list relationship usage:
+
+```powershell
+meta row relationship set Measure 1 --to Cube 10 --workspace .\Samples\CommandExamples
+meta row relationship list Measure 1 --workspace .\Samples\CommandExamples
+meta row relationship clear Measure 1 --to-entity Cube --workspace .\Samples\CommandExamples
+```
+
+Delete one row:
+
+```powershell
+meta delete Cube 10 --workspace .\Samples\CommandExamples
+```
+
+### 4) Bulk insert
+
+TSV example file (`cube-upsert.tsv`):
+
+```text
+CubeName	Purpose	RefreshMode
+Planning Cube	Annual planning	Manual
+Daily Ops	Daily operational cube	Scheduled
+```
+
+Load with auto identity:
+
+```powershell
+meta bulk-insert Cube --from tsv --file .\cube-upsert.tsv --auto-id --workspace .\Samples\CommandExamples
+```
+
+### 5) Import and generate
+
+Import XML into a new workspace:
+
+```powershell
+meta import xml .\Samples\SampleModel.xml .\Samples\SampleInstance.xml --new-workspace .\Samples\ImportedXml
+```
+
+Import SQL into a new workspace:
+
+```powershell
+meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\Samples\ImportedSql
+```
+
+Generate artifacts:
+
+```powershell
+meta generate sql --out .\out\sql --workspace .\Samples\CommandExamples
+meta generate csharp --out .\out\csharp --workspace .\Samples\CommandExamples
+meta generate ssdt --out .\out\ssdt --workspace .\Samples\CommandExamples
+```
+
+## Instance diff and merge
+
+### Equal-model mode
+
+Requires left and right `model.xml` files to be identical.
+
+```powershell
+meta instance diff .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDiffRight
+meta instance merge .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDiffRight.instance-diff
+```
+
+### Aligned mode
+
+Compares mapped subsets across different models using an explicit alignment workspace.
+
+```powershell
+meta instance diff-aligned .\LeftWs .\RightWs .\AlignmentWs
+meta instance merge-aligned .\TargetWs .\RightWs.instance-diff-aligned
+```
+
+## Determinism and integrity notes
+
+- Writers are deterministic (stable ordering and formatting).
+- Commands fail hard on invalid model/instance state.
+- Missing value and explicit empty value are distinct.
+- Relationship targets are single-target and validated.
+
+## Command references
+
+- Full surface and contracts: `COMMANDS.md`
+- Real command transcript examples: `COMMANDS-EXAMPLES.md`
+- Human output grammar: `OUTPUT-GRAMMAR.md`
+
+## Tests
+
+Run all tests:
+
+```powershell
+dotnet test Metadata.Framework.sln
+```
+
+Run CLI-focused tests only:
+
+```powershell
+dotnet test MetadataStudio.Core.Tests/MetadataStudio.Core.Tests.csproj
+```
