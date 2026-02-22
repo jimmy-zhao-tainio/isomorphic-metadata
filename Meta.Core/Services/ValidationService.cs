@@ -201,7 +201,7 @@ public sealed class ValidationService : IValidationService
 
         foreach (var relationship in entity.Relationships)
         {
-            var usageName = relationship.GetName();
+            var usageName = relationship.GetColumnName();
             if (string.IsNullOrWhiteSpace(usageName))
             {
                 continue;
@@ -255,7 +255,7 @@ public sealed class ValidationService : IValidationService
             var relationNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var relationship in entity.Relationships)
             {
-                var relationshipName = relationship.GetName();
+                var relationshipName = relationship.GetColumnName();
                 if (!IsValidName(relationshipName))
                 {
                     diagnostics.Issues.Add(new DiagnosticIssue
@@ -513,7 +513,7 @@ public sealed class ValidationService : IValidationService
             {
                 foreach (var relationship in modelEntity.Relationships)
                 {
-                    var relationshipName = relationship.GetName();
+                    var relationshipName = relationship.GetColumnName();
                     if (!record.RelationshipIds.TryGetValue(relationshipName, out var relatedId) ||
                         string.IsNullOrWhiteSpace(relatedId))
                     {

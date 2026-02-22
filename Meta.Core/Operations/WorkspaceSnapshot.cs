@@ -74,7 +74,7 @@ public static class WorkspaceSnapshotCloner
                 entityClone.Relationships.Add(new RelationshipDefinition
                 {
                     Entity = relationship.Entity,
-                    Name = relationship.Name,
+                    Role = relationship.Role,
                 });
             }
 

@@ -242,7 +242,7 @@ public sealed class FullCycleRandomizedTests
                     }
 
                     var target = targetRows[random.Next(targetRows.Count)];
-                    record.RelationshipIds[relationship.GetName()] = target.Id;
+                    record.RelationshipIds[relationship.GetColumnName()] = target.Id;
                 }
 
                 rows.Add(record);

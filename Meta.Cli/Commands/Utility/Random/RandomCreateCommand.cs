@@ -468,7 +468,7 @@ internal sealed partial class CliRuntime
                 {
                     var targetRows = workspace.Instance.GetOrCreateEntityRecords(relationship.Entity);
                     var target = targetRows[random.Next(targetRows.Count)];
-                    record.RelationshipIds[relationship.GetName()] = target.Id;
+                    record.RelationshipIds[relationship.GetColumnName()] = target.Id;
                 }
     
                 records.Add(record);
@@ -846,10 +846,11 @@ internal sealed partial class CliRuntime
     
         var relationship = entity.Relationships
             .FirstOrDefault(item =>
-                string.Equals(item.GetName(), fieldName, StringComparison.OrdinalIgnoreCase));
+                string.Equals(item.GetRoleOrDefault(), fieldName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.GetColumnName(), fieldName, StringComparison.OrdinalIgnoreCase));
         if (relationship != null)
         {
-            return relationship.GetName();
+            return relationship.GetColumnName();
         }
     
         throw new InvalidOperationException($"Field '{fieldName}' does not exist on entity '{entity.Name}'.");
@@ -1145,7 +1146,7 @@ internal sealed partial class CliRuntime
     string ResolveRelationshipName(EntityDefinition entity, string candidateToEntityName)
     {
         return ResolveRelationshipDefinition(entity, candidateToEntityName, out _)
-            ?.GetName() ?? string.Empty;
+            ?.GetColumnName() ?? string.Empty;
     }
 
     RelationshipDefinition? ResolveRelationshipDefinition(
@@ -1160,16 +1161,17 @@ internal sealed partial class CliRuntime
             return null;
         }
 
-        var byName = entity.Relationships
+        var byRoleOrColumn = entity.Relationships
             .Where(item =>
-                string.Equals(item.GetName(), selector, StringComparison.OrdinalIgnoreCase))
+                string.Equals(item.GetRoleOrDefault(), selector, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.GetColumnName(), selector, StringComparison.OrdinalIgnoreCase))
             .ToList();
-        if (byName.Count == 1)
+        if (byRoleOrColumn.Count == 1)
         {
-            return byName[0];
+            return byRoleOrColumn[0];
         }
 
-        if (byName.Count > 1)
+        if (byRoleOrColumn.Count > 1)
         {
             isAmbiguous = true;
             return null;
@@ -1617,7 +1619,7 @@ internal sealed partial class CliRuntime
         int? rowNumber)
     {
         foreach (var relationship in entity.Relationships
-                     .Select(item => item.GetName())
+                     .Select(item => item.GetColumnName())
                      .Where(name => !string.IsNullOrWhiteSpace(name))
                      .OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
         {
@@ -1641,13 +1643,14 @@ internal sealed partial class CliRuntime
         var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var relationship in entity.Relationships)
         {
-            var relationshipName = relationship.GetName();
+            var relationshipName = relationship.GetColumnName();
             if (string.IsNullOrWhiteSpace(relationshipName))
             {
                 continue;
             }
 
             aliases[relationshipName] = relationshipName;
+            aliases[relationship.GetRoleOrDefault()] = relationshipName;
         }
 
         return aliases;

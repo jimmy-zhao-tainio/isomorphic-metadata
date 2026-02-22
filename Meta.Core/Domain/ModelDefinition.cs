@@ -27,26 +27,26 @@ public sealed class EntityDefinition
         return string.IsNullOrWhiteSpace(Plural) ? Name + "s" : Plural;
     }
 
-    public RelationshipDefinition? FindRelationshipByUsageName(string usageName)
+    public RelationshipDefinition? FindRelationshipByRole(string role)
     {
-        if (string.IsNullOrWhiteSpace(usageName))
+        if (string.IsNullOrWhiteSpace(role))
         {
             return null;
         }
 
         return Relationships.FirstOrDefault(relationship =>
-            string.Equals(relationship.GetName(), usageName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(relationship.GetRoleOrDefault(), role, StringComparison.OrdinalIgnoreCase));
     }
 
-    public RelationshipDefinition? FindRelationshipByName(string relationshipName)
+    public RelationshipDefinition? FindRelationshipByColumnName(string columnName)
     {
-        if (string.IsNullOrWhiteSpace(relationshipName))
+        if (string.IsNullOrWhiteSpace(columnName))
         {
             return null;
         }
 
         return Relationships.FirstOrDefault(relationship =>
-            string.Equals(relationship.GetName(), relationshipName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(relationship.GetColumnName(), columnName, StringComparison.OrdinalIgnoreCase));
     }
 }
 
@@ -60,21 +60,20 @@ public sealed class PropertyDefinition
 public sealed class RelationshipDefinition
 {
     public string Entity { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
 
-    public string GetName()
+    public string GetRoleOrDefault()
     {
-        return string.IsNullOrWhiteSpace(Name) ? Entity + "Id" : Name;
+        return string.IsNullOrWhiteSpace(Role) ? Entity : Role;
+    }
+
+    public string GetColumnName()
+    {
+        return GetRoleOrDefault() + "Id";
     }
 
     public string GetNavigationName()
     {
-        var relationshipName = GetName();
-        if (relationshipName.EndsWith("Id", StringComparison.Ordinal) && relationshipName.Length > 2)
-        {
-            return relationshipName[..^2];
-        }
-
-        return relationshipName;
+        return GetRoleOrDefault();
     }
 }

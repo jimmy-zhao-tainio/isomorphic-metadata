@@ -23,11 +23,11 @@ internal sealed partial class CliRuntime
         }
     
         var refs = entity.Relationships
-            .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
             .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
             .Select(relationship => new
             {
-                Name = relationship.GetName(),
+                Name = relationship.GetColumnName(),
                 Target = relationship.Entity,
             })
             .ToList();

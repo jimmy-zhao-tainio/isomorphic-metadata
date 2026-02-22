@@ -26,7 +26,7 @@ internal sealed partial class CliRuntime
             {
                 return PrintDataError(
                     "E_RELATIONSHIP_AMBIGUOUS",
-                    $"Relationship selector '{toEntityName}' is ambiguous on entity '{fromEntityName}'. Use relationship name.");
+                    $"Relationship selector '{toEntityName}' is ambiguous on entity '{fromEntityName}'. Use relationship role or column.");
             }
 
             if (relationship == null)
@@ -36,7 +36,7 @@ internal sealed partial class CliRuntime
                     $"Relationship '{fromEntityName}->{toEntityName}' does not exist.");
             }
 
-            var relationshipName = relationship.GetName();
+            var relationshipName = relationship.GetColumnName();
             var targetEntityName = relationship.Entity;
 
             var blockers = workspace.Instance.GetOrCreateEntityRecords(fromEntityName)

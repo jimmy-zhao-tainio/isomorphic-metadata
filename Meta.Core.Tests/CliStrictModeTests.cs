@@ -2703,7 +2703,7 @@ public sealed class CliStrictModeTests
                 .Select(item => item.Name)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var relationshipNames = entity.Relationships
-                .Select(item => item.GetName())
+                .Select(item => item.GetColumnName())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var row = new InstanceRecord
             {

@@ -111,19 +111,28 @@ public sealed class ImportService : IImportService
                     $"Foreign key '{relationship.ConstraintName}' on '{sourceEntity.Name}.{relationship.SourceColumn}' must reference '{targetEntity.Name}.Id'.");
             }
 
-            var relationshipName = relationship.SourceColumn.Trim();
-            ValidateIdentifier(relationshipName, $"Foreign key column on table '{sourceEntity.Name}'");
-            if (sourceEntity.Relationships.Any(item =>
-                    string.Equals(item.GetName(), relationshipName, StringComparison.OrdinalIgnoreCase)))
+            var sourceColumnName = relationship.SourceColumn.Trim();
+            ValidateIdentifier(sourceColumnName, $"Foreign key column on table '{sourceEntity.Name}'");
+            if (!sourceColumnName.EndsWith("Id", StringComparison.OrdinalIgnoreCase) || sourceColumnName.Length <= 2)
             {
                 throw new InvalidOperationException(
-                    $"Table '{sourceEntity.Name}' has duplicate relationship usage name '{relationshipName}'.");
+                    $"Foreign key '{relationship.ConstraintName}' on '{sourceEntity.Name}.{relationship.SourceColumn}' must use an '<Role>Id' column name.");
+            }
+
+            var role = sourceColumnName[..^2];
+            if (sourceEntity.Relationships.Any(item =>
+                    string.Equals(item.GetRoleOrDefault(), role, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"Table '{sourceEntity.Name}' has duplicate relationship role '{role}'.");
             }
 
             sourceEntity.Relationships.Add(new RelationshipDefinition
             {
                 Entity = targetEntity.Name,
-                Name = relationshipName,
+                Role = string.Equals(role, targetEntity.Name, StringComparison.OrdinalIgnoreCase)
+                    ? string.Empty
+                    : role,
             });
         }
 
@@ -306,7 +315,7 @@ public sealed class ImportService : IImportService
 
         var relationshipColumns = entity.Relationships
             .Where(item => !string.IsNullOrWhiteSpace(item.Entity))
-            .Select(item => item.GetName())
+            .Select(item => item.GetColumnName())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         entity.Properties.RemoveAll(property =>
@@ -392,7 +401,7 @@ public sealed class ImportService : IImportService
 
             foreach (var relationship in entity.Relationships)
             {
-                var columnName = relationship.GetName();
+                var columnName = relationship.GetColumnName();
                 if (!columnNames.Contains(columnName))
                 {
                     throw new InvalidOperationException(
@@ -418,7 +427,7 @@ public sealed class ImportService : IImportService
                         $"Table '{schema}.{entity.Name}' has non-numeric relationship value '{relationshipId}' for '{columnName}' on row '{id}'.");
                 }
 
-                record.RelationshipIds[relationship.GetName()] = relationshipId;
+                record.RelationshipIds[relationship.GetColumnName()] = relationshipId;
             }
 
             rows.Add(record);

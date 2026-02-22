@@ -37,7 +37,7 @@ internal sealed partial class CliRuntime
             {
                 return PrintDataError(
                     "E_RELATIONSHIP_AMBIGUOUS",
-                    $"Relationship selector '{toEntityName}' is ambiguous on entity '{fromEntityName}'. Use relationship name.");
+                    $"Relationship selector '{toEntityName}' is ambiguous on entity '{fromEntityName}'. Use relationship role or column.");
             }
 
             if (relationship == null)
@@ -47,7 +47,7 @@ internal sealed partial class CliRuntime
                     $"Relationship '{fromEntityName}->{toEntityName}' does not exist.");
             }
 
-            var toRelationshipName = relationship.GetName();
+            var toRelationshipName = relationship.GetColumnName();
 
             return PrintFormattedError(
                 "E_OPERATION",

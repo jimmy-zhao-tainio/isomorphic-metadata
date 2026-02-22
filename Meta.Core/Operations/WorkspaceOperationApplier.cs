@@ -106,7 +106,7 @@ public static class WorkspaceOperationApplier
 
             var relationshipUsageNames = sourceEntity.Relationships
                 .Where(relationship => string.Equals(relationship.Entity, entityName, StringComparison.OrdinalIgnoreCase))
-                .Select(relationship => relationship.GetName())
+                .Select(relationship => relationship.GetColumnName())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (relationshipUsageNames.Count == 0)
             {
@@ -148,9 +148,9 @@ public static class WorkspaceOperationApplier
             {
                 if (string.Equals(relationship.Entity, entityName, StringComparison.OrdinalIgnoreCase))
                 {
-                    var previousUsageName = relationship.GetName();
+                    var previousUsageName = relationship.GetColumnName();
                     relationship.Entity = newEntityName;
-                    var updatedUsageName = relationship.GetName();
+                    var updatedUsageName = relationship.GetColumnName();
                     if (!string.Equals(previousUsageName, updatedUsageName, StringComparison.OrdinalIgnoreCase))
                     {
                         foreach (var record in modelEntityRecords)
@@ -282,9 +282,9 @@ public static class WorkspaceOperationApplier
             Entity = relatedEntity,
         };
 
-        var relationshipName = newRelationship.GetName();
+        var relationshipName = newRelationship.GetColumnName();
         if (entity.Relationships.Any(relationship =>
-                string.Equals(relationship.GetName(), relationshipName, StringComparison.OrdinalIgnoreCase)))
+                string.Equals(relationship.GetColumnName(), relationshipName, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException($"Relationship '{entity.Name}.{relationshipName}' already exists.");
         }
@@ -301,10 +301,10 @@ public static class WorkspaceOperationApplier
 
         if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records) &&
             records.Any(record => record.RelationshipIds.Any(pair =>
-                string.Equals(pair.Key, relationship.GetName(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(pair.Key, relationship.GetColumnName(), StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(pair.Value))))
         {
-            throw new InvalidOperationException($"Relationship '{entityName}.{relationship.GetName()}' is in use and cannot be removed.");
+            throw new InvalidOperationException($"Relationship '{entityName}.{relationship.GetColumnName()}' is in use and cannot be removed.");
         }
 
         entity.Relationships.Remove(relationship);
@@ -319,18 +319,18 @@ public static class WorkspaceOperationApplier
 
         var entity = RequireEntity(workspace.Model, entityName);
         var relationship = ResolveRelationship(entity, relationshipSelector);
-        var oldUsageName = relationship.GetName();
+        var oldUsageName = relationship.GetColumnName();
 
         if (entity.Relationships.Any(item =>
                 !ReferenceEquals(item, relationship) &&
-                string.Equals(item.GetName(), relationship.GetName(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(item.GetColumnName(), relationship.GetColumnName(), StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(item.Entity, newRelatedEntity, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException($"Relationship '{entityName}->{newRelatedEntity}' already exists.");
         }
 
         relationship.Entity = newRelatedEntity;
-        var newUsageName = relationship.GetName();
+        var newUsageName = relationship.GetColumnName();
         if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records))
         {
             foreach (var record in records)
@@ -458,8 +458,22 @@ public static class WorkspaceOperationApplier
     private static RelationshipDefinition ResolveRelationship(EntityDefinition entity, string selector)
     {
         var normalizedSelector = selector.Trim();
+        var byRole = entity.Relationships
+            .Where(item => string.Equals(item.GetRoleOrDefault(), normalizedSelector, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (byRole.Count == 1)
+        {
+            return byRole[0];
+        }
+
+        if (byRole.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"Relationship selector '{selector}' is ambiguous in entity '{entity.Name}'.");
+        }
+
         var byUsage = entity.Relationships
-            .Where(item => string.Equals(item.GetName(), normalizedSelector, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.Equals(item.GetColumnName(), normalizedSelector, StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (byUsage.Count == 1)
         {
@@ -483,7 +497,7 @@ public static class WorkspaceOperationApplier
         if (byTarget.Count > 1)
         {
             throw new InvalidOperationException(
-                $"Relationship target '{selector}' is ambiguous in entity '{entity.Name}'. Use relationship name.");
+                $"Relationship target '{selector}' is ambiguous in entity '{entity.Name}'. Use relationship role or column.");
         }
 
         throw new InvalidOperationException(

@@ -208,10 +208,10 @@ public static class GenerationService
             }
 
             foreach (var relationship in entity.Relationships
-                         .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
                          .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase))
             {
-                var relationshipName = relationship.GetName();
+                var relationshipName = relationship.GetColumnName();
                 columns.Add($"    [{EscapeSqlIdentifier(relationshipName)}] NVARCHAR(128) NOT NULL");
                 relationships.Add((entity.Name, relationship.Entity, relationshipName));
             }
@@ -267,12 +267,12 @@ public static class GenerationService
                 }
 
                 foreach (var relationship in entity.Relationships
-                             .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+                             .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
                              .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase))
                 {
-                    var relationshipName = relationship.GetName();
+                    var relationshipName = relationship.GetColumnName();
                     columns.Add($"[{EscapeSqlIdentifier(relationshipName)}]");
-                    values.Add(row.RelationshipIds.TryGetValue(relationship.GetName(), out var relationshipValue)
+                    values.Add(row.RelationshipIds.TryGetValue(relationship.GetColumnName(), out var relationshipValue)
                         ? ToSqlLiteral(relationshipValue)
                         : "NULL");
                 }
@@ -327,10 +327,10 @@ public static class GenerationService
         }
 
         foreach (var relationship in entity.Relationships
-                     .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
                      .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase))
         {
-            var relationshipName = relationship.GetName();
+            var relationshipName = relationship.GetColumnName();
             var navigationName = relationship.GetNavigationName();
             builder.AppendLine($"        public string {relationshipName} {{ get; set; }} = string.Empty;");
             builder.AppendLine($"        public {relationship.Entity} {navigationName} {{ get; set; }} = new {relationship.Entity}();");

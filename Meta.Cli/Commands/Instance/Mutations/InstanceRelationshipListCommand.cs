@@ -26,16 +26,16 @@ internal sealed partial class CliRuntime
             var fromEntity = RequireEntity(workspace, fromEntityName);
             var row = ResolveRowById(workspace, fromEntityName, fromId);
             var relationshipRows = fromEntity.Relationships
-                .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
                 .Where(relationship =>
-                    row.RelationshipIds.TryGetValue(relationship.GetName(), out var relationshipId) &&
+                    row.RelationshipIds.TryGetValue(relationship.GetColumnName(), out var relationshipId) &&
                     !string.IsNullOrWhiteSpace(relationshipId))
                 .Select(item => new
                 {
-                    Relationship = item.GetName(),
+                    Relationship = item.GetColumnName(),
                     ToEntity = item.Entity,
-                    ToInstance = BuildEntityInstanceAddress(item.Entity, row.RelationshipIds[item.GetName()]),
+                    ToInstance = BuildEntityInstanceAddress(item.Entity, row.RelationshipIds[item.GetColumnName()]),
                 })
                 .ToList();
     

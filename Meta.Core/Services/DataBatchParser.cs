@@ -60,7 +60,7 @@ public static class DataBatchParser
         var relationshipHeaderMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var relationship in entity.Relationships)
         {
-            var relationshipName = relationship.GetName();
+            var relationshipName = relationship.GetColumnName();
             if (string.IsNullOrWhiteSpace(relationshipName))
             {
                 continue;

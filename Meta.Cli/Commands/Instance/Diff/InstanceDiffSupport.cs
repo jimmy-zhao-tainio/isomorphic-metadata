@@ -354,16 +354,22 @@ internal sealed partial class CliRuntime
             {
                 foreach (var relationshipElement in relationshipsElement.Elements("Relationship"))
                 {
+                    if (relationshipElement.Attribute("name") != null)
+                    {
+                        throw new InvalidDataException(
+                            $"Template '{resourceName}' entity '{entity.Name}' uses unsupported relationship attribute 'name'. Use 'role'.");
+                    }
+
                     if (relationshipElement.Attribute("column") != null)
                     {
                         throw new InvalidDataException(
-                            $"Template '{resourceName}' entity '{entity.Name}' uses unsupported relationship attribute 'column'. Use 'name'.");
+                            $"Template '{resourceName}' entity '{entity.Name}' uses unsupported relationship attribute 'column'. Use 'role'.");
                     }
 
                     entity.Relationships.Add(new RelationshipDefinition
                     {
                         Entity = ((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim(),
-                        Name = ((string?)relationshipElement.Attribute("name") ?? string.Empty).Trim(),
+                        Role = ((string?)relationshipElement.Attribute("role") ?? string.Empty).Trim(),
                     });
                 }
             }
@@ -398,14 +404,14 @@ internal sealed partial class CliRuntime
             }
 
             foreach (var relationship in entity.Relationships
-                         .OrderBy(item => item.GetName(), StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(item => item.GetColumnName(), StringComparer.OrdinalIgnoreCase)
                          .ThenBy(item => item.Entity, StringComparer.OrdinalIgnoreCase))
             {
                 lines.Add(
                     "relationship|" +
                     EscapeCanonicalPart(entity.Name) + "|" +
                     EscapeCanonicalPart(relationship.Entity) + "|" +
-                    EscapeCanonicalPart(relationship.GetName()));
+                    EscapeCanonicalPart(relationship.GetColumnName()));
             }
         }
 
@@ -448,7 +454,7 @@ internal sealed partial class CliRuntime
                 entityClone.Relationships.Add(new RelationshipDefinition
                 {
                     Entity = relationship.Entity ?? string.Empty,
-                    Name = relationship.Name ?? string.Empty,
+                    Role = relationship.Role ?? string.Empty,
                 });
             }
 
@@ -472,12 +478,8 @@ internal sealed partial class CliRuntime
         var relationshipByAlias = new Dictionary<string, RelationshipDefinition>(StringComparer.OrdinalIgnoreCase);
         foreach (var relationship in modelEntity.Relationships)
         {
-            var relationshipName = relationship.GetName();
-            relationshipByAlias[relationshipName] = relationship;
-            if (relationshipName.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
-            {
-                relationshipByAlias[relationshipName + "Id"] = relationship;
-            }
+            relationshipByAlias[relationship.GetColumnName()] = relationship;
+            relationshipByAlias[relationship.GetRoleOrDefault()] = relationship;
         }
 
         var row = new InstanceRecord
@@ -501,7 +503,7 @@ internal sealed partial class CliRuntime
 
             if (relationshipByAlias.TryGetValue(pair.Key, out var relationship))
             {
-                row.RelationshipIds[relationship.GetName()] = pair.Value;
+                row.RelationshipIds[relationship.GetColumnName()] = pair.Value;
                 continue;
             }
 
@@ -660,21 +662,21 @@ internal sealed partial class CliRuntime
             return true;
         }
 
-        var relationship = entity.FindRelationshipByName(propertyName) ??
-                           entity.FindRelationshipByUsageName(propertyName);
+        var relationship = entity.FindRelationshipByRole(propertyName) ??
+                           entity.FindRelationshipByColumnName(propertyName);
         if (relationship != null &&
-            row.RelationshipIds.TryGetValue(relationship.GetName(), out var relationshipValue))
+            row.RelationshipIds.TryGetValue(relationship.GetColumnName(), out var relationshipValue))
         {
             if (relationshipValue == null)
             {
                 throw new InvalidOperationException(
-                    $"Entity '{entity.Name}' row '{row.Id}' contains null relationship target for '{relationship.GetName()}'.");
+                    $"Entity '{entity.Name}' row '{row.Id}' contains null relationship target for '{relationship.GetColumnName()}'.");
             }
 
             if (string.IsNullOrWhiteSpace(relationshipValue))
             {
                 throw new InvalidOperationException(
-                    $"Entity '{entity.Name}' row '{row.Id}' contains blank relationship target for '{relationship.GetName()}'.");
+                    $"Entity '{entity.Name}' row '{row.Id}' contains blank relationship target for '{relationship.GetColumnName()}'.");
             }
 
             value = relationshipValue;
@@ -688,14 +690,14 @@ internal sealed partial class CliRuntime
     private static bool IsRelationshipProperty(EntityDefinition entity, string propertyName, out string relationshipUsageName)
     {
         relationshipUsageName = string.Empty;
-        var relationship = entity.FindRelationshipByName(propertyName) ??
-                           entity.FindRelationshipByUsageName(propertyName);
+        var relationship = entity.FindRelationshipByRole(propertyName) ??
+                           entity.FindRelationshipByColumnName(propertyName);
         if (relationship == null)
         {
             return false;
         }
 
-        relationshipUsageName = relationship.GetName();
+        relationshipUsageName = relationship.GetColumnName();
         return true;
     }
 
@@ -741,7 +743,7 @@ internal sealed partial class CliRuntime
 
             foreach (var relationship in entity.Relationships)
             {
-                propertyNames.Add(relationship.GetName());
+                propertyNames.Add(relationship.GetColumnName());
             }
 
             var propertyIdByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

@@ -160,13 +160,14 @@ Relationships are declared as:
 
 `<Relationship entity="TargetEntity" />`
 
-To support multiple relationships to the same target, or to control the instance attribute / SQL column name, specify `name` directly as the serialized relationship name:
+To support multiple relationships to the same target, specify a role:
 
-`<Relationship entity="TypeSystem" name="SourceTypeSystemId" />`
+`<Relationship entity="TypeSystem" role="SourceTypeSystem" />`
 
 Defaults are:
 
-If `name` is omitted, the relationship name defaults to `${TargetEntity}Id`.
+If `role` is omitted, the relationship role defaults to `${TargetEntity}`.  
+The serialized instance attribute / SQL column is always `${roleOrTarget}Id`.
 
 ### Instance XML
 
@@ -175,7 +176,7 @@ Under root, each entity uses a plural container element (for example `<Cubes>`, 
 Inside each container, each instance uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
 
 Instance `Id` attribute is mandatory.  
-Declared relationships are required and stored as instance attributes named by the relationship name (defaults described above).  
+Declared relationships are required and stored as instance attributes named by `${roleOrTarget}Id`.  
 Scalar properties are child elements. Missing property element means unset; empty property element means explicit empty string.
 
 ## Core workflows with examples
