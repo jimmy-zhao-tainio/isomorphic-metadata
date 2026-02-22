@@ -162,7 +162,7 @@ Relationships are declared as:
 
 To support multiple relationships to the same target, or to control the instance attribute / SQL column name, specify `name` directly as the serialized relationship name:
 
-`<Relationship entity="TargetEntity" name="PoopId" />`
+`<Relationship entity="TypeSystem" name="SourceTypeSystemId" />`
 
 Defaults are:
 
