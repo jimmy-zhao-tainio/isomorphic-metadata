@@ -1,6 +1,6 @@
 # isomorphic-metadata
 
-`isomorphic-metadata` is a deterministic, git-first backend for metadata. You keep a **model** and **instance data** in a workspace on disk, validate and edit it with `meta`, and generate artifacts (SQL, C#, SSDT) with minimal diff noise.
+`isomorphic-metadata` is a deterministic metadata backend. The canonical representation is an XML workspace on disk (git-friendly), but you can round-trip: import from SQL, generate SQL/C#/SSDT, and load/save model instances via generated C# APIs for tooling.
 
 This repo ships two CLI tools:
 
