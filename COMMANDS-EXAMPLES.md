@@ -30,25 +30,20 @@ Model:
   graph  Graph stats and inbound relationships.
   list   List entities, properties, relationships, and tasks.
   model  Mutate model entities, properties, and relationships.
-  view   View entity or row details.
+  view   View entity or instance details.
 
 Instance:
 
   instance     Diff and merge instance artifacts.
-  insert       Insert one row: <Entity> <Id> or --auto-id.
-  delete       Delete one row: <Entity> <Id>.
-  query        Search rows with equals/contains filters.
-  bulk-insert  Insert many rows from tsv/csv/jsonl input (supports --auto-id).
-  row          Row updates and relationship commands.
+  insert       Insert one instance: <Entity> <Id> or --auto-id.
+  delete       Delete one instance: <Entity> <Id>.
+  query        Search instances with equals/contains filters.
+  bulk-insert  Insert many instances from tsv/csv/jsonl input (supports --auto-id).
 
 Pipeline:
 
   import    Import into a NEW workspace.
   generate  Generate artifacts from the workspace.
-
-Utility:
-
-  random  Generate random stress-test workspace.
 
 Examples:
 
@@ -152,11 +147,11 @@ Model:
   Entities: 9
   Rows: 15
 Data:
-  Model: 3.45 KB (3530 B)
-  Instance: 3.26 KB (3335 B)
+  Model: 2.38 KB (2438 B)
+  Instance: 3.2 KB (3281 B)
 Contract:
   Version: 1.0
-  WorkspaceFingerprint: 5374679619e11ac8ff1856b7615a3f4650b49244054860cf70b003cb884a0b6f
+  WorkspaceFingerprint: 8d95c4d962796946070e52c452d0f0deee79b9b3ceacc36a8b3384c49ff2735b
 ```
 
 Failure:
@@ -199,15 +194,15 @@ Success:
 [exit 0]
 Entities (9):
   Name             Rows  Properties  Relationships
-  Cube             2     4           0
-  Dimension        2     4           0
-  Fact             1     5           0
-  Measure          1     3           1
-  System           2     4           1
-  SystemCube       2     2           2
-  SystemDimension  2     2           2
-  SystemFact       1     2           2
-  SystemType       2     3           0
+  Cube             2     3           0
+  Dimension        2     3           0
+  Fact             1     4           0
+  Measure          1     2           1
+  System           2     3           1
+  SystemCube       2     1           2
+  SystemDimension  2     1           2
+  SystemFact       1     1           2
+  SystemType       2     2           0
 ```
 
 Failure:
@@ -228,11 +223,11 @@ Success:
 > .\\meta.cmd list properties Cube --workspace Samples\CommandExamples
 [exit 0]
 Properties: Cube
-  Name         Type    Nullable
-  Id           string  no
-  CubeName     string  no
-  Purpose      string  yes
-  RefreshMode  string  yes
+  Name         Type    Required
+  Id           string  yes
+  CubeName     string  yes
+  Purpose      string  no
+  RefreshMode  string  no
 ```
 
 Failure:
@@ -252,8 +247,8 @@ Success:
 [exit 0]
 Relationships: Measure (1)
 Required: (n/a)
-  Target
-  Cube
+  Name  Target  Column
+  Cube  Cube    CubeId
 ```
 
 Failure:
@@ -332,13 +327,13 @@ Error: Entity 'MissingEntity' was not found.
 Next: meta list entities
 ```
 
-## view row
+## view instance
 
 Success:
 ```powershell
-> .\\meta.cmd view row Cube 1 --workspace Samples\CommandExamples
+> .\\meta.cmd view instance Cube 1 --workspace Samples\CommandExamples
 [exit 0]
-Row: Cube 1
+Instance: Cube 1
   Field        Value
   CubeName     Sales Performance
   Purpose      Monthly revenue and margin tracking.
@@ -347,9 +342,9 @@ Row: Cube 1
 
 Failure:
 ```powershell
-> .\\meta.cmd view row Cube 999 --workspace Samples\CommandExamples
+> .\\meta.cmd view instance Cube 999 --workspace Samples\CommandExamples
 [exit 4]
-Error: Row 'Cube 999' was not found.
+Error: Instance 'Cube 999' was not found.
 
 Next: meta query Cube --contains Id 999
 ```
@@ -541,6 +536,7 @@ Success:
 OK: relationship removed
 From: CmdEntityRenamed
 To: Cube
+Name: Cube
 ```
 
 Failure:
@@ -549,13 +545,13 @@ Failure:
 [exit 4]
 Error: Relationship 'Measure->Cube' is in use.
 
-Relationship usage exists in 1 row(s).
+Relationship usage exists in 1 instance(s).
 
 Relationship usage blockers:
-  Entity   Row
+  Entity   Instance
   Measure  Measure 1
 
-Next: meta row relationship clear Measure 1 --to-entity Cube
+Next: meta instance relationship set Measure 1 --to Cube <ToId>
 ```
 
 ## model drop-property
@@ -594,9 +590,9 @@ Failure:
 [exit 4]
 Error: Cannot drop entity Cube
 
-Cube has 2 rows.
+Cube has 2 instances.
 
-Next: meta view row Cube 1
+Next: meta view instance Cube 1
 ```
 
 ## insert
@@ -613,9 +609,9 @@ Failure:
 ```powershell
 > .\\meta.cmd insert Cube 10 --set CubeName=Duplicate --workspace Samples\CommandExamples
 [exit 4]
-Error: Row 'Cube 10' already exists.
+Error: Instance 'Cube 10' already exists.
 
-Next: meta row update Cube 10 --set <Field>=<Value>
+Next: meta instance update Cube 10 --set <Field>=<Value>
 ```
 
 ## insert auto-id
@@ -639,82 +635,81 @@ Usage: meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Valu
 Next: meta insert help
 ```
 
-## row update
+## instance update
 
 Success:
 ```powershell
-> .\\meta.cmd row update Cube 10 --set RefreshMode=Manual --workspace Samples\CommandExamples
+> .\\meta.cmd instance update Cube 10 --set RefreshMode=Manual --workspace Samples\CommandExamples
 [exit 0]
 OK: updated Cube 10
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd row update Cube 1 --set MissingField=BadValue --workspace Samples\CommandExamples
+> .\\meta.cmd instance update Cube 1 --set MissingField=BadValue --workspace Samples\CommandExamples
 [exit 4]
 Error: Property 'Cube.MissingField' was not found.
 
 Next: meta list properties Cube
 ```
 
-## row relationship set
+## instance relationship set
 
 Success:
 ```powershell
-> .\\meta.cmd row relationship set Measure 1 --to Cube 2 --workspace Samples\CommandExamples
+> .\\meta.cmd instance relationship set Measure 1 --to Cube 2 --workspace Samples\CommandExamples
 [exit 0]
 OK: relationship usage updated
-FromRow: Measure 1
-ToRow: Cube 2
+FromInstance: Measure 1
+ToInstance: Cube 2
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd row relationship set Measure 1 --to Cube 999 --workspace Samples\CommandExamples
+> .\\meta.cmd instance relationship set Measure 1 --to Cube 999 --workspace Samples\CommandExamples
 [exit 4]
-Error: Row 'Cube 999' was not found.
+Error: Instance 'Cube 999' was not found.
 
 Next: meta query Cube --contains Id 999
 ```
 
-## row relationship list
+## instance relationship list
 
 Success:
 ```powershell
-> .\\meta.cmd row relationship list Measure 1 --workspace Samples\CommandExamples
+> .\\meta.cmd instance relationship list Measure 1 --workspace Samples\CommandExamples
 [exit 0]
 Relationships:
-  FromRow: Measure 1
-  ToEntity  ToRow
-  Cube      Cube 2
+  FromInstance: Measure 1
+  Relationship  ToEntity  ToInstance
+  Cube          Cube      Cube 2
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd row relationship list Measure 999 --workspace Samples\CommandExamples
+> .\\meta.cmd instance relationship list Measure 999 --workspace Samples\CommandExamples
 [exit 4]
-Error: Row 'Measure 999' was not found.
+Error: Instance 'Measure 999' was not found.
 
 Next: meta query Measure --contains Id 999
 ```
 
-## row relationship clear
+## instance relationship clear
 
 Success:
 ```powershell
-> .\\meta.cmd row relationship clear Measure 1 --to-entity Cube --workspace Samples\CommandExamples
+> .\\meta.cmd instance relationship clear Measure 1 --to-entity Cube --workspace Samples\CommandExamples
 [exit 4]
-Error: Cannot complete row.relationship.clear
+Error: Cannot clear required relationship 'Measure->Cube'.
 
-Blocked by validation issues (1).
-Measure 1 is missing relationship Cube
+Instance: Measure 1
 
-Next: meta row relationship clear help
+Next: meta instance relationship set Measure 1 --to Cube <ToId>
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd row relationship clear Cube 1 --to-entity System --workspace Samples\CommandExamples
+> .\\meta.cmd instance relationship clear Cube 1 --to-entity System --workspace Samples\CommandExamples
 [exit 4]
 Error: Relationship 'Cube->System' was not found.
 

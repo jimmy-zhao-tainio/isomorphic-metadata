@@ -357,6 +357,8 @@ internal sealed partial class CliRuntime
                     entity.Relationships.Add(new RelationshipDefinition
                     {
                         Entity = ((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim(),
+                        Name = ((string?)relationshipElement.Attribute("name") ?? string.Empty).Trim(),
+                        Column = ((string?)relationshipElement.Attribute("column") ?? string.Empty).Trim(),
                     });
                 }
             }
@@ -390,12 +392,16 @@ internal sealed partial class CliRuntime
                     (property.IsNullable ? "nullable" : "required"));
             }
 
-            foreach (var relationship in entity.Relationships.OrderBy(item => item.Entity, StringComparer.OrdinalIgnoreCase))
+            foreach (var relationship in entity.Relationships
+                         .OrderBy(item => item.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+                         .ThenBy(item => item.Entity, StringComparer.OrdinalIgnoreCase))
             {
                 lines.Add(
                     "relationship|" +
                     EscapeCanonicalPart(entity.Name) + "|" +
-                    EscapeCanonicalPart(relationship.Entity));
+                    EscapeCanonicalPart(relationship.Entity) + "|" +
+                    EscapeCanonicalPart(relationship.GetUsageName()) + "|" +
+                    EscapeCanonicalPart(relationship.GetColumnName()));
             }
         }
 
@@ -438,6 +444,8 @@ internal sealed partial class CliRuntime
                 entityClone.Relationships.Add(new RelationshipDefinition
                 {
                     Entity = relationship.Entity ?? string.Empty,
+                    Name = relationship.Name ?? string.Empty,
+                    Column = relationship.Column ?? string.Empty,
                 });
             }
 
@@ -458,9 +466,12 @@ internal sealed partial class CliRuntime
         var propertyNames = modelEntity.Properties
             .Select(item => item.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var relationshipNames = modelEntity.Relationships
-            .Select(item => item.Entity)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var relationshipByAlias = new Dictionary<string, RelationshipDefinition>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationship in modelEntity.Relationships)
+        {
+            relationshipByAlias[relationship.GetUsageName()] = relationship;
+            relationshipByAlias[relationship.GetColumnName()] = relationship;
+        }
 
         var row = new InstanceRecord
         {
@@ -481,14 +492,10 @@ internal sealed partial class CliRuntime
                 continue;
             }
 
-            if (pair.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+            if (relationshipByAlias.TryGetValue(pair.Key, out var relationship))
             {
-                var relationshipEntity = pair.Key[..^2];
-                if (relationshipNames.Contains(relationshipEntity))
-                {
-                    row.RelationshipIds[relationshipEntity] = pair.Value;
-                    continue;
-                }
+                row.RelationshipIds[relationship.GetUsageName()] = pair.Value;
+                continue;
             }
 
             if (propertyNames.Contains(pair.Key))
@@ -512,25 +519,37 @@ internal sealed partial class CliRuntime
             if (propertyValue == null)
             {
                 throw new InvalidOperationException(
-                    $"Row '{row.Id}' contains null value for '{key}'.");
+                    $"Instance '{row.Id}' contains null value for '{key}'.");
             }
 
             value = propertyValue;
             return true;
         }
 
+        if (row.RelationshipIds.TryGetValue(key, out var relationshipValue))
+        {
+            if (relationshipValue == null)
+            {
+                throw new InvalidOperationException(
+                    $"Instance '{row.Id}' contains null relationship value for '{key}'.");
+            }
+
+            value = relationshipValue;
+            return true;
+        }
+
         if (key.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
         {
-            var relationshipEntity = key[..^2];
-            if (row.RelationshipIds.TryGetValue(relationshipEntity, out var relationshipValue))
+            var relationshipUsageName = key[..^2];
+            if (row.RelationshipIds.TryGetValue(relationshipUsageName, out var usageRelationshipValue))
             {
-                if (relationshipValue == null)
+                if (usageRelationshipValue == null)
                 {
                     throw new InvalidOperationException(
-                        $"Row '{row.Id}' contains null relationship value for '{key}'.");
+                        $"Instance '{row.Id}' contains null relationship value for '{key}'.");
                 }
 
-                value = relationshipValue;
+                value = usageRelationshipValue;
                 return true;
             }
         }
@@ -579,9 +598,7 @@ internal sealed partial class CliRuntime
                 ? normalizedRelative
                 : Path.Combine(workspaceRoot, normalizedRelative),
             Path.Combine(metadataRoot, "model.xml"),
-            Path.Combine(metadataRoot, "SampleModel.xml"),
             Path.Combine(workspaceRoot, "model.xml"),
-            Path.Combine(workspaceRoot, "SampleModel.xml"),
         };
 
         var match = candidates.FirstOrDefault(File.Exists);
@@ -636,50 +653,42 @@ internal sealed partial class CliRuntime
             return true;
         }
 
-        if (propertyName.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+        var relationship = entity.FindRelationshipByColumnName(propertyName) ??
+                           entity.FindRelationshipByUsageName(propertyName);
+        if (relationship != null &&
+            row.RelationshipIds.TryGetValue(relationship.GetUsageName(), out var relationshipValue))
         {
-            var relationshipEntity = propertyName[..^2];
-            var hasRelationship = entity.Relationships.Any(relationship =>
-                string.Equals(relationship.Entity, relationshipEntity, StringComparison.OrdinalIgnoreCase));
-            if (hasRelationship && row.RelationshipIds.TryGetValue(relationshipEntity, out var relationshipValue))
+            if (relationshipValue == null)
             {
-                if (relationshipValue == null)
-                {
-                    throw new InvalidOperationException(
-                        $"Entity '{entity.Name}' row '{row.Id}' contains null relationship target for '{relationshipEntity}'.");
-                }
-
-                if (string.IsNullOrWhiteSpace(relationshipValue))
-                {
-                    throw new InvalidOperationException(
-                        $"Entity '{entity.Name}' row '{row.Id}' contains blank relationship target for '{relationshipEntity}'.");
-                }
-
-                value = relationshipValue;
-                return true;
+                throw new InvalidOperationException(
+                    $"Entity '{entity.Name}' row '{row.Id}' contains null relationship target for '{relationship.GetUsageName()}'.");
             }
+
+            if (string.IsNullOrWhiteSpace(relationshipValue))
+            {
+                throw new InvalidOperationException(
+                    $"Entity '{entity.Name}' row '{row.Id}' contains blank relationship target for '{relationship.GetUsageName()}'.");
+            }
+
+            value = relationshipValue;
+            return true;
         }
 
         value = string.Empty;
         return false;
     }
 
-    private static bool IsRelationshipProperty(EntityDefinition entity, string propertyName, out string relationshipEntity)
+    private static bool IsRelationshipProperty(EntityDefinition entity, string propertyName, out string relationshipUsageName)
     {
-        relationshipEntity = string.Empty;
-        if (!propertyName.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+        relationshipUsageName = string.Empty;
+        var relationship = entity.FindRelationshipByColumnName(propertyName) ??
+                           entity.FindRelationshipByUsageName(propertyName);
+        if (relationship == null)
         {
             return false;
         }
 
-        var candidate = propertyName[..^2];
-        if (!entity.Relationships.Any(relationship =>
-                string.Equals(relationship.Entity, candidate, StringComparison.OrdinalIgnoreCase)))
-        {
-            return false;
-        }
-
-        relationshipEntity = candidate;
+        relationshipUsageName = relationship.GetUsageName();
         return true;
     }
 
@@ -725,7 +734,7 @@ internal sealed partial class CliRuntime
 
             foreach (var relationship in entity.Relationships)
             {
-                propertyNames.Add(relationship.Entity + "Id");
+                propertyNames.Add(relationship.GetColumnName());
             }
 
             var propertyIdByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

@@ -23,8 +23,14 @@ internal sealed partial class CliRuntime
         }
     
         var refs = entity.Relationships
-            .OrderBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
-            .Select(relationship => relationship.Entity)
+            .OrderBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
+            .Select(relationship => new
+            {
+                Name = relationship.GetUsageName(),
+                Target = relationship.Entity,
+                Column = relationship.GetColumnName(),
+            })
             .ToList();
     
         if (globalJson)
@@ -42,8 +48,13 @@ internal sealed partial class CliRuntime
         presenter.WriteInfo($"Relationships: {entity.Name} ({refs.Count})");
         presenter.WriteInfo("Required: (n/a)");
         presenter.WriteTable(
-            new[] { "Target" },
-            refs.Select(relationship => (IReadOnlyList<string>)new[] { relationship }).ToList());
+            new[] { "Name", "Target", "Column" },
+            refs.Select(relationship => (IReadOnlyList<string>)new[]
+            {
+                relationship.Name,
+                relationship.Target,
+                relationship.Column,
+            }).ToList());
     
         return 0;
     }

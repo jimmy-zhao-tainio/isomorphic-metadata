@@ -37,7 +37,7 @@ public static class BulkRelationshipResolver
         }
 
         var relationTargets = entity.Relationships
-            .Select(relationship => relationship.Entity)
+            .Select(relationship => relationship.GetUsageName())
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -66,7 +66,8 @@ public static class BulkRelationshipResolver
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return string.Empty;
+            throw new InvalidOperationException(
+                $"Row '{rowId}' relationship '{relationName}' is missing required target id.");
         }
 
         var trimmed = value.Trim();

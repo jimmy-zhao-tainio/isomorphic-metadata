@@ -15,6 +15,12 @@ internal sealed partial class CliRuntime
         PrintContractCompatibilityWarning(leftWorkspace.Manifest);
         PrintContractCompatibilityWarning(rightWorkspace.Manifest);
 
+        var rightDiagnostics = services.ValidationService.Validate(rightWorkspace);
+        if (rightDiagnostics.HasErrors || (globalStrict && rightDiagnostics.WarningCount > 0))
+        {
+            return PrintOperationValidationFailure("instance diff right workspace", Array.Empty<WorkspaceOp>(), rightDiagnostics);
+        }
+
         if (!AreModelXmlFilesByteIdentical(leftPath, leftWorkspace, rightPath, rightWorkspace, out var leftModelPath, out var rightModelPath))
         {
             return PrintFormattedError(

@@ -93,6 +93,43 @@ public sealed class ValidationServiceTests
         Assert.True(diagnostics.HasErrors);
     }
 
+    [Fact]
+    public void Validate_RequiredStringProperty_AllowsExplicitEmptyValue()
+    {
+        var workspace = BuildWorkspace(
+            modelName: "MetadataModel",
+            entityName: "Cube",
+            propertyName: "Purpose");
+        var record = new InstanceRecord { Id = "1" };
+        record.Values["Purpose"] = string.Empty;
+        workspace.Instance.GetOrCreateEntityRecords("Cube").Add(record);
+
+        var diagnostics = new ValidationService().Validate(workspace);
+
+        Assert.DoesNotContain(diagnostics.Issues,
+            issue => issue.Code == "instance.required.missing" && issue.Location.EndsWith("/Purpose"));
+    }
+
+    [Fact]
+    public void Validate_RequiredNonStringProperty_RejectsExplicitEmptyValue()
+    {
+        var workspace = BuildWorkspace(
+            modelName: "MetadataModel",
+            entityName: "Cube",
+            propertyName: "Rank");
+        workspace.Model.Entities[0].Properties[0].DataType = "int";
+        var record = new InstanceRecord { Id = "1" };
+        record.Values["Rank"] = string.Empty;
+        workspace.Instance.GetOrCreateEntityRecords("Cube").Add(record);
+
+        var diagnostics = new ValidationService().Validate(workspace);
+
+        Assert.Contains(diagnostics.Issues,
+            issue => issue.Code == "instance.property.parse" && issue.Location.EndsWith("/Rank"));
+        Assert.DoesNotContain(diagnostics.Issues,
+            issue => issue.Code == "instance.required.missing" && issue.Location.EndsWith("/Rank"));
+    }
+
     private static Workspace BuildWorkspace(string modelName, string entityName, string propertyName)
     {
         var workspace = new Workspace

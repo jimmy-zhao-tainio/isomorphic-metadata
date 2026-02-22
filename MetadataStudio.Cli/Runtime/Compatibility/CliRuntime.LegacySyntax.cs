@@ -1,11 +1,11 @@
-internal sealed partial class CliRuntime
+﻿internal sealed partial class CliRuntime
 {
-    string BuildEntityRowAddress(string entityName, string id)
+    string BuildEntityInstanceAddress(string entityName, string id)
     {
-        return $"{entityName} {QuoteRowId(id)}";
+        return $"{entityName} {QuoteInstanceId(id)}";
     }
 
-    string QuoteRowId(string id)
+    string QuoteInstanceId(string id)
     {
         var value = id ?? string.Empty;
         if (value.IndexOfAny([' ', '\t', '"']) >= 0)
@@ -16,7 +16,7 @@ internal sealed partial class CliRuntime
         return value;
     }
 
-    bool ContainsLegacyRowReferenceSyntax(string value)
+    bool ContainsLegacyInstanceReferenceSyntax(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -60,3 +60,4 @@ internal sealed partial class CliRuntime
         return false;
     }
 }
+

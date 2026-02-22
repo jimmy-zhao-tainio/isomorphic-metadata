@@ -26,10 +26,10 @@ public sealed class DeterminismGoldenTests
             ["instance/SystemFact.xml"] = "33b7bba7b37768b09b8e3b19122fe29ad063473835ed9155561aa53f5ed5d583",
             ["instance/SystemType.xml"] = "61bd50d754f2a26b860ba877eb5429174ea26e567766dc634b78ed3f5848fb4e",
             ["model.xml"] = "6e473c65afd30cac887e822980f4ba541760da99e87ea4ec9c70c89f75b16c09",
-            ["workspace.json"] = "e2b6e148a5fc8321c12054eddd6522c826b23f99b691f9de55ceb6c6ca9fa1ce",
+            ["workspace.xml"] = "bee3d9da1b4ce76a6f112ec96f4652482db7c7d8da2bbc16a6cf61a138866cc6",
         };
 
-    private const string ExpectedXmlMetadataCombinedHash = "b1a47b6034ed471a232c7c6e9cc24c80bd31b0178c98c44d1a019b90aa22820b";
+    private const string ExpectedXmlMetadataCombinedHash = "abb37972567fe723f6643983ce5728a60967df8b69c9434e25fd0a4a9c0a6e18";
 
     private static readonly IReadOnlyDictionary<string, string> ExpectedSqlHashes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

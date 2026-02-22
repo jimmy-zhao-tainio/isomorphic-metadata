@@ -1,0 +1,80 @@
+﻿internal sealed partial class CliRuntime
+{
+    async Task<int> InstanceRelationshipListAsync(string[] commandArgs)
+    {
+        if (commandArgs.Length < 5)
+        {
+            return PrintUsageError("Usage: instance relationship list <FromEntity> <FromId> [--workspace <path>]");
+        }
+    
+        var fromEntityName = commandArgs[3];
+        var fromId = commandArgs[4];
+        if (ContainsLegacyInstanceReferenceSyntax(fromId))
+        {
+            return PrintArgumentError($"Error: unsupported instance reference '{fromId}'. Use <Entity> <Id>.");
+        }
+        var options = ParseWorkspaceOnlyOptions(commandArgs, startIndex: 5);
+        if (!options.Ok)
+        {
+            return PrintArgumentError(options.ErrorMessage);
+        }
+    
+        try
+        {
+            var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
+            PrintContractCompatibilityWarning(workspace.Manifest);
+            var fromEntity = RequireEntity(workspace, fromEntityName);
+            var row = ResolveRowById(workspace, fromEntityName, fromId);
+            var relationshipRows = fromEntity.Relationships
+                .OrderBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
+                .Where(relationship =>
+                    row.RelationshipIds.TryGetValue(relationship.GetUsageName(), out var relationshipId) &&
+                    !string.IsNullOrWhiteSpace(relationshipId))
+                .Select(item => new
+                {
+                    Relationship = item.GetUsageName(),
+                    ToEntity = item.Entity,
+                    ToInstance = BuildEntityInstanceAddress(item.Entity, row.RelationshipIds[item.GetUsageName()]),
+                })
+                .ToList();
+    
+            if (globalJson)
+            {
+                WriteJson(new
+                {
+                    command = "instance.relationship.list",
+                    fromInstance = BuildEntityInstanceAddress(fromEntityName, row.Id),
+                    count = relationshipRows.Count,
+                    relationships = relationshipRows,
+                });
+                return 0;
+            }
+    
+            if (relationshipRows.Count == 0)
+            {
+                presenter.WriteOk("no relationship usage", ("Instance", BuildEntityInstanceAddress(fromEntityName, row.Id)));
+                return 0;
+            }
+    
+            presenter.WriteInfo("Relationships:");
+            presenter.WriteInfo($"  FromInstance: {BuildEntityInstanceAddress(fromEntityName, row.Id)}");
+            presenter.WriteTable(
+                new[] { "Relationship", "ToEntity", "ToInstance" },
+                relationshipRows
+                    .Select(item => (IReadOnlyList<string>)new[]
+                    {
+                        item.Relationship,
+                        item.ToEntity,
+                        item.ToInstance,
+                    })
+                    .ToList());
+            return 0;
+        }
+        catch (InvalidOperationException exception)
+        {
+            return PrintDataError("E_OPERATION", exception.Message);
+        }
+    }
+}
+

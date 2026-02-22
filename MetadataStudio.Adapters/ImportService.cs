@@ -105,21 +105,26 @@ public sealed class ImportService : IImportService
                 continue;
             }
 
-            var expectedColumn = targetEntity.Name + "Id";
-            if (!string.Equals(relationship.SourceColumn, expectedColumn, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(relationship.TargetColumn, "Id", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"Relationship from '{sourceEntity.Name}' to '{targetEntity.Name}' must use column '{expectedColumn}'. Found '{relationship.SourceColumn}'.");
+                    $"Foreign key '{relationship.ConstraintName}' on '{sourceEntity.Name}.{relationship.SourceColumn}' must reference '{targetEntity.Name}.Id'.");
             }
 
-            if (!sourceEntity.Relationships.Any(item =>
-                    string.Equals(item.Entity, targetEntity.Name, StringComparison.OrdinalIgnoreCase)))
+            var relationshipName = DeriveRelationshipNameFromColumn(relationship.SourceColumn);
+            if (sourceEntity.Relationships.Any(item =>
+                    string.Equals(item.GetUsageName(), relationshipName, StringComparison.OrdinalIgnoreCase)))
             {
-                sourceEntity.Relationships.Add(new RelationshipDefinition
-                {
-                    Entity = targetEntity.Name,
-                });
+                throw new InvalidOperationException(
+                    $"Table '{sourceEntity.Name}' has duplicate relationship usage name '{relationshipName}'.");
             }
+
+            sourceEntity.Relationships.Add(new RelationshipDefinition
+            {
+                Entity = targetEntity.Name,
+                Name = relationshipName,
+                Column = relationship.SourceColumn,
+            });
         }
 
         foreach (var entity in workspace.Model.Entities)
@@ -229,16 +234,32 @@ public sealed class ImportService : IImportService
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               SELECT
-                                  fk.TABLE_NAME AS SourceTable,
-                                  fk.COLUMN_NAME AS SourceColumn,
-                                  pk.TABLE_NAME AS TargetTable
-                              FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
-                              INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE fk
-                                  ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME
-                              INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE pk
-                                  ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME
-                              WHERE fk.TABLE_SCHEMA = @schema AND pk.TABLE_SCHEMA = @schema
-                              ORDER BY fk.TABLE_NAME, fk.ORDINAL_POSITION;
+                                  fk.name AS ConstraintName,
+                                  srcTable.name AS SourceTable,
+                                  srcColumn.name AS SourceColumn,
+                                  dstTable.name AS TargetTable,
+                                  dstColumn.name AS TargetColumn,
+                                  fkc.constraint_column_id AS ConstraintColumnId
+                              FROM sys.foreign_keys fk
+                              INNER JOIN sys.foreign_key_columns fkc
+                                  ON fk.object_id = fkc.constraint_object_id
+                              INNER JOIN sys.tables srcTable
+                                  ON srcTable.object_id = fk.parent_object_id
+                              INNER JOIN sys.schemas srcSchema
+                                  ON srcSchema.schema_id = srcTable.schema_id
+                              INNER JOIN sys.columns srcColumn
+                                  ON srcColumn.object_id = fkc.parent_object_id
+                                  AND srcColumn.column_id = fkc.parent_column_id
+                              INNER JOIN sys.tables dstTable
+                                  ON dstTable.object_id = fk.referenced_object_id
+                              INNER JOIN sys.schemas dstSchema
+                                  ON dstSchema.schema_id = dstTable.schema_id
+                              INNER JOIN sys.columns dstColumn
+                                  ON dstColumn.object_id = fkc.referenced_object_id
+                                  AND dstColumn.column_id = fkc.referenced_column_id
+                              WHERE srcSchema.name = @schema
+                                AND dstSchema.name = @schema
+                              ORDER BY fk.name, fkc.constraint_column_id;
                               """;
         command.Parameters.Add(new SqlParameter("@schema", SqlDbType.NVarChar, 128) { Value = schema });
 
@@ -247,13 +268,33 @@ public sealed class ImportService : IImportService
         {
             relationships.Add(new RelationshipRow
             {
-                SourceTable = reader.GetString(0),
-                SourceColumn = reader.GetString(1),
-                TargetTable = reader.GetString(2),
+                ConstraintName = reader.GetString(0),
+                SourceTable = reader.GetString(1),
+                SourceColumn = reader.GetString(2),
+                TargetTable = reader.GetString(3),
+                TargetColumn = reader.GetString(4),
+                ConstraintColumnId = reader.GetInt32(5),
             });
         }
 
-        return relationships;
+        var grouped = relationships
+            .GroupBy(item => item.ConstraintName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var normalized = new List<RelationshipRow>(grouped.Count);
+        foreach (var group in grouped)
+        {
+            if (group.Count() != 1)
+            {
+                var sample = group.First();
+                throw new InvalidOperationException(
+                    $"Composite foreign key '{group.Key}' on '{sample.SourceTable}' is not supported.");
+            }
+
+            normalized.Add(group.Single());
+        }
+
+        return normalized;
     }
 
     private static void NormalizeRelationshipProperties(EntityDefinition entity)
@@ -265,7 +306,7 @@ public sealed class ImportService : IImportService
 
         var relationshipColumns = entity.Relationships
             .Where(item => !string.IsNullOrWhiteSpace(item.Entity))
-            .Select(item => item.Entity + "Id")
+            .Select(item => item.GetColumnName())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         entity.Properties.RemoveAll(property =>
@@ -351,7 +392,7 @@ public sealed class ImportService : IImportService
 
             foreach (var relationship in entity.Relationships)
             {
-                var columnName = relationship.Entity + "Id";
+                var columnName = relationship.GetColumnName();
                 if (!columnNames.Contains(columnName))
                 {
                     throw new InvalidOperationException(
@@ -377,7 +418,7 @@ public sealed class ImportService : IImportService
                         $"Table '{schema}.{entity.Name}' has non-numeric relationship value '{relationshipId}' for '{columnName}' on row '{id}'.");
                 }
 
-                record.RelationshipIds[relationship.Entity] = relationshipId;
+                record.RelationshipIds[relationship.GetUsageName()] = relationshipId;
             }
 
             rows.Add(record);
@@ -408,6 +449,38 @@ public sealed class ImportService : IImportService
     private static string EscapeSqlIdentifier(string value)
     {
         return value.Replace("]", "]]", StringComparison.Ordinal);
+    }
+
+    private static string DeriveRelationshipNameFromColumn(string sourceColumn)
+    {
+        var candidate = sourceColumn;
+        if (candidate.EndsWith("Id", StringComparison.OrdinalIgnoreCase) && candidate.Length > 2)
+        {
+            candidate = candidate[..^2];
+        }
+
+        candidate = candidate.Trim();
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            throw new InvalidOperationException(
+                $"Cannot derive relationship name from foreign key column '{sourceColumn}'.");
+        }
+
+        var sanitizedChars = candidate.Select(ch =>
+            char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_').ToArray();
+        var sanitized = new string(sanitizedChars);
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            throw new InvalidOperationException(
+                $"Cannot derive relationship name from foreign key column '{sourceColumn}'.");
+        }
+
+        if (!(char.IsLetter(sanitized[0]) || sanitized[0] == '_'))
+        {
+            sanitized = "_" + sanitized;
+        }
+
+        return sanitized;
     }
 
     private static bool IsPositiveIntegerIdentity(string? value)
@@ -448,8 +521,11 @@ public sealed class ImportService : IImportService
 
     private sealed class RelationshipRow
     {
+        public string ConstraintName { get; set; } = string.Empty;
         public string SourceTable { get; set; } = string.Empty;
         public string SourceColumn { get; set; } = string.Empty;
         public string TargetTable { get; set; } = string.Empty;
+        public string TargetColumn { get; set; } = string.Empty;
+        public int ConstraintColumnId { get; set; }
     }
 }

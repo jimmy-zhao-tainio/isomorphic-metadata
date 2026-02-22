@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>meta-schema</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MetadataStudio.Core\MetadataStudio.Core.csproj" />
+    <ProjectReference Include="..\MetaSchema.Core\MetaSchema.Core.csproj" />
+    <ProjectReference Include="..\MetaSchema.Extractors.SqlServer\MetaSchema.Extractors.SqlServer.csproj" />
+  </ItemGroup>
+
+</Project>

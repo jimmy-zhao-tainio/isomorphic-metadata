@@ -1,4 +1,4 @@
-internal sealed partial class CliRuntime
+﻿internal sealed partial class CliRuntime
 {
     async Task<int> ModelDropRelationshipAsync(string[] commandArgs)
     {
@@ -21,22 +21,30 @@ internal sealed partial class CliRuntime
             var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
             PrintContractCompatibilityWarning(workspace.Manifest);
             var fromEntity = RequireEntity(workspace, fromEntityName);
-            RequireEntity(workspace, toEntityName);
-    
-            if (!fromEntity.Relationships.Any(relationship =>
-                    string.Equals(relationship.Entity, toEntityName, StringComparison.OrdinalIgnoreCase)))
+            var relationship = ResolveRelationshipDefinition(fromEntity, toEntityName, out var isAmbiguous);
+            if (isAmbiguous)
+            {
+                return PrintDataError(
+                    "E_RELATIONSHIP_AMBIGUOUS",
+                    $"Relationship selector '{toEntityName}' is ambiguous on entity '{fromEntityName}'. Use relationship name.");
+            }
+
+            if (relationship == null)
             {
                 return PrintDataError(
                     "E_RELATIONSHIP_NOT_FOUND",
                     $"Relationship '{fromEntityName}->{toEntityName}' does not exist.");
             }
-    
+
+            var relationshipName = relationship.GetUsageName();
+            var targetEntityName = relationship.Entity;
+
             var blockers = workspace.Instance.GetOrCreateEntityRecords(fromEntityName)
-                .Where(row => CountRelationshipUsages(row, toEntityName) > 0)
+                .Where(row => CountRelationshipUsages(row, relationshipName) > 0)
                 .Select(row => new
                 {
                     Row = row,
-                    RowAddress = BuildEntityRowAddress(fromEntityName, row.Id),
+                    RowAddress = BuildEntityInstanceAddress(fromEntityName, row.Id),
                     Display = TryGetDisplayValue(fromEntity, row),
                 })
                 .OrderBy(item => string.IsNullOrWhiteSpace(item.Display) ? 1 : 0)
@@ -48,21 +56,22 @@ internal sealed partial class CliRuntime
                 var firstRowId = blockers[0].Row.Id;
                 return PrintFormattedErrorWithTable(
                     code: "E_RELATIONSHIP_IN_USE",
-                    message: $"Relationship '{fromEntityName}->{toEntityName}' is in use.",
+                    message: $"Relationship '{fromEntityName}->{targetEntityName}' is in use.",
                     exitCode: 4,
                     where: new[]
                     {
                         ("fromEntity", fromEntityName),
-                        ("toEntity", toEntityName),
+                        ("relationship", relationshipName),
+                        ("toEntity", targetEntityName),
                         ("occurrences", blockers.Count.ToString(CultureInfo.InvariantCulture)),
                     },
                     hints: new[]
                     {
-                        $"Relationship usage exists in {blockers.Count.ToString(CultureInfo.InvariantCulture)} row(s).",
-                        $"Next: meta row relationship clear {fromEntityName} {QuoteRowId(firstRowId)} --to-entity {toEntityName}",
+                        $"Relationship usage exists in {blockers.Count.ToString(CultureInfo.InvariantCulture)} instance(s).",
+                        $"Next: meta instance relationship set {fromEntityName} {QuoteInstanceId(firstRowId)} --to {relationshipName} <ToId>",
                     },
                     tableTitle: "Relationship usage blockers",
-                    headers: new[] { "Entity", "Row" },
+                    headers: new[] { "Entity", "Instance" },
                     rows: blockers
                         .Take(20)
                         .Select(item => (IReadOnlyList<string>)new[]
@@ -77,7 +86,7 @@ internal sealed partial class CliRuntime
             {
                 Type = WorkspaceOpTypes.DeleteRelationship,
                 EntityName = fromEntityName,
-                RelatedEntity = toEntityName,
+                RelatedEntity = relationshipName,
             };
             return await ExecuteOperationAsync(
                     options.WorkspacePath,
@@ -85,7 +94,8 @@ internal sealed partial class CliRuntime
                     "model drop-relationship",
                     "relationship removed",
                     ("From", fromEntityName),
-                    ("To", toEntityName))
+                    ("To", targetEntityName),
+                    ("Name", relationshipName))
                 .ConfigureAwait(false);
         }
         catch (InvalidOperationException exception)
@@ -94,3 +104,4 @@ internal sealed partial class CliRuntime
         }
     }
 }
+

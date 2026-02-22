@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MetadataStudio.Core.Domain;
 
@@ -25,6 +26,28 @@ public sealed class EntityDefinition
     {
         return string.IsNullOrWhiteSpace(Plural) ? Name + "s" : Plural;
     }
+
+    public RelationshipDefinition? FindRelationshipByUsageName(string usageName)
+    {
+        if (string.IsNullOrWhiteSpace(usageName))
+        {
+            return null;
+        }
+
+        return Relationships.FirstOrDefault(relationship =>
+            string.Equals(relationship.GetUsageName(), usageName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public RelationshipDefinition? FindRelationshipByColumnName(string columnName)
+    {
+        if (string.IsNullOrWhiteSpace(columnName))
+        {
+            return null;
+        }
+
+        return Relationships.FirstOrDefault(relationship =>
+            string.Equals(relationship.GetColumnName(), columnName, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 public sealed class PropertyDefinition
@@ -37,4 +60,17 @@ public sealed class PropertyDefinition
 public sealed class RelationshipDefinition
 {
     public string Entity { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Column { get; set; } = string.Empty;
+
+    public string GetUsageName()
+    {
+        return string.IsNullOrWhiteSpace(Name) ? Entity : Name;
+    }
+
+    public string GetColumnName()
+    {
+        var usageName = GetUsageName();
+        return string.IsNullOrWhiteSpace(Column) ? usageName + "Id" : Column;
+    }
 }

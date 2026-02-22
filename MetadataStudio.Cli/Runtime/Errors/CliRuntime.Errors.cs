@@ -1,4 +1,4 @@
-internal sealed partial class CliRuntime
+﻿internal sealed partial class CliRuntime
 {
     string BuildWhere(params (string Key, string? Value)[] fields)
     {
@@ -339,7 +339,7 @@ internal sealed partial class CliRuntime
                 RegexOptions.IgnoreCase);
             if (locationMatch.Success)
             {
-                return $"{BuildEntityRowAddress(locationMatch.Groups[1].Value, locationMatch.Groups[2].Value)} references {BuildEntityRowAddress(locationMatch.Groups[3].Value, locationMatch.Groups[4].Value)}";
+                return $"{BuildEntityInstanceAddress(locationMatch.Groups[1].Value, locationMatch.Groups[2].Value)} references {BuildEntityInstanceAddress(locationMatch.Groups[3].Value, locationMatch.Groups[4].Value)}";
             }
     
             var messageMatch = Regex.Match(
@@ -348,7 +348,7 @@ internal sealed partial class CliRuntime
                 RegexOptions.IgnoreCase);
             if (messageMatch.Success)
             {
-                return $"{BuildEntityRowAddress(messageMatch.Groups[1].Value, messageMatch.Groups[2].Value)} references {BuildEntityRowAddress(messageMatch.Groups[3].Value, messageMatch.Groups[4].Value)}";
+                return $"{BuildEntityInstanceAddress(messageMatch.Groups[1].Value, messageMatch.Groups[2].Value)} references {BuildEntityInstanceAddress(messageMatch.Groups[3].Value, messageMatch.Groups[4].Value)}";
             }
         }
     
@@ -360,7 +360,7 @@ internal sealed partial class CliRuntime
                 RegexOptions.IgnoreCase);
             if (locationMatch.Success)
             {
-                return $"{BuildEntityRowAddress(locationMatch.Groups[1].Value, locationMatch.Groups[2].Value)} is missing relationship {locationMatch.Groups[3].Value}";
+                return $"{BuildEntityInstanceAddress(locationMatch.Groups[1].Value, locationMatch.Groups[2].Value)} is missing required relationship {locationMatch.Groups[3].Value}";
             }
         }
     
@@ -372,7 +372,7 @@ internal sealed partial class CliRuntime
                 RegexOptions.IgnoreCase);
             if (locationMatch.Success)
             {
-                return $"{BuildEntityRowAddress(locationMatch.Groups[1].Value, locationMatch.Groups[2].Value)} is missing required value {locationMatch.Groups[3].Value}";
+                return $"{BuildEntityInstanceAddress(locationMatch.Groups[1].Value, locationMatch.Groups[2].Value)} is missing required value {locationMatch.Groups[3].Value}";
             }
         }
     
@@ -397,7 +397,7 @@ internal sealed partial class CliRuntime
                     .ToList();
                 if (targetId is { Count: 1 })
                 {
-                    return $"Cannot delete {BuildEntityRowAddress(deleteOp.EntityName, targetId[0])}";
+                    return $"Cannot delete {BuildEntityInstanceAddress(deleteOp.EntityName, targetId[0])}";
                 }
     
                 return $"Cannot delete {deleteOp.EntityName}";
@@ -785,10 +785,10 @@ internal sealed partial class CliRuntime
                 var entity = workspace?.Model.FindEntity(entityName);
                 suggestions = SuggestValues(
                     fieldName,
-                    entity == null
-                        ? Array.Empty<string>()
+                        entity == null
+                            ? Array.Empty<string>()
                         : entity.Properties.Select(property => property.Name)
-                            .Concat(entity.Relationships.Select(relationship => relationship.Entity))
+                            .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
                             .Concat(new[] { "Id" }));
                 hints.Clear();
                 hints.Add($"Next: meta list properties {entityName}");
@@ -812,7 +812,7 @@ internal sealed partial class CliRuntime
                         entity == null
                             ? Array.Empty<string>()
                         : entity.Properties.Select(property => property.Name)
-                                .Concat(entity.Relationships.Select(relationship => relationship.Entity))
+                                .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
                                 .Concat(new[] { "Id" }));
                     hints.Clear();
                     hints.Add($"Next: meta list properties {entityName}");
@@ -833,10 +833,10 @@ internal sealed partial class CliRuntime
                         var entity = workspace?.Model.FindEntity(entityName);
                         suggestions = SuggestValues(
                             fieldName,
-                            entity == null
-                                ? Array.Empty<string>()
+                                entity == null
+                                    ? Array.Empty<string>()
                                 : entity.Properties.Select(property => property.Name)
-                                    .Concat(entity.Relationships.Select(relationship => relationship.Entity))
+                                    .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
                                     .Concat(new[] { "Id" }));
                         hints.Clear();
                         hints.Add($"Next: meta list properties {entityName}");
@@ -859,8 +859,8 @@ internal sealed partial class CliRuntime
                                 fieldName,
                                 entity == null
                                     ? Array.Empty<string>()
-                                    : entity.Properties.Select(property => property.Name)
-                                        .Concat(entity.Relationships.Select(relationship => relationship.Entity))
+                                : entity.Properties.Select(property => property.Name)
+                                        .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
                                         .Concat(new[] { "Id" }));
                             hints.Clear();
                             hints.Add($"Next: meta list properties {entityName}");
@@ -888,10 +888,10 @@ internal sealed partial class CliRuntime
         {
             var entityName = duplicateIdMatch.Groups[1].Value;
             var id = duplicateIdMatch.Groups[2].Value;
-            normalized = $"Row '{BuildEntityRowAddress(entityName, id)}' already exists.";
+            normalized = $"Instance '{BuildEntityInstanceAddress(entityName, id)}' already exists.";
             where = BuildWhere(("entity", entityName), ("id", id));
             hints.Clear();
-            hints.Add($"Next: meta row update {entityName} {QuoteRowId(id)} --set <Field>=<Value>");
+            hints.Add($"Next: meta instance update {entityName} {QuoteInstanceId(id)} --set <Field>=<Value>");
         }
     
         var entityNotEmptyMatch = Regex.Match(
@@ -913,8 +913,8 @@ internal sealed partial class CliRuntime
                 ("entity", entityName),
                 ("rows", rowCount.ToString(CultureInfo.InvariantCulture)));
             hints.Clear();
-            hints.Add($"{entityName} has {rowCount.ToString(CultureInfo.InvariantCulture)} rows.");
-            hints.Add($"Next: meta view row {entityName} {QuoteRowId(firstRowId)}");
+            hints.Add($"{entityName} has {rowCount.ToString(CultureInfo.InvariantCulture)} instances.");
+            hints.Add($"Next: meta view instance {entityName} {QuoteInstanceId(firstRowId)}");
         }
     
         var entityInboundMatch = Regex.Match(
@@ -957,13 +957,13 @@ internal sealed partial class CliRuntime
                 ("toEntity", toEntity),
                 ("occurrences", occurrenceCount.ToString(CultureInfo.InvariantCulture)));
             hints.Clear();
-            hints.Add($"Relationship usage exists in {occurrenceCount.ToString(CultureInfo.InvariantCulture)} row(s).");
+            hints.Add($"Relationship usage exists in {occurrenceCount.ToString(CultureInfo.InvariantCulture)} instance(s).");
             var sampleRowId = GetEntityRows(workspace, fromEntity)
                 .Where(row => TryGetRelationshipId(row, toEntity, out _))
                 .OrderBy(row => row.Id, StringComparer.OrdinalIgnoreCase)
                 .Select(row => row.Id)
                 .FirstOrDefault() ?? "1";
-            hints.Add($"Next: meta row relationship clear {fromEntity} {QuoteRowId(sampleRowId)} --to-entity {toEntity}");
+            hints.Add($"Next: meta instance relationship set {fromEntity} {QuoteInstanceId(sampleRowId)} --to {toEntity} <ToId>");
         }
     
         var relationshipNotFoundMatch = Regex.Match(
@@ -983,13 +983,13 @@ internal sealed partial class CliRuntime
     
         var rowNotFoundMatch = Regex.Match(
             normalized,
-            "^Row with Id '([^']+)' does not exist in entity '([^']+)'\\.?$",
+            "^Instance with Id '([^']+)' does not exist in entity '([^']+)'\\.?$",
             RegexOptions.IgnoreCase);
         if (!rowNotFoundMatch.Success)
         {
             rowNotFoundMatch = Regex.Match(
                 normalized,
-                "^Row '([^\\s']+)\\s+([^']+)' was not found\\.?$",
+                "^Instance '([^\\s']+)\\s+([^']+)' was not found\\.?$",
                 RegexOptions.IgnoreCase);
         }
         if (rowNotFoundMatch.Success)
@@ -997,20 +997,20 @@ internal sealed partial class CliRuntime
             finalCode = "E_ROW_NOT_FOUND";
             var id = rowNotFoundMatch.Groups[1].Value;
             var entityName = rowNotFoundMatch.Groups[2].Value;
-            if (Regex.IsMatch(normalized, "^Row '([^\\s']+)\\s+([^']+)' was not found\\.?$", RegexOptions.IgnoreCase))
+            if (Regex.IsMatch(normalized, "^Instance '([^\\s']+)\\s+([^']+)' was not found\\.?$", RegexOptions.IgnoreCase))
             {
                 entityName = rowNotFoundMatch.Groups[1].Value;
                 id = rowNotFoundMatch.Groups[2].Value;
             }
     
             var rows = GetEntityRows(workspace, entityName);
-            normalized = $"Row '{BuildEntityRowAddress(entityName, id)}' was not found.";
+            normalized = $"Instance '{BuildEntityInstanceAddress(entityName, id)}' was not found.";
             where = BuildWhere(
                 ("entity", entityName),
                 ("id", id),
                 ("rows", rows.Count.ToString(CultureInfo.InvariantCulture)));
             hints.Clear();
-            hints.Add($"Next: meta query {entityName} --contains Id {QuoteRowId(id)}");
+            hints.Add($"Next: meta query {entityName} --contains Id {QuoteInstanceId(id)}");
             suggestions = SuggestValues(
                 id,
                 rows.Select(row => row.Id).Where(value => !string.IsNullOrWhiteSpace(value)).Take(20));
@@ -1034,7 +1034,7 @@ internal sealed partial class CliRuntime
     
         if (Regex.IsMatch(
                 message,
-                "^Could not find model\\.xml \\(or legacy SampleModel\\.xml\\) in '.*'\\.?$",
+                "^Could not find model\\.xml in '.*'\\.?$",
                 RegexOptions.IgnoreCase))
         {
             return true;
@@ -1048,7 +1048,8 @@ internal sealed partial class CliRuntime
             return true;
         }
     
-        return message.Contains("workspace.json", StringComparison.OrdinalIgnoreCase) &&
+        var mentionsWorkspaceConfig = message.Contains("workspace.xml", StringComparison.OrdinalIgnoreCase);
+        return mentionsWorkspaceConfig &&
                message.Contains("not found", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -1068,3 +1069,4 @@ internal sealed partial class CliRuntime
         return PrintFormattedError(code, normalized, exitCode: 5, hints: hints);
     }
 }
+

@@ -24,6 +24,7 @@ public sealed class InstanceStore
 public sealed class InstanceRecord
 {
     public string Id { get; set; } = string.Empty;
+    public string SourceShardFileName { get; set; } = string.Empty;
     public Dictionary<string, string> Values { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> RelationshipIds { get; } = new(StringComparer.OrdinalIgnoreCase);
 }

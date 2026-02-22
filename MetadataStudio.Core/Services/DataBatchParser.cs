@@ -57,7 +57,19 @@ public static class DataBatchParser
         }
 
         var propertyMap = entity.Properties.ToDictionary(item => item.Name, StringComparer.OrdinalIgnoreCase);
-        var relationshipMap = entity.Relationships.ToDictionary(item => item.Entity, StringComparer.OrdinalIgnoreCase);
+        var relationshipHeaderMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationship in entity.Relationships)
+        {
+            var usageName = relationship.GetUsageName();
+            if (string.IsNullOrWhiteSpace(usageName))
+            {
+                continue;
+            }
+
+            TryAddRelationshipHeaderAlias(entityName, relationshipHeaderMap, usageName, usageName);
+            var columnName = relationship.GetColumnName();
+            TryAddRelationshipHeaderAlias(entityName, relationshipHeaderMap, columnName, usageName);
+        }
 
         var columnKinds = new List<ColumnKind>(headers.Count);
         for (var i = 0; i < headers.Count; i++)
@@ -75,9 +87,9 @@ public static class DataBatchParser
                 continue;
             }
 
-            if (relationshipMap.ContainsKey(header))
+            if (relationshipHeaderMap.TryGetValue(header, out var relationshipUsageName))
             {
-                columnKinds.Add(new ColumnKind(ColumnType.Relationship, relationshipMap[header].Entity));
+                columnKinds.Add(new ColumnKind(ColumnType.Relationship, relationshipUsageName));
                 continue;
             }
 
@@ -259,6 +271,27 @@ public static class DataBatchParser
     private static string NormalizeColumnName(string value)
     {
         return value.Trim().TrimStart('\uFEFF');
+    }
+
+    private static void TryAddRelationshipHeaderAlias(
+        string entityName,
+        IDictionary<string, string> relationshipHeaderMap,
+        string alias,
+        string usageName)
+    {
+        if (string.IsNullOrWhiteSpace(alias))
+        {
+            return;
+        }
+
+        if (relationshipHeaderMap.TryGetValue(alias, out var existingUsageName) &&
+            !string.Equals(existingUsageName, usageName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Entity '{entityName}' has ambiguous relationship header alias '{alias}'.");
+        }
+
+        relationshipHeaderMap[alias] = usageName;
     }
 
     private enum ColumnType

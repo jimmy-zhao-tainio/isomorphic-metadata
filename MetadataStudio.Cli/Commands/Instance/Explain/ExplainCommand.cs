@@ -1,17 +1,17 @@
-internal sealed partial class CliRuntime
+﻿internal sealed partial class CliRuntime
 {
     async Task<int> ViewAsync(string[] commandArgs)
     {
         if (commandArgs.Length < 3)
         {
-            return PrintUsageError("Usage: view <entity|row> ...");
+            return PrintUsageError("Usage: view <entity|instance> ...");
         }
     
         var mode = commandArgs[1].Trim().ToLowerInvariant();
         return mode switch
         {
             "entity" => await ViewEntityAsync(commandArgs).ConfigureAwait(false),
-            "row" => await ViewRowAsync(commandArgs).ConfigureAwait(false),
+            "instance" => await ViewInstanceAsync(commandArgs).ConfigureAwait(false),
             _ => UnknownViewCommand(mode),
         };
     }
@@ -21,3 +21,4 @@ internal sealed partial class CliRuntime
         return PrintCommandUnknownError($"view {mode}");
     }
 }
+

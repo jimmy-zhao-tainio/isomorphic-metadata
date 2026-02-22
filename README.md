@@ -4,7 +4,7 @@ MetadataStudio is a deterministic CLI for editing metadata models and metadata i
 
 The project is built around one workspace contract:
 
-- `metadata/workspace.json`
+- `metadata/workspace.xml`
 - `metadata/model.xml`
 - `metadata/instance/<Entity>.xml`
 
@@ -106,19 +106,26 @@ public sealed class Measure
 public sealed class Cubes : IEnumerable<Cube>
 {
     public Cube GetId(int id);
-    public bool TryGetId(int id, out Cube row);
+    public bool TryGetId(int id, out Cube instance);
 }
 
 public sealed class Measures : IEnumerable<Measure>
 {
     public Measure GetId(int id);
-    public bool TryGetId(int id, out Measure row);
+    public bool TryGetId(int id, out Measure instance);
 }
 
-public static class EnterpriseBIPlatform
+public sealed class EnterpriseBIPlatform
 {
-    public static Cubes Cubes { get; }
-    public static Measures Measures { get; }
+    public Cubes Cubes { get; }
+    public Measures Measures { get; }
+}
+
+public static class EnterpriseBIPlatformModel
+{
+    public static EnterpriseBIPlatform Current { get; }
+    public static EnterpriseBIPlatform LoadFromXml(string workspacePath);
+    public static EnterpriseBIPlatform LoadFromSql(DbConnection connection, string schemaName = "dbo");
 }
 ```
 
@@ -165,11 +172,8 @@ Main groups:
 
 - Workspace: `init`, `status`
 - Model: `check`, `graph`, `list`, `model`, `view`
-- Instance: `instance`, `insert`, `delete`, `query`, `bulk-insert`, `row`
+- Instance: `instance`, `insert`, `delete`, `query`, `bulk-insert`
 - Pipeline: `import`, `generate`
-- Utility: `random`
-
-README examples use the canonical top-level forms from `meta help` (for example `meta init`, `meta status`, `meta delete Cube 10`).
 
 ## Workspace quick start
 
@@ -197,19 +201,15 @@ Instance XML (strict contract):
 
 - Root element is the model name (for example `<EnterpriseBIPlatform>`).
 - Under root, each entity uses a plural container element (for example `<Cubes>`, `<Measures>`).
-- Inside each container, each row uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
-- Direct row elements under root are invalid; rows must be inside their plural container.
-- Row `Id` attribute is mandatory.
-- Relationship values are row attributes named `<TargetEntity>Id`.
+- Inside each container, each instance uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
+- Sharded instance mode supports split entity files: multiple `metadata/instance/*.xml` files may each contain instances for the same entity container, and load merges them.
+- Save preserves split layout by instance shard origin; new instances are assigned to that entity's primary shard file.
+- Direct instance elements under root are invalid; instances must be inside their plural container.
+- Instance `Id` attribute is mandatory.
+- Declared relationships are required and stored as instance attributes named `<TargetEntity>Id`.
+- Missing relationship attributes for declared relationships are invalid.
 - Scalar properties are child elements.
 - Missing property element means unset; empty property element means explicit empty string.
-
-Compatibility read mode (migration only):
-
-- Environment variable: `METADATASTUDIO_COMPAT_READ_LEGACY_INSTANCE_ATTRIBUTES`.
-- Accepted true values: `1`, `true`, `yes`.
-- Enables reading legacy attribute-based property input and legacy relationship child elements during load, so old files can be migrated.
-- Writer output remains the current strict contract (plural containers, relationship attributes, property elements).
 
 ## Core workflows with examples
 
@@ -219,7 +219,7 @@ Compatibility read mode (migration only):
 meta status --workspace .\Samples\CommandExamples
 meta list entities --workspace .\Samples\CommandExamples
 meta view entity Cube --workspace .\Samples\CommandExamples
-meta view row Cube 1 --workspace .\Samples\CommandExamples
+meta view instance Cube 1 --workspace .\Samples\CommandExamples
 meta query Cube --contains CubeName Sales --workspace .\Samples\CommandExamples
 meta graph stats --workspace .\Samples\CommandExamples
 meta check --workspace .\Samples\CommandExamples
@@ -234,7 +234,7 @@ meta model add-relationship System SourceSystem --workspace .\Samples\CommandExa
 meta model rename-property Cube Purpose BusinessPurpose --workspace .\Samples\CommandExamples
 ```
 
-### 3) Row edits
+### 3) Instance edits
 
 Insert explicit Id:
 
@@ -248,21 +248,22 @@ Insert with identity allocation:
 meta insert Cube --auto-id --set "CubeName=Auto Cube" --workspace .\Samples\CommandExamples
 ```
 
-Update one row:
+Update one instance:
 
 ```powershell
-meta row update Cube 10 --set "Purpose=Operations reporting" --workspace .\Samples\CommandExamples
+meta instance update Cube 10 --set "Purpose=Operations reporting" --workspace .\Samples\CommandExamples
 ```
 
-Set/clear/list relationship usage:
+Set/list relationship usage:
 
 ```powershell
-meta row relationship set Measure 1 --to Cube 10 --workspace .\Samples\CommandExamples
-meta row relationship list Measure 1 --workspace .\Samples\CommandExamples
-meta row relationship clear Measure 1 --to-entity Cube --workspace .\Samples\CommandExamples
+meta instance relationship set Measure 1 --to Cube 10 --workspace .\Samples\CommandExamples
+meta instance relationship list Measure 1 --workspace .\Samples\CommandExamples
 ```
 
-Delete one row:
+Declared relationships are required; use `instance relationship set` to retarget, or delete the instance if it should no longer exist.
+
+Delete one instance:
 
 ```powershell
 meta delete Cube 10 --workspace .\Samples\CommandExamples
@@ -314,15 +315,15 @@ Mental model:
 
 - `meta instance diff <left> <right>` produces a diff artifact that describes how to transform Left instance data into Right instance data.
 - `meta instance merge <target> <diffWorkspace>` applies that Left -> Right transformation to a target workspace (typically the same workspace used as Left when the diff was created).
-- The diff artifact is a deterministic, scoped change-set: it captures only row/property/relationship differences, not a full copy of the right workspace instance.
+- The diff artifact is a deterministic, scoped change-set: it captures only instance/property/relationship differences, not a full copy of the right workspace instance.
 - Merge applies that scoped change-set to the target workspace and validates integrity while applying.
 
 What the diff captures:
 
-- Row identity by `(Entity, Id)`.
+- Instance identity by `(Entity, Id)`.
 - Scalar property value differences.
 - Relationship usage differences via `<TargetEntity>Id` attributes.
-- Row-level insert/update/delete outcomes implied by Left-only and Right-only identities.
+- Instance-level insert/update/delete outcomes implied by Left-only and Right-only identities.
 
 Instance semantics are preserved:
 
@@ -332,7 +333,7 @@ Instance semantics are preserved:
 Constraints and failure modes:
 
 - Left and Right `model.xml` files must be identical for equal-model mode.
-- Merge fails hard if preconditions or integrity rules are violated (for example, applying a change that would delete a referenced row).
+- Merge fails hard if preconditions or integrity rules are violated (for example, applying a change that would delete a referenced instance).
 
 ```powershell
 meta instance diff .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDiffRight
@@ -365,13 +366,24 @@ Determinism:
 - Commands fail hard on invalid model/instance state.
 - Missing value and explicit empty value are distinct.
 - Relationship targets are single-target and validated.
+- Declared relationships are required; missing relationship usage is invalid.
+
+## MetaSchema
+
+MetaSchema is the separate schema/canonical-catalog toolchain (schema extraction plus sanctioned catalogs like `TypeConversionCatalog`).
+
+```powershell
+meta-schema help
+meta-schema extract sqlserver --help
+meta-schema seed type-conversion --new-workspace .\MetaSchema.Catalogs\TypeConversionCatalog
+```
 
 ## Generated C# API usage
 
 Generated model API shape:
 
-- Root singleton class named by model (example: `EnterpriseBIPlatform`)
-- Loader class `<ModelName>Model` (example: `EnterpriseBIPlatformModel`)
+- Root model class named by model (example: `EnterpriseBIPlatform`)
+- Loader class `<ModelName>Model` (example: `EnterpriseBIPlatformModel`) owns one static instance via `Current`
 - Entity collections exposed as plural names (`<EntityName>s` by default, or model `plural=` override)
 - Rows expose `Id`, scalar properties, `<TargetEntity>Id`, and `<TargetEntity>` navigation
 
@@ -382,28 +394,28 @@ using GeneratedModel;
 using System;
 using System.Data.Common;
 
-// Load immutable singleton snapshot from XML workspace:
-EnterpriseBIPlatformModel.LoadFromXml(@"C:\repo\Metadata\Samples");
+// Load (or refresh) the loader-owned singleton instance and get it:
+var model = EnterpriseBIPlatformModel.LoadFromXml(@"C:\repo\Metadata\Samples");
+var current = EnterpriseBIPlatformModel.Current;
 
 // Or load from SQL:
 // DbConnection conn = ...;
-// EnterpriseBIPlatformModel.LoadFromSql(conn, "dbo");
+// var model = EnterpriseBIPlatformModel.LoadFromSql(conn, "dbo");
 
-foreach (var m in EnterpriseBIPlatform.Measures)
+foreach (var m in model.Measures)
 {
     Console.WriteLine(m.Id);
     Console.WriteLine(m.Cube?.Name);
 }
 
-var m0 = EnterpriseBIPlatform.Measures.GetId(1);
+var m0 = model.Measures.GetId(1);
 var cubeName = m0.Cube?.Name;
 ```
 
 Notes:
 
-- Accessing `EnterpriseBIPlatform.Measures` before load throws:
-  `EnterpriseBIPlatform is not loaded. Call EnterpriseBIPlatformModel.LoadFromXml/LoadFromSql first.`
-- `LoadFromXml` / `LoadFromSql` installs a process-wide immutable loaded snapshot that backs the static `EnterpriseBIPlatform` root; call load first, then use the root.
+- `EnterpriseBIPlatformModel.Current` returns the same model instance object on every call.
+- `LoadFromXml` / `LoadFromSql` populate that same object and return it.
 - Collections implement `IEnumerable<T>` and provide `GetId(int)` / `TryGetId(int, out T)`.
 
 ## Command references

@@ -5,12 +5,12 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using MetadataStudio.Core.Domain;
+using MetadataStudio.Core.WorkspaceConfig;
 
 namespace MetadataStudio.Core.Services;
 
@@ -19,26 +19,11 @@ public sealed class WorkspaceService : IWorkspaceService
     private const int SupportedContractMajorVersion = 1;
     private const int SupportedContractMinorVersion = 0;
     private const string MetadataDirectoryName = "metadata";
-    private const string WorkspaceFileName = "workspace.json";
+    private const string WorkspaceXmlFileName = "workspace.xml";
     private const string ModelFileName = "model.xml";
     private const string InstanceDirectoryName = "instance";
     private const string InstanceFileName = "instance.xml";
-    private const string LegacyModelFileName = "SampleModel.xml";
-    private const string LegacyInstanceFileName = "SampleInstance.xml";
-    private const string LegacyPropertyAttributeCompatibilityEnvVar = "METADATASTUDIO_COMPAT_READ_LEGACY_INSTANCE_ATTRIBUTES";
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-
-    private static readonly JsonSerializerOptions ManifestJsonReadOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-    };
-
-    private static readonly JsonSerializerOptions ManifestJsonWriteOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
 
     public Task<Workspace> LoadAsync(
         string workspaceRootPath,
@@ -62,7 +47,7 @@ public sealed class WorkspaceService : IWorkspaceService
         if (string.IsNullOrWhiteSpace(modelPath))
         {
             throw new FileNotFoundException(
-                $"Could not find {ModelFileName} (or legacy {LegacyModelFileName}) in '{paths.MetadataRootPath}'.");
+                $"Could not find {ModelFileName} in '{paths.MetadataRootPath}'.");
         }
 
         var model = ReadModel(modelPath);
@@ -162,7 +147,8 @@ public sealed class WorkspaceService : IWorkspaceService
         Directory.CreateDirectory(stagingMetadataRootPath);
         try
         {
-            WriteManifestToFile(manifest, Path.Combine(stagingMetadataRootPath, WorkspaceFileName));
+            WriteManifestToFile(manifest, Path.Combine(stagingMetadataRootPath, WorkspaceXmlFileName));
+
             WriteXmlToFile(BuildModelDocument(workspace.Model), stagingModelPath, indented: true);
             WriteInstanceShards(workspace, stagingInstanceDirectoryPath);
             DeleteIfExists(Path.Combine(stagingMetadataRootPath, InstanceFileName));
@@ -226,9 +212,9 @@ public sealed class WorkspaceService : IWorkspaceService
         while (!string.IsNullOrWhiteSpace(current))
         {
             var metadataRootPath = Path.Combine(current, MetadataDirectoryName);
-            var workspaceFilePath = Path.Combine(metadataRootPath, WorkspaceFileName);
+            var workspaceXmlPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
 
-            if (File.Exists(workspaceFilePath))
+            if (File.Exists(workspaceXmlPath))
             {
                 return new WorkspacePaths(current, metadataRootPath);
             }
@@ -248,7 +234,7 @@ public sealed class WorkspaceService : IWorkspaceService
         }
 
         var fallbackRoot = Path.GetFullPath(initialDirectory);
-        var fallbackMetadata = ResolveLegacyMetadataRoot(fallbackRoot);
+        var fallbackMetadata = ResolveMetadataRoot(fallbackRoot);
         return new WorkspacePaths(fallbackRoot, fallbackMetadata);
     }
 
@@ -264,26 +250,22 @@ public sealed class WorkspaceService : IWorkspaceService
             return new WorkspacePaths(parent, rootPath);
         }
 
-        var metadataRootPath = ResolveLegacyMetadataRoot(rootPath);
+        var metadataRootPath = ResolveMetadataRoot(rootPath);
         return new WorkspacePaths(rootPath, metadataRootPath);
     }
 
     private static bool IsMetadataDirectoryCandidate(string metadataRootPath)
     {
         return File.Exists(Path.Combine(metadataRootPath, ModelFileName)) ||
-               File.Exists(Path.Combine(metadataRootPath, LegacyModelFileName)) ||
                File.Exists(Path.Combine(metadataRootPath, InstanceFileName)) ||
-               File.Exists(Path.Combine(metadataRootPath, LegacyInstanceFileName)) ||
                Directory.Exists(Path.Combine(metadataRootPath, InstanceDirectoryName));
     }
 
-    private static string ResolveLegacyMetadataRoot(string workspaceRootPath)
+    private static string ResolveMetadataRoot(string workspaceRootPath)
     {
         var hasDirectCanonical = File.Exists(Path.Combine(workspaceRootPath, ModelFileName)) &&
                                  File.Exists(Path.Combine(workspaceRootPath, InstanceFileName));
-        var hasDirectLegacy = File.Exists(Path.Combine(workspaceRootPath, LegacyModelFileName)) &&
-                              File.Exists(Path.Combine(workspaceRootPath, LegacyInstanceFileName));
-        if (hasDirectCanonical || hasDirectLegacy)
+        if (hasDirectCanonical)
         {
             return workspaceRootPath;
         }
@@ -294,22 +276,17 @@ public sealed class WorkspaceService : IWorkspaceService
 
     private static WorkspaceManifest ReadManifest(string workspaceRootPath, string metadataRootPath)
     {
-        var workspaceFilePath = Path.Combine(metadataRootPath, WorkspaceFileName);
-        if (!File.Exists(workspaceFilePath))
+        var workspaceXmlPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
+        if (File.Exists(workspaceXmlPath))
         {
-            return WorkspaceManifest.CreateDefault();
+            var snapshot = MetaWorkspaceModel.LoadFromWorkspaceXmlFile(workspaceXmlPath);
+            var manifestFromXml = MetaWorkspaceManifestAdapter.ToWorkspaceManifest(snapshot, workspaceXmlPath);
+            var normalizedFromXml = NormalizeManifest(manifestFromXml);
+            ValidateContractVersion(normalizedFromXml, workspaceXmlPath);
+            return normalizedFromXml;
         }
 
-        var json = File.ReadAllText(workspaceFilePath);
-        var manifest = JsonSerializer.Deserialize<WorkspaceManifest>(json, ManifestJsonReadOptions);
-        if (manifest == null)
-        {
-            throw new InvalidDataException($"Workspace manifest '{workspaceFilePath}' is invalid.");
-        }
-
-        var normalized = NormalizeManifest(manifest);
-        ValidateContractVersion(normalized, workspaceFilePath);
-        return normalized;
+        return WorkspaceManifest.CreateDefault();
     }
 
     private static WorkspaceManifest NormalizeManifest(WorkspaceManifest? manifest)
@@ -393,8 +370,8 @@ public sealed class WorkspaceService : IWorkspaceService
 
     private static void WriteManifestToFile(WorkspaceManifest manifest, string workspaceFilePath)
     {
-        var json = JsonSerializer.Serialize(manifest, ManifestJsonWriteOptions);
-        WriteTextAtomic(workspaceFilePath, json + "\n");
+        var document = MetaWorkspaceModel.BuildDocument(MetaWorkspaceManifestAdapter.ToMetaWorkspaceData(manifest));
+        WriteXmlToFile(document, workspaceFilePath, indented: true);
     }
 
     private static string ResolveModelPath(string workspaceRootPath, string metadataRootPath, WorkspaceManifest manifest)
@@ -404,9 +381,7 @@ public sealed class WorkspaceService : IWorkspaceService
         {
             manifestModelPath,
             Path.Combine(metadataRootPath, ModelFileName),
-            Path.Combine(metadataRootPath, LegacyModelFileName),
             Path.Combine(workspaceRootPath, ModelFileName),
-            Path.Combine(workspaceRootPath, LegacyModelFileName),
         };
 
         return FirstExistingPath(candidatePaths);
@@ -418,7 +393,6 @@ public sealed class WorkspaceService : IWorkspaceService
         WorkspaceManifest manifest,
         ModelDefinition model)
     {
-        var compatibilityRead = IsLegacyPropertyAttributeCompatibilityEnabled();
         var shardDirectoryPath = ResolvePathFromWorkspaceRoot(workspaceRootPath, manifest.InstanceDir);
         var hasShardDirectory = Directory.Exists(shardDirectoryPath);
         if (Directory.Exists(shardDirectoryPath))
@@ -428,16 +402,14 @@ public sealed class WorkspaceService : IWorkspaceService
                 .ToList();
             if (shardFiles.Count > 0)
             {
-                return ReadInstanceShards(shardFiles, model, compatibilityRead);
+                return ReadInstanceShards(shardFiles, model);
             }
         }
 
         var monolithicPath = FirstExistingPath(new[]
         {
             Path.Combine(metadataRootPath, InstanceFileName),
-            Path.Combine(metadataRootPath, LegacyInstanceFileName),
             Path.Combine(workspaceRootPath, InstanceFileName),
-            Path.Combine(workspaceRootPath, LegacyInstanceFileName),
         });
 
         if (string.IsNullOrWhiteSpace(monolithicPath))
@@ -451,23 +423,22 @@ public sealed class WorkspaceService : IWorkspaceService
             }
 
             throw new FileNotFoundException(
-                $"Could not find sharded instance files in '{shardDirectoryPath}' and could not find {InstanceFileName} (or legacy {LegacyInstanceFileName}) in '{metadataRootPath}'.");
+                $"Could not find sharded instance files in '{shardDirectoryPath}' and could not find {InstanceFileName} in '{metadataRootPath}'.");
         }
 
-        return ReadInstanceMonolithic(monolithicPath, model, compatibilityRead);
+        return ReadInstanceMonolithic(monolithicPath, model);
     }
 
     private static InstanceStore ReadInstanceMonolithic(
         string instancePath,
-        ModelDefinition model,
-        bool compatibilityRead)
+        ModelDefinition model)
     {
         var document = XDocument.Load(instancePath, LoadOptions.None);
         var instance = new InstanceStore
         {
             ModelName = model.Name ?? string.Empty,
         };
-        MergeInstanceDocument(instance, document, model, compatibilityRead);
+        MergeInstanceDocument(instance, document, model, sourceShardFileName: string.Empty);
         if (string.IsNullOrWhiteSpace(instance.ModelName))
         {
             instance.ModelName = model.Name ?? string.Empty;
@@ -478,8 +449,7 @@ public sealed class WorkspaceService : IWorkspaceService
 
     private static InstanceStore ReadInstanceShards(
         IReadOnlyCollection<string> shardFiles,
-        ModelDefinition model,
-        bool compatibilityRead)
+        ModelDefinition model)
     {
         var instance = new InstanceStore
         {
@@ -489,7 +459,11 @@ public sealed class WorkspaceService : IWorkspaceService
         foreach (var shardPath in shardFiles)
         {
             var document = XDocument.Load(shardPath, LoadOptions.None);
-            MergeInstanceDocument(instance, document, model, compatibilityRead);
+            MergeInstanceDocument(
+                instance,
+                document,
+                model,
+                sourceShardFileName: Path.GetFileName(shardPath));
         }
 
         if (string.IsNullOrWhiteSpace(instance.ModelName))
@@ -504,7 +478,7 @@ public sealed class WorkspaceService : IWorkspaceService
         InstanceStore instance,
         XDocument document,
         ModelDefinition model,
-        bool compatibilityRead)
+        string sourceShardFileName)
     {
         var root = document.Root ?? throw new InvalidDataException("Instance XML has no root element.");
         if (string.IsNullOrWhiteSpace(instance.ModelName))
@@ -534,7 +508,7 @@ public sealed class WorkspaceService : IWorkspaceService
                         $"Instance XML list '{listName}' contains unexpected row element '{rowElement.Name.LocalName}'. Expected '{entityName}'.");
                 }
 
-                records.Add(ParseRecord(entityName, modelEntity, rowElement, compatibilityRead));
+                records.Add(ParseRecord(entityName, modelEntity, rowElement, sourceShardFileName));
             }
         }
     }
@@ -543,7 +517,7 @@ public sealed class WorkspaceService : IWorkspaceService
         string entityName,
         EntityDefinition modelEntity,
         XElement rowElement,
-        bool compatibilityRead)
+        string sourceShardFileName)
     {
         var id = (string?)rowElement.Attribute("Id");
         if (!IsPositiveIntegerIdentity(id))
@@ -555,16 +529,16 @@ public sealed class WorkspaceService : IWorkspaceService
         var record = new InstanceRecord
         {
             Id = id!,
+            SourceShardFileName = NormalizeShardFileName(sourceShardFileName, entityName),
         };
 
         var propertyByName = modelEntity.Properties
             .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
-        var relationshipByEntity = modelEntity.Relationships
-            .ToDictionary(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase);
-        var childElementNames = new HashSet<string>(
-            rowElement.Elements().Select(element => element.Name.LocalName),
-            StringComparer.OrdinalIgnoreCase);
+        var relationshipByColumn = modelEntity.Relationships
+            .ToDictionary(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase);
+        var relationshipByUsage = modelEntity.Relationships
+            .ToDictionary(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var attribute in rowElement.Attributes())
         {
@@ -574,27 +548,15 @@ public sealed class WorkspaceService : IWorkspaceService
                 continue;
             }
 
-            if (attributeName.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+            if (relationshipByColumn.TryGetValue(attributeName, out var relationship))
             {
-                var relationshipEntity = attributeName[..^2];
-                if (relationshipByEntity.TryGetValue(relationshipEntity, out var relationship))
+                if (!IsPositiveIntegerIdentity(attribute.Value))
                 {
-                    if (!IsPositiveIntegerIdentity(attribute.Value))
-                    {
-                        throw new InvalidDataException(
-                            $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationship.Entity}Id' value '{attribute.Value}'.");
-                    }
-
-                    record.RelationshipIds[relationship.Entity] = attribute.Value;
-                    continue;
+                    throw new InvalidDataException(
+                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationship.GetColumnName()}' value '{attribute.Value}'.");
                 }
-            }
 
-            if (compatibilityRead &&
-                propertyByName.TryGetValue(attributeName, out var property) &&
-                !childElementNames.Contains(property.Name))
-            {
-                record.Values[property.Name] = attribute.Value;
+                record.RelationshipIds[relationship.GetUsageName()] = attribute.Value;
                 continue;
             }
 
@@ -606,36 +568,10 @@ public sealed class WorkspaceService : IWorkspaceService
         foreach (var element in rowElement.Elements())
         {
             var elementName = element.Name.LocalName;
-            if (relationshipByEntity.TryGetValue(elementName, out var relationship))
+            if (relationshipByUsage.TryGetValue(elementName, out var relationship))
             {
-                if (compatibilityRead)
-                {
-                    if (element.HasElements || element.Attributes().Any(attribute =>
-                            !string.Equals(attribute.Name.LocalName, "Id", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        throw new InvalidDataException(
-                            $"Entity '{entityName}' row '{record.Id}' has invalid legacy relationship element '{elementName}'.");
-                    }
-
-                    var legacyRelationshipId = (string?)element.Attribute("Id");
-                    if (!IsPositiveIntegerIdentity(legacyRelationshipId))
-                    {
-                        throw new InvalidDataException(
-                            $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationship.Entity}Id' value '{legacyRelationshipId}'.");
-                    }
-
-                    if (record.RelationshipIds.ContainsKey(relationship.Entity))
-                    {
-                        throw new InvalidDataException(
-                            $"Entity '{entityName}' row '{record.Id}' has duplicate relationship value for '{relationship.Entity}Id'.");
-                    }
-
-                    record.RelationshipIds[relationship.Entity] = legacyRelationshipId!;
-                    continue;
-                }
-
                 throw new InvalidDataException(
-                    $"Entity '{entityName}' row '{record.Id}' has relationship element '{elementName}'. Relationships must be attributes.");
+                    $"Entity '{entityName}' row '{record.Id}' has relationship element '{relationship.GetUsageName()}'. Relationships must be attributes.");
             }
 
             if (!propertyByName.TryGetValue(elementName, out var property))
@@ -653,6 +589,17 @@ public sealed class WorkspaceService : IWorkspaceService
             record.Values[property.Name] = element.Value;
         }
 
+        foreach (var relationship in modelEntity.Relationships)
+        {
+            var relationshipUsage = relationship.GetUsageName();
+            if (!record.RelationshipIds.TryGetValue(relationshipUsage, out var relationshipId) ||
+                string.IsNullOrWhiteSpace(relationshipId))
+            {
+                throw new InvalidDataException(
+                    $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationship.GetColumnName()}'.");
+            }
+        }
+
         return record;
     }
 
@@ -664,13 +611,13 @@ public sealed class WorkspaceService : IWorkspaceService
             ? workspace.Model.Name
             : workspace.Instance.ModelName;
         var rootName = string.IsNullOrWhiteSpace(modelName) ? "MetadataModel" : modelName;
-        var orderedEntityNames = GetOrderedEntityNames(workspace);
+        var shardPlans = BuildInstanceShardWritePlans(workspace, persistAssignments: true);
 
         var expectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entityName in orderedEntityNames)
+        foreach (var shardPlan in shardPlans)
         {
-            var shardPath = Path.Combine(instanceDirectoryPath, entityName + ".xml");
-            var shardDocument = BuildInstanceShardDocument(workspace, rootName, entityName);
+            var shardPath = Path.Combine(instanceDirectoryPath, shardPlan.ShardFileName);
+            var shardDocument = BuildInstanceShardDocument(workspace, rootName, shardPlan.EntityName, shardPlan.Records);
             WriteXmlToFile(shardDocument, shardPath, indented: true);
             expectedPaths.Add(Path.GetFullPath(shardPath));
         }
@@ -685,7 +632,11 @@ public sealed class WorkspaceService : IWorkspaceService
         }
     }
 
-    private static XDocument BuildInstanceShardDocument(Workspace workspace, string rootName, string entityName)
+    private static XDocument BuildInstanceShardDocument(
+        Workspace workspace,
+        string rootName,
+        string entityName,
+        IReadOnlyCollection<InstanceRecord>? recordsOverride = null)
     {
         var modelEntity = workspace.Model.Entities.FirstOrDefault(entity =>
             string.Equals(entity.Name, entityName, StringComparison.OrdinalIgnoreCase));
@@ -702,18 +653,19 @@ public sealed class WorkspaceService : IWorkspaceService
             .Select(property => property.Name)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var orderedRelationshipNames = modelEntity.Relationships
-            .Select(relationship => relationship.Entity)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+        var orderedRelationships = modelEntity.Relationships
+            .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var root = new XElement(rootName);
         var listElement = new XElement(modelEntity.GetPluralName());
         root.Add(listElement);
 
-        var records = workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var entityRecords)
-            ? entityRecords
-            : new List<InstanceRecord>();
+        var records = recordsOverride ??
+                      (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var entityRecords)
+                          ? entityRecords
+                          : new List<InstanceRecord>());
 
         foreach (var record in records.OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase))
         {
@@ -733,25 +685,31 @@ public sealed class WorkspaceService : IWorkspaceService
                     $"Entity '{entityName}' row '{record.Id}' contains unknown property '{unknownPropertyName}'.");
             }
 
-            foreach (var relationshipName in orderedRelationshipNames)
+            foreach (var relationship in orderedRelationships)
             {
+                var relationshipName = relationship.GetUsageName();
+                var relationshipColumn = relationship.GetColumnName();
                 if (!record.RelationshipIds.TryGetValue(relationshipName, out var relationshipId) ||
                     string.IsNullOrWhiteSpace(relationshipId))
                 {
-                    continue;
+                    throw new InvalidOperationException(
+                        $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationshipColumn}'.");
                 }
 
                 if (!IsPositiveIntegerIdentity(relationshipId))
                 {
                     throw new InvalidOperationException(
-                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationshipName}Id' value '{relationshipId}'.");
+                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationshipColumn}' value '{relationshipId}'.");
                 }
 
-                recordElement.Add(new XAttribute(relationshipName + "Id", relationshipId));
+                recordElement.Add(new XAttribute(relationshipColumn, relationshipId));
             }
 
+            var knownRelationshipNames = orderedRelationships
+                .Select(relationship => relationship.GetUsageName())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var unknownRelationshipName in record.RelationshipIds.Keys
-                         .Where(key => !orderedRelationshipNames.Contains(key, StringComparer.OrdinalIgnoreCase))
+                         .Where(key => !knownRelationshipNames.Contains(key))
                          .OrderBy(key => key, StringComparer.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
@@ -781,14 +739,173 @@ public sealed class WorkspaceService : IWorkspaceService
             : workspace.Instance.ModelName;
         var rootName = string.IsNullOrWhiteSpace(modelName) ? "MetadataModel" : modelName;
         var parts = new List<string>();
-        foreach (var entityName in GetOrderedEntityNames(workspace))
+        foreach (var shardPlan in BuildInstanceShardWritePlans(workspace, persistAssignments: false))
         {
-            var shardDocument = BuildInstanceShardDocument(workspace, rootName, entityName);
+            var shardDocument = BuildInstanceShardDocument(
+                workspace,
+                rootName,
+                shardPlan.EntityName,
+                shardPlan.Records);
             var shardCanonical = SerializeXml(shardDocument, indented: false);
-            parts.Add(entityName + ".xml\n" + shardCanonical);
+            parts.Add(shardPlan.ShardFileName + "\n" + shardCanonical);
         }
 
         return string.Join("\n---\n", parts);
+    }
+
+    private static IReadOnlyList<InstanceShardWritePlan> BuildInstanceShardWritePlans(
+        Workspace workspace,
+        bool persistAssignments)
+    {
+        var plans = new List<InstanceShardWritePlan>();
+        foreach (var entityName in GetOrderedEntityNames(workspace))
+        {
+            plans.AddRange(BuildEntityShardWritePlans(workspace, entityName));
+        }
+
+        plans = plans
+            .OrderBy(plan => plan.EntityName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(plan => plan.ShardFileName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var plan in plans)
+        {
+            plan.ShardFileName = MakeUniqueShardFileName(plan.EntityName, plan.ShardFileName, usedFileNames);
+            if (persistAssignments)
+            {
+                foreach (var record in plan.Records)
+                {
+                    record.SourceShardFileName = plan.ShardFileName;
+                }
+            }
+        }
+
+        return plans;
+    }
+
+    private static IReadOnlyList<InstanceShardWritePlan> BuildEntityShardWritePlans(Workspace workspace, string entityName)
+    {
+        var records = workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var entityRecords)
+            ? entityRecords
+            : new List<InstanceRecord>();
+        var orderedRecords = records
+            .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var defaultShardFileName = NormalizeShardFileName(null, entityName);
+        var assignedNames = orderedRecords
+            .Select(record => NormalizeLoadedShardFileName(record.SourceShardFileName, entityName))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (assignedNames.Count == 0)
+        {
+            assignedNames.Add(defaultShardFileName);
+        }
+
+        var primaryShardFileName = assignedNames[0];
+        var recordsByShard = new Dictionary<string, List<InstanceRecord>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var record in orderedRecords)
+        {
+            var shardFileName = NormalizeLoadedShardFileName(record.SourceShardFileName, entityName);
+            if (string.IsNullOrWhiteSpace(shardFileName))
+            {
+                shardFileName = primaryShardFileName;
+            }
+
+            if (!recordsByShard.TryGetValue(shardFileName, out var shardRecords))
+            {
+                shardRecords = new List<InstanceRecord>();
+                recordsByShard[shardFileName] = shardRecords;
+            }
+
+            record.SourceShardFileName = shardFileName;
+            shardRecords.Add(record);
+        }
+
+        if (recordsByShard.Count == 0)
+        {
+            recordsByShard[defaultShardFileName] = new List<InstanceRecord>();
+        }
+
+        return recordsByShard
+            .OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(item => new InstanceShardWritePlan(entityName, item.Key, item.Value))
+            .ToList();
+    }
+
+    private static string NormalizeLoadedShardFileName(string? shardFileName, string entityName)
+    {
+        var trimmed = (shardFileName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        return NormalizeShardFileName(trimmed, entityName);
+    }
+
+    private static string NormalizeShardFileName(string? shardFileName, string entityName)
+    {
+        var trimmed = (shardFileName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return entityName + ".xml";
+        }
+
+        var leafName = Path.GetFileName(trimmed);
+        if (string.IsNullOrWhiteSpace(leafName))
+        {
+            return entityName + ".xml";
+        }
+
+        if (!leafName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return leafName + ".xml";
+        }
+
+        return leafName;
+    }
+
+    private static string MakeUniqueShardFileName(
+        string entityName,
+        string candidate,
+        ISet<string> usedFileNames)
+    {
+        var normalized = NormalizeShardFileName(candidate, entityName);
+        if (usedFileNames.Add(normalized))
+        {
+            return normalized;
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(normalized);
+        var extension = Path.GetExtension(normalized);
+        var disambiguatedBase = entityName + "." + baseName;
+        var disambiguated = disambiguatedBase + extension;
+        var suffix = 2;
+        while (!usedFileNames.Add(disambiguated))
+        {
+            disambiguated = disambiguatedBase + "." + suffix.ToString(CultureInfo.InvariantCulture) + extension;
+            suffix++;
+        }
+
+        return disambiguated;
+    }
+
+    private sealed class InstanceShardWritePlan
+    {
+        public InstanceShardWritePlan(string entityName, string shardFileName, List<InstanceRecord> records)
+        {
+            EntityName = entityName;
+            ShardFileName = shardFileName;
+            Records = records;
+        }
+
+        public string EntityName { get; }
+        public string ShardFileName { get; set; }
+        public List<InstanceRecord> Records { get; }
     }
 
     private static IReadOnlyList<string> GetOrderedEntityNames(Workspace workspace)
@@ -811,19 +928,6 @@ public sealed class WorkspaceService : IWorkspaceService
         }
 
         return entityNames.ToList();
-    }
-
-    private static bool IsLegacyPropertyAttributeCompatibilityEnabled()
-    {
-        var value = Environment.GetEnvironmentVariable(LegacyPropertyAttributeCompatibilityEnvVar);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPositiveIntegerIdentity(string? value)
@@ -903,7 +1007,9 @@ public sealed class WorkspaceService : IWorkspaceService
 
     private static string SerializeManifest(WorkspaceManifest manifest)
     {
-        return JsonSerializer.Serialize(manifest, ManifestJsonWriteOptions);
+        return SerializeXml(
+            MetaWorkspaceModel.BuildDocument(MetaWorkspaceManifestAdapter.ToMetaWorkspaceData(manifest)),
+            indented: false);
     }
 
     private static void DeleteIfExists(string path)
@@ -1029,7 +1135,9 @@ public sealed class WorkspaceService : IWorkspaceService
                 {
                     entity.Relationships.Add(new RelationshipDefinition
                     {
-                        Entity = (string?)relationshipElement.Attribute("entity") ?? string.Empty,
+                        Entity = ((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim(),
+                        Name = ((string?)relationshipElement.Attribute("name") ?? string.Empty).Trim(),
+                        Column = ((string?)relationshipElement.Attribute("column") ?? string.Empty).Trim(),
                     });
                 }
             }
@@ -1113,10 +1221,25 @@ public sealed class WorkspaceService : IWorkspaceService
             {
                 var relationshipsElement = new XElement("Relationships");
                 foreach (var relationship in entity.Relationships
-                             .OrderBy(item => item.Entity, StringComparer.OrdinalIgnoreCase))
+                             .OrderBy(item => item.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+                             .ThenBy(item => item.Entity, StringComparer.OrdinalIgnoreCase))
                 {
-                    relationshipsElement.Add(new XElement("Relationship",
-                        new XAttribute("entity", relationship.Entity ?? string.Empty)));
+                    var relationshipElement = new XElement("Relationship",
+                        new XAttribute("entity", relationship.Entity ?? string.Empty));
+                    var usageName = relationship.GetUsageName();
+                    if (!string.Equals(usageName, relationship.Entity, StringComparison.Ordinal))
+                    {
+                        relationshipElement.Add(new XAttribute("name", usageName));
+                    }
+
+                    var columnName = relationship.GetColumnName();
+                    var defaultColumnName = usageName + "Id";
+                    if (!string.Equals(columnName, defaultColumnName, StringComparison.Ordinal))
+                    {
+                        relationshipElement.Add(new XAttribute("column", columnName));
+                    }
+
+                    relationshipsElement.Add(relationshipElement);
                 }
 
                 entityElement.Add(relationshipsElement);
@@ -1145,12 +1268,6 @@ public sealed class WorkspaceService : IWorkspaceService
             {
                 throw new InvalidDataException(
                     $"Model has duplicate instance container name '{containerName}' for multiple entities.");
-            }
-
-            var legacyListName = entity.Name + "List";
-            if (!string.Equals(containerName, legacyListName, StringComparison.OrdinalIgnoreCase))
-            {
-                lookup.TryAdd(legacyListName, entity);
             }
         }
 

@@ -58,7 +58,7 @@ internal sealed partial class CliRuntime
                     .ToList());
             if (inboundAll.Count > inbound.Count)
             {
-                presenter.WriteInfo($"RowsTruncated: {(inboundAll.Count - inbound.Count).ToString(CultureInfo.InvariantCulture)}");
+                presenter.WriteInfo($"InstancesTruncated: {(inboundAll.Count - inbound.Count).ToString(CultureInfo.InvariantCulture)}");
             }
     
             return 0;

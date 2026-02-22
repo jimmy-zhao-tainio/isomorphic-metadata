@@ -1,0 +1,293 @@
+using System.Globalization;
+using MetadataStudio.Core.Domain;
+
+namespace MetaSchema.Core;
+
+public static class TypeConversionCatalogSeed
+{
+    public static Workspace CreateWorkspace(string workspaceRootPath)
+    {
+        var workspace = MetaSchemaWorkspaceFactory.CreateEmptyWorkspace(
+            workspaceRootPath,
+            MetaSchemaModels.CreateTypeConversionCatalogModel());
+        new CatalogSeedBuilder(workspace).Seed();
+        return workspace;
+    }
+
+    private sealed class CatalogSeedBuilder
+    {
+        private readonly Workspace workspace;
+        private readonly Dictionary<string, int> idCounters = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> typeSystemIds = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> dataTypeIds = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> facetIds = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> settingIds = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> implementationIds = new(StringComparer.OrdinalIgnoreCase);
+
+        public CatalogSeedBuilder(Workspace workspace)
+        {
+            this.workspace = workspace;
+        }
+
+        public void Seed()
+        {
+            SeedTypeSystems();
+            SeedFacets();
+            SeedDataTypes();
+            SeedDataTypeFacets();
+            SeedTypeSpecs();
+            SeedSettings();
+            SeedConversionImplementations();
+            SeedMappings();
+        }
+
+        private void SeedTypeSystems()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.TypeSystems)
+            {
+                var id = AddRow("TypeSystem", new Dictionary<string, string?> { ["Name"] = value });
+                typeSystemIds[value] = id;
+            }
+        }
+
+        private void SeedFacets()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.Facets)
+            {
+                var id = AddRow("Facet", new Dictionary<string, string?>
+                {
+                    ["Name"] = value.Name,
+                    ["ValueKind"] = value.ValueKind,
+                });
+                facetIds[value.Name] = id;
+            }
+        }
+
+        private void SeedDataTypes()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.DataTypes)
+            {
+                var id = AddRow(
+                    "DataType",
+                    new Dictionary<string, string?>
+                    {
+                        ["Name"] = value.Name,
+                        ["Category"] = value.Category,
+                    },
+                    new Dictionary<string, string>
+                    {
+                        ["TypeSystem"] = RequireId(typeSystemIds, value.TypeSystem, "TypeSystem"),
+                    });
+                dataTypeIds[BuildDataTypeKey(value.TypeSystem, value.Name)] = id;
+            }
+        }
+
+        private void SeedDataTypeFacets()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.DataTypeFacets)
+            {
+                AddRow(
+                    "DataTypeFacet",
+                    new Dictionary<string, string?>
+                    {
+                        ["IsSupported"] = BoolText(value.IsSupported),
+                        ["IsRequired"] = BoolText(value.IsRequired),
+                        ["DefaultInt"] = value.DefaultInt.HasValue ? IntText(value.DefaultInt.Value) : null,
+                        ["DefaultBool"] = value.DefaultBool.HasValue ? BoolText(value.DefaultBool.Value) : null,
+                    },
+                    new Dictionary<string, string>
+                    {
+                        ["DataType"] = RequireDataTypeId(value.TypeSystem, value.DataType),
+                        ["Facet"] = RequireId(facetIds, value.Facet, "Facet"),
+                    });
+            }
+        }
+
+        private void SeedTypeSpecs()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.TypeSpecs)
+            {
+                AddRow(
+                    "TypeSpec",
+                    new Dictionary<string, string?>
+                    {
+                        ["Length"] = value.Length.HasValue ? IntText(value.Length.Value) : null,
+                        ["Precision"] = value.Precision.HasValue ? IntText(value.Precision.Value) : null,
+                        ["Scale"] = value.Scale.HasValue ? IntText(value.Scale.Value) : null,
+                        ["TimePrecision"] = value.TimePrecision.HasValue ? IntText(value.TimePrecision.Value) : null,
+                        ["IsUnicode"] = value.IsUnicode.HasValue ? BoolText(value.IsUnicode.Value) : null,
+                        ["IsFixedLength"] = value.IsFixedLength.HasValue ? BoolText(value.IsFixedLength.Value) : null,
+                    },
+                    new Dictionary<string, string>
+                    {
+                        ["DataType"] = RequireDataTypeId(value.TypeSystem, value.DataType),
+                    });
+            }
+        }
+
+        private void SeedSettings()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.Settings)
+            {
+                var id = AddRow("Setting", new Dictionary<string, string?>
+                {
+                    ["Name"] = value.Name,
+                    ["DefaultValue"] = value.DefaultValue,
+                });
+                settingIds[value.Name] = id;
+            }
+        }
+
+        private void SeedConversionImplementations()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.ConversionImplementations)
+            {
+                var id = AddRow("ConversionImplementation", new Dictionary<string, string?>
+                {
+                    ["Key"] = value.Key,
+                    ["Kind"] = value.Kind,
+                    ["CSharpEntryPoint"] = value.CSharpEntryPoint,
+                });
+                implementationIds[value.Key] = id;
+            }
+        }
+
+        private void SeedMappings()
+        {
+            foreach (var value in TypeConversionCatalogSeedData.TypeMappings)
+            {
+                AddMapping(value);
+            }
+        }
+
+        private void AddMapping(TypeConversionCatalogSeedData.MappingSeed value)
+        {
+            var mappingId = AddRow(
+                "TypeMapping",
+                new Dictionary<string, string?>
+                {
+                    ["Name"] = value.Name,
+                    ["Priority"] = IntText(value.Priority),
+                    ["Lossiness"] = value.Lossiness,
+                    ["IsImplicit"] = BoolText(value.IsImplicit),
+                    ["Notes"] = value.Notes,
+                },
+                new Dictionary<string, string>
+                {
+                    ["SourceTypeSystem"] = RequireId(typeSystemIds, value.SourceTypeSystem, "TypeSystem"),
+                    ["TargetTypeSystem"] = RequireId(typeSystemIds, value.TargetTypeSystem, "TypeSystem"),
+                    ["SourceDataType"] = RequireDataTypeId(value.SourceTypeSystem, value.SourceDataType),
+                    ["TargetDataType"] = RequireDataTypeId(value.TargetTypeSystem, value.TargetDataType),
+                    ["ConversionImplementation"] = RequireId(implementationIds, value.ConversionImplementation, "ConversionImplementation"),
+                    ["Setting"] = RequireId(settingIds, value.Setting, "Setting"),
+                });
+
+            foreach (var condition in value.Conditions ?? Array.Empty<TypeConversionCatalogSeedData.MappingConditionSeed>())
+            {
+                AddRow(
+                    "TypeMappingCondition",
+                    new Dictionary<string, string?>
+                    {
+                        ["Operator"] = condition.Operator,
+                        ["ValueInt"] = condition.ValueInt.HasValue ? IntText(condition.ValueInt.Value) : null,
+                    },
+                    new Dictionary<string, string>
+                    {
+                        ["TypeMapping"] = mappingId,
+                        ["Facet"] = RequireId(facetIds, condition.Facet, "Facet"),
+                    });
+            }
+
+            foreach (var transform in value.Transforms ?? Array.Empty<TypeConversionCatalogSeedData.MappingTransformSeed>())
+            {
+                AddRow(
+                    "TypeMappingFacetTransform",
+                    new Dictionary<string, string?>
+                    {
+                        ["Mode"] = transform.Mode,
+                        ["SetInt"] = transform.SetInt.HasValue ? IntText(transform.SetInt.Value) : null,
+                        ["SetBool"] = transform.SetBool.HasValue ? BoolText(transform.SetBool.Value) : null,
+                    },
+                    new Dictionary<string, string>
+                    {
+                        ["TypeMapping"] = mappingId,
+                        ["Facet"] = RequireId(facetIds, transform.Facet, "Facet"),
+                    });
+            }
+        }
+
+        private string AddRow(
+            string entityName,
+            IReadOnlyDictionary<string, string?> values,
+            IReadOnlyDictionary<string, string>? relationships = null)
+        {
+            var id = NextId(entityName);
+            var row = new InstanceRecord
+            {
+                Id = id,
+            };
+
+            foreach (var value in values)
+            {
+                if (value.Value != null)
+                {
+                    row.Values[value.Key] = value.Value;
+                }
+            }
+
+            foreach (var relationship in relationships ?? new Dictionary<string, string>())
+            {
+                row.RelationshipIds[relationship.Key] = relationship.Value;
+            }
+
+            workspace.Instance.GetOrCreateEntityRecords(entityName).Add(row);
+            return id;
+        }
+
+        private string NextId(string entityName)
+        {
+            if (!idCounters.TryGetValue(entityName, out var current))
+            {
+                current = 0;
+            }
+
+            current++;
+            idCounters[entityName] = current;
+            return current.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private string RequireDataTypeId(string typeSystemName, string dataTypeName)
+        {
+            var key = BuildDataTypeKey(typeSystemName, dataTypeName);
+            return RequireId(dataTypeIds, key, "DataType");
+        }
+
+        private static string BuildDataTypeKey(string typeSystemName, string dataTypeName)
+        {
+            return typeSystemName + "|" + dataTypeName;
+        }
+
+        private static string RequireId(
+            IReadOnlyDictionary<string, string> idLookup,
+            string name,
+            string entityName)
+        {
+            if (idLookup.TryGetValue(name, out var id))
+            {
+                return id;
+            }
+
+            throw new InvalidOperationException($"{entityName} row '{name}' is not seeded.");
+        }
+
+        private static string BoolText(bool value)
+        {
+            return value ? "true" : "false";
+        }
+
+        private static string IntText(int value)
+        {
+            return value.ToString(CultureInfo.InvariantCulture);
+        }
+    }
+}

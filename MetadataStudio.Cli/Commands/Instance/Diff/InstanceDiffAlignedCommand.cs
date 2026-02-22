@@ -18,6 +18,12 @@ internal sealed partial class CliRuntime
         PrintContractCompatibilityWarning(rightWorkspace.Manifest);
         PrintContractCompatibilityWarning(alignmentWorkspace.Manifest);
 
+        var rightDiagnostics = services.ValidationService.Validate(rightWorkspace);
+        if (rightDiagnostics.HasErrors || (globalStrict && rightDiagnostics.WarningCount > 0))
+        {
+            return PrintOperationValidationFailure("instance diff-aligned right workspace", Array.Empty<WorkspaceOp>(), rightDiagnostics);
+        }
+
         AlignmentCatalog alignment;
         try
         {

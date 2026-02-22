@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -54,12 +55,12 @@ public sealed class WorkspaceServiceTests
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
 
             var metadataRoot = Path.Combine(tempRoot, "metadata");
-            var manifestPath = Path.Combine(metadataRoot, "workspace.json");
+            var manifestPath = Path.Combine(metadataRoot, "workspace.xml");
             var modelPath = Path.Combine(metadataRoot, "model.xml");
             var instanceDir = Path.Combine(metadataRoot, "instance");
             var legacyInstancePath = Path.Combine(metadataRoot, "instance.xml");
 
-            Assert.True(File.Exists(manifestPath), "workspace.json should exist after save.");
+            Assert.True(File.Exists(manifestPath), "workspace.xml should exist after save.");
             Assert.True(File.Exists(modelPath), "model.xml should exist after save.");
             Assert.True(Directory.Exists(instanceDir), "instance shard directory should exist after save.");
             Assert.True(Directory.GetFiles(instanceDir, "*.xml").Length > 0, "instance shard directory should contain XML files.");
@@ -69,6 +70,148 @@ public sealed class WorkspaceServiceTests
             var reloadedRows = reloaded.Instance.RecordsByEntity.Values.Sum(records => records.Count);
             Assert.Equal(expectedRows, reloadedRows);
             Assert.Equal("1.0", reloaded.Manifest.ContractVersion);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Load_LegacyWorkspaceJson_DoesNotAutoMigrateToWorkspaceXml()
+    {
+        var services = new ServiceCollection();
+        var repositoryRoot = FindRepositoryRoot();
+        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+
+        var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
+        var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            await services.ExportService.ExportXmlAsync(workspace, tempRoot);
+            var metadataRoot = Path.Combine(tempRoot, "metadata");
+            var workspaceXmlPath = Path.Combine(metadataRoot, "workspace.xml");
+            var workspaceJsonPath = Path.Combine(metadataRoot, "workspace.json");
+
+            Assert.True(File.Exists(workspaceXmlPath));
+            var legacyJson = JsonSerializer.Serialize(new WorkspaceManifest
+            {
+                ContractVersion = "1.0",
+                ModelFile = "metadata/model.xml",
+                InstanceDir = "metadata/instance",
+                Encoding = "utf-8-no-bom",
+                Newlines = "lf",
+                CanonicalSort = new CanonicalSortManifest
+                {
+                    Entities = "name-ordinal",
+                    Properties = "name-ordinal",
+                    Relationships = "name-ordinal",
+                    Rows = "id-ordinal",
+                    Attributes = "id-first-then-name-ordinal",
+                },
+            });
+
+            File.Delete(workspaceXmlPath);
+            await File.WriteAllTextAsync(workspaceJsonPath, legacyJson);
+
+            var loaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
+            Assert.Equal("1.0", loaded.Manifest.ContractVersion);
+            Assert.False(File.Exists(workspaceXmlPath), "workspace.xml should not be auto-created from legacy workspace.json.");
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Load_AndSave_PreservesSplitEntityShardLayout()
+    {
+        var services = new ServiceCollection();
+        var repositoryRoot = FindRepositoryRoot();
+        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+
+        var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
+        var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            await services.ExportService.ExportXmlAsync(workspace, tempRoot);
+            SplitEntityShard(tempRoot, "Cube", "Cube.part-a.xml", "Cube.part-b.xml");
+
+            var splitLoaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
+            var cubeRows = splitLoaded.Instance.GetOrCreateEntityRecords("Cube");
+            Assert.NotEmpty(cubeRows);
+            Assert.All(
+                cubeRows,
+                row => Assert.Contains(
+                    row.SourceShardFileName,
+                    new[] { "Cube.part-a.xml", "Cube.part-b.xml" }));
+
+            await services.WorkspaceService.SaveAsync(splitLoaded);
+
+            var instanceDir = Path.Combine(tempRoot, "metadata", "instance");
+            Assert.True(File.Exists(Path.Combine(instanceDir, "Cube.part-a.xml")));
+            Assert.True(File.Exists(Path.Combine(instanceDir, "Cube.part-b.xml")));
+            Assert.False(File.Exists(Path.Combine(instanceDir, "Cube.xml")));
+
+            var reloaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
+            Assert.Equal(
+                splitLoaded.Instance.GetOrCreateEntityRecords("Cube").Count,
+                reloaded.Instance.GetOrCreateEntityRecords("Cube").Count);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Save_NewRowsGoToPrimarySplitShardForEntity()
+    {
+        var services = new ServiceCollection();
+        var repositoryRoot = FindRepositoryRoot();
+        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+
+        var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
+        var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            await services.ExportService.ExportXmlAsync(workspace, tempRoot);
+            SplitEntityShard(tempRoot, "Cube", "Cube.part-a.xml", "Cube.part-b.xml");
+
+            var splitLoaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
+            splitLoaded.Instance.GetOrCreateEntityRecords("Cube").Add(new InstanceRecord
+            {
+                Id = "999",
+                SourceShardFileName = string.Empty,
+                Values =
+                {
+                    ["CubeName"] = "Split Layout Insert",
+                    ["Purpose"] = "Test row",
+                    ["RefreshMode"] = "Manual",
+                },
+            });
+
+            await services.WorkspaceService.SaveAsync(splitLoaded);
+
+            var primaryShard = XDocument.Load(Path.Combine(tempRoot, "metadata", "instance", "Cube.part-a.xml"));
+            var secondaryShard = XDocument.Load(Path.Combine(tempRoot, "metadata", "instance", "Cube.part-b.xml"));
+
+            Assert.NotNull(primaryShard
+                .Descendants("Cube")
+                .SingleOrDefault(element => string.Equals((string?)element.Attribute("Id"), "999", StringComparison.OrdinalIgnoreCase)));
+            Assert.Null(secondaryShard
+                .Descendants("Cube")
+                .SingleOrDefault(element => string.Equals((string?)element.Attribute("Id"), "999", StringComparison.OrdinalIgnoreCase)));
         }
         finally
         {
@@ -119,9 +262,13 @@ public sealed class WorkspaceServiceTests
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.json");
-            var manifest = File.ReadAllText(manifestPath);
-            File.WriteAllText(manifestPath, manifest.Replace("\"1.0\"", "\"2.0\"", StringComparison.Ordinal));
+            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var manifest = XDocument.Load(manifestPath);
+            manifest
+                .Descendants("FormatVersion")
+                .Single()
+                .Value = "2.0";
+            manifest.Save(manifestPath);
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await services.WorkspaceService.LoadAsync(tempRoot));
@@ -148,9 +295,13 @@ public sealed class WorkspaceServiceTests
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.json");
-            var manifest = File.ReadAllText(manifestPath);
-            File.WriteAllText(manifestPath, manifest.Replace("\"1.0\"", "\"1.7\"", StringComparison.Ordinal));
+            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var manifest = XDocument.Load(manifestPath);
+            manifest
+                .Descendants("FormatVersion")
+                .Single()
+                .Value = "1.7";
+            manifest.Save(manifestPath);
 
             var loaded = await services.WorkspaceService.LoadAsync(tempRoot);
             Assert.Equal("1.7", loaded.Manifest.ContractVersion);
@@ -187,7 +338,7 @@ public sealed class WorkspaceServiceTests
 
             var invalidEntity = new MetadataStudio.Core.Domain.EntityDefinition
             {
-                Name = "class",
+                Name = "Bad Name",
             };
             workspace.Model.Entities.Add(invalidEntity);
 
@@ -217,11 +368,14 @@ public sealed class WorkspaceServiceTests
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.json");
-            var manifest = File.ReadAllText(manifestPath);
-            File.WriteAllText(
-                manifestPath,
-                manifest.Replace("\"metadata/model.xml\"", "\"../outside-model.xml\"", StringComparison.Ordinal));
+            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var manifest = XDocument.Load(manifestPath);
+            var modelPath = manifest
+                .Descendants("WorkspacePath")
+                .First(element =>
+                    string.Equals((string?)element.Element("Key"), "ModelFile", StringComparison.OrdinalIgnoreCase));
+            modelPath.Element("Path")!.Value = "../outside-model.xml";
+            manifest.Save(manifestPath);
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await services.WorkspaceService.LoadAsync(tempRoot));
@@ -431,7 +585,7 @@ public sealed class WorkspaceServiceTests
             await services.WorkspaceService.SaveAsync(workspace);
 
             Assert.False(File.Exists(lockPath), "Stale lock should be removed after successful save.");
-            Assert.True(File.Exists(Path.Combine(tempRoot, "metadata", "workspace.json")));
+            Assert.True(File.Exists(Path.Combine(tempRoot, "metadata", "workspace.xml")));
         }
         finally
         {
@@ -747,6 +901,56 @@ public sealed class WorkspaceServiceTests
 
         workspace.Instance.GetOrCreateEntityRecords("Item").Add(row);
         return workspace;
+    }
+
+    private static void SplitEntityShard(
+        string workspaceRoot,
+        string entityName,
+        string firstShardFileName,
+        string secondShardFileName)
+    {
+        var shardPath = Path.Combine(workspaceRoot, "metadata", "instance", entityName + ".xml");
+        var shard = XDocument.Load(shardPath);
+        var root = shard.Root ?? throw new InvalidDataException("Entity shard has no root.");
+        var listElement = root.Elements().Single();
+        var rows = listElement.Elements().ToList();
+        Assert.True(rows.Count >= 2, $"Expected at least two rows in '{entityName}' shard for split test.");
+
+        var midpoint = rows.Count / 2;
+        if (midpoint == 0)
+        {
+            midpoint = 1;
+        }
+
+        WriteEntityShard(
+            workspaceRoot,
+            firstShardFileName,
+            root.Name.LocalName,
+            listElement.Name.LocalName,
+            rows.Take(midpoint));
+        WriteEntityShard(
+            workspaceRoot,
+            secondShardFileName,
+            root.Name.LocalName,
+            listElement.Name.LocalName,
+            rows.Skip(midpoint));
+        File.Delete(shardPath);
+    }
+
+    private static void WriteEntityShard(
+        string workspaceRoot,
+        string shardFileName,
+        string rootName,
+        string listName,
+        IEnumerable<XElement> rows)
+    {
+        var rowCopies = rows.Select(row => new XElement(row)).ToList();
+        var document = new XDocument(
+            new XDeclaration("1.0", "utf-8", null),
+            new XElement(
+                rootName,
+                new XElement(listName, rowCopies)));
+        document.Save(Path.Combine(workspaceRoot, "metadata", "instance", shardFileName));
     }
 
     private static Workspace BuildWorkspaceWithRelationship(string workspaceRoot)

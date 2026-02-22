@@ -201,20 +201,21 @@ public sealed class ValidationService : IValidationService
 
         foreach (var relationship in entity.Relationships)
         {
-            if (string.IsNullOrWhiteSpace(relationship.Entity))
+            var usageName = relationship.GetUsageName();
+            if (string.IsNullOrWhiteSpace(usageName))
             {
                 continue;
             }
 
-            if (!memberNames.Add(relationship.Entity))
+            if (!memberNames.Add(usageName))
             {
                 diagnostics.Issues.Add(new DiagnosticIssue
                 {
                     Code = "entity.member.collision",
                     Message =
-                        $"Entity '{entity.Name}' has a name collision between property/member '{relationship.Entity}' and relationship '{relationship.Entity}'.",
+                        $"Entity '{entity.Name}' has a name collision between property/member '{usageName}' and relationship '{usageName}'.",
                     Severity = IssueSeverity.Error,
-                    Location = $"model/entity/{entity.Name}/relationship/{relationship.Entity}",
+                    Location = $"model/entity/{entity.Name}/relationship/{usageName}",
                 });
             }
         }
@@ -251,17 +252,53 @@ public sealed class ValidationService : IValidationService
                 continue;
             }
 
-            var relationTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var relationUsageNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var relationColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var relationship in entity.Relationships)
             {
-                if (!relationTargets.Add(relationship.Entity))
+                var usageName = relationship.GetUsageName();
+                var columnName = relationship.GetColumnName();
+                if (!IsValidName(usageName))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.name.invalid",
+                        Message = $"Relationship name '{entity.Name}.{usageName}' is invalid.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}",
+                    });
+                }
+
+                if (!IsValidName(columnName))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.column.invalid",
+                        Message = $"Relationship column '{entity.Name}.{columnName}' is invalid.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}/@column",
+                    });
+                }
+
+                if (!relationUsageNames.Add(usageName))
                 {
                     diagnostics.Issues.Add(new DiagnosticIssue
                     {
                         Code = "relationship.duplicate",
-                        Message = $"Relationship '{entity.Name}->{relationship.Entity}' is duplicated.",
+                        Message = $"Relationship '{entity.Name}.{usageName}' is duplicated.",
                         Severity = IssueSeverity.Error,
-                        Location = $"model/entity/{entity.Name}/relationship/{relationship.Entity}",
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}",
+                    });
+                }
+
+                if (!relationColumns.Add(columnName))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.column.duplicate",
+                        Message = $"Relationship column '{entity.Name}.{columnName}' is duplicated.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}/@column",
                     });
                 }
 
@@ -429,7 +466,7 @@ public sealed class ValidationService : IValidationService
                                  !property.IsNullable &&
                                  !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase)))
                 {
-                    var hasValue = record.Values.TryGetValue(requiredProperty.Name, out var value) && value != null;
+                    var hasValue = record.Values.TryGetValue(requiredProperty.Name, out var value);
                     if (!hasValue)
                     {
                         diagnostics.Issues.Add(new DiagnosticIssue
@@ -443,8 +480,7 @@ public sealed class ValidationService : IValidationService
                         continue;
                     }
 
-                    if (string.IsNullOrWhiteSpace(value) &&
-                        !AllowsExplicitEmptyRequiredValue(model, modelEntity, requiredProperty))
+                    if (value == null)
                     {
                         diagnostics.Issues.Add(new DiagnosticIssue
                         {
@@ -452,6 +488,32 @@ public sealed class ValidationService : IValidationService
                             Message = $"Entity '{entityName}' record '{record.Id}' is missing required value '{requiredProperty.Name}'.",
                             Severity = IssueSeverity.Error,
                             Location = $"instance/{entityName}/{record.Id}/{requiredProperty.Name}",
+                        });
+                    }
+                }
+
+                foreach (var property in modelEntity.Properties
+                             .Where(item => !string.Equals(item.Name, "Id", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (!record.Values.TryGetValue(property.Name, out var propertyValue) || propertyValue == null)
+                    {
+                        continue;
+                    }
+
+                    if (IsStringDataType(property.DataType))
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(propertyValue))
+                    {
+                        diagnostics.Issues.Add(new DiagnosticIssue
+                        {
+                            Code = "instance.property.parse",
+                            Message =
+                                $"Entity '{entityName}' record '{record.Id}' has invalid empty value for non-string property '{property.Name}'.",
+                            Severity = IssueSeverity.Error,
+                            Location = $"instance/{entityName}/{record.Id}/{property.Name}",
                         });
                     }
                 }
@@ -475,15 +537,17 @@ public sealed class ValidationService : IValidationService
             {
                 foreach (var relationship in modelEntity.Relationships)
                 {
-                    if (!record.RelationshipIds.TryGetValue(relationship.Entity, out var relatedId) ||
+                    var relationshipUsage = relationship.GetUsageName();
+                    var relationshipColumn = relationship.GetColumnName();
+                    if (!record.RelationshipIds.TryGetValue(relationshipUsage, out var relatedId) ||
                         string.IsNullOrWhiteSpace(relatedId))
                     {
                         diagnostics.Issues.Add(new DiagnosticIssue
                         {
                             Code = "instance.relationship.missing",
-                            Message = $"Entity '{entityName}' record '{record.Id}' is missing relationship '{relationship.Entity}'.",
+                            Message = $"Entity '{entityName}' record '{record.Id}' is missing relationship '{relationshipColumn}'.",
                             Severity = IssueSeverity.Error,
-                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationship.Entity}",
+                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipUsage}",
                         });
                         continue;
                     }
@@ -494,9 +558,9 @@ public sealed class ValidationService : IValidationService
                         {
                             Code = "instance.relationship.invalid",
                             Message =
-                                $"Entity '{entityName}' record '{record.Id}' has invalid relationship '{relationship.Entity}' id '{relatedId}'.",
+                                $"Entity '{entityName}' record '{record.Id}' has invalid relationship '{relationshipUsage}' id '{relatedId}'.",
                             Severity = IssueSeverity.Error,
-                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationship.Entity}/{relatedId}",
+                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipUsage}/{relatedId}",
                         });
                         continue;
                     }
@@ -556,28 +620,14 @@ public sealed class ValidationService : IValidationService
         return hasNonZeroDigit;
     }
 
-    private static bool AllowsExplicitEmptyRequiredValue(
-        ModelDefinition model,
-        EntityDefinition entity,
-        PropertyDefinition property)
+    private static bool IsStringDataType(string? dataType)
     {
-        if (model == null || entity == null || property == null)
+        if (string.IsNullOrWhiteSpace(dataType))
         {
-            return false;
+            return true;
         }
 
-        if (!model.Name.StartsWith("InstanceDiffModel", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (!string.Equals(property.Name, "Value", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return string.Equals(entity.Name, "ModelLeftPropertyInstance", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(entity.Name, "ModelRightPropertyInstance", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(dataType.Trim(), "string", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsValidName(string value)

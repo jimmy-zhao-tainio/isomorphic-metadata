@@ -74,6 +74,8 @@ public static class WorkspaceSnapshotCloner
                 entityClone.Relationships.Add(new RelationshipDefinition
                 {
                     Entity = relationship.Entity,
+                    Name = relationship.Name,
+                    Column = relationship.Column,
                 });
             }
 
@@ -98,6 +100,7 @@ public static class WorkspaceSnapshotCloner
                 var recordClone = new InstanceRecord
                 {
                     Id = record.Id,
+                    SourceShardFileName = record.SourceShardFileName,
                 };
 
                 foreach (var value in record.Values)

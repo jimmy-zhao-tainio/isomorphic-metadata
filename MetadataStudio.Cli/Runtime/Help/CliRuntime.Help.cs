@@ -20,17 +20,17 @@ internal sealed partial class CliRuntime
                     "merge" => "meta instance merge <targetWorkspace> <diffWorkspace>",
                     "diff-aligned" => "meta instance diff-aligned <leftWorkspace> <rightWorkspace> <alignmentWorkspace>",
                     "merge-aligned" => "meta instance merge-aligned <targetWorkspace> <diffWorkspace>",
-                    _ => "meta instance <diff|merge|diff-aligned|merge-aligned> ...",
+                    "update" => "meta instance update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]",
+                    "relationship" when args.Length >= 3 => args[2].Trim().ToLowerInvariant() switch
+                    {
+                        "set" => "meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId> [--workspace <path>]",
+                        "clear" => "meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity> [--workspace <path>]",
+                        "list" => "meta instance relationship list <FromEntity> <FromId> [--workspace <path>]",
+                        _ => "meta instance relationship <set|clear|list> ...",
+                    },
+                    _ => "meta instance <diff|merge|diff-aligned|merge-aligned|update|relationship> ...",
                 }
-                : "meta instance <diff|merge|diff-aligned|merge-aligned> ...",
-            "workspace" => args.Length >= 2
-                ? args[1].Trim().ToLowerInvariant() switch
-                {
-                    "diff" => "meta instance diff <leftWorkspace> <rightWorkspace>",
-                    "merge" => "meta instance merge <targetWorkspace> <diffWorkspace>",
-                    _ => "meta workspace <diff|merge> ...",
-                }
-                : "meta workspace <diff|merge> ...",
+                : "meta instance <diff|merge|diff-aligned|merge-aligned|update|relationship> ...",
             "list" => args.Length >= 2
                 ? args[1].Trim().ToLowerInvariant() switch
                 {
@@ -46,10 +46,10 @@ internal sealed partial class CliRuntime
                 ? args[1].Trim().ToLowerInvariant() switch
                 {
                     "entity" => "meta view entity <Entity> [--workspace <path>]",
-                    "row" => "meta view row <Entity> <Id> [--workspace <path>]",
-                    _ => "meta view <entity|row> ...",
+                    "instance" => "meta view instance <Entity> <Id> [--workspace <path>]",
+                    _ => "meta view <entity|instance> ...",
                 }
-                : "meta view <entity|row> ...",
+                : "meta view <entity|instance> ...",
             "query" => "meta query <Entity> [--equals <Field> <Value>]... [--contains <Field> <Value>]... [--top <n>] [--workspace <path>]",
             "graph" => args.Length >= 2
                 ? args[1].Trim().ToLowerInvariant() switch
@@ -75,20 +75,6 @@ internal sealed partial class CliRuntime
                 : "meta model <subcommand> [arguments] [--workspace <path>]",
             "insert" => "meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Value ...] [--workspace <path>]",
             "bulk-insert" => "meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]",
-            "row" => args.Length >= 2
-                ? args[1].Trim().ToLowerInvariant() switch
-                {
-                    "update" => "meta row update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]",
-                    "relationship" when args.Length >= 3 => args[2].Trim().ToLowerInvariant() switch
-                    {
-                        "set" => "meta row relationship set <FromEntity> <FromId> --to <ToEntity> <ToId> [--workspace <path>]",
-                        "clear" => "meta row relationship clear <FromEntity> <FromId> --to-entity <ToEntity> [--workspace <path>]",
-                        "list" => "meta row relationship list <FromEntity> <FromId> [--workspace <path>]",
-                        _ => "meta row relationship <set|clear|list> ...",
-                    },
-                    _ => "meta row <update|relationship> ...",
-                }
-                : "meta row <update|relationship> ...",
             "delete" => "meta delete <Entity> <Id> [--workspace <path>]",
             "generate" => args.Length >= 2
                 ? args[1].Trim().ToLowerInvariant() switch
@@ -107,7 +93,6 @@ internal sealed partial class CliRuntime
                     _ => "meta import <xml|sql> ...",
                 }
                 : "meta import <xml|sql> ...",
-            "random" => "meta random create [options]",
             _ => string.Empty,
         };
     }

@@ -10,7 +10,6 @@ internal static class HelpTopics
         "Model",
         "Instance",
         "Pipeline",
-        "Utility",
     };
 
     private static readonly Dictionary<string, RegisteredCommand> RegisteredCommands = new(StringComparer.OrdinalIgnoreCase);
@@ -128,22 +127,6 @@ internal static class HelpTopics
                     next: "meta check");
                 return true;
 
-            case "instance":
-                document = BuildTopicDocument(
-                    title: "Command: instance",
-                    summary: "Build or apply instance diff artifacts.",
-                    usage: "meta instance <diff|merge|diff-aligned|merge-aligned> ...",
-                    options: Array.Empty<(string, string)>(),
-                    examples: new[]
-                    {
-                        "meta instance diff .\\LeftWorkspace .\\RightWorkspace",
-                        "meta instance merge .\\TargetWorkspace .\\RightWorkspace.instance-diff",
-                        "meta instance diff-aligned .\\LeftWorkspace .\\RightWorkspace .\\AlignmentWorkspace",
-                        "meta instance merge-aligned .\\TargetWorkspace .\\RightWorkspace.instance-diff-aligned",
-                    },
-                    next: "meta instance diff help");
-                return true;
-
             case "instance diff":
                 document = BuildTopicDocument(
                     title: "Command: instance diff",
@@ -215,7 +198,7 @@ internal static class HelpTopics
             case "list entities":
                 document = BuildTopicDocument(
                     title: "Command: list entities",
-                    summary: "List entities with row/property/relationship counts.",
+                    summary: "List entities with instance/property/relationship counts.",
                     usage: "meta list entities [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta list entities" },
@@ -239,7 +222,7 @@ internal static class HelpTopics
                     usage: "meta list relationships <Entity> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta list relationships Measure" },
-                    next: "meta row relationship list <Entity> <Id>");
+                    next: "meta instance relationship list <Entity> <Id>");
                 return true;
 
             case "list tasks":
@@ -255,13 +238,13 @@ internal static class HelpTopics
             case "view":
                 document = BuildTopicDocument(
                     title: "Command: view",
-                    summary: "View entity schema or one row.",
-                    usage: "meta view <entity|row> ...",
+                    summary: "View entity schema or one instance.",
+                    usage: "meta view <entity|instance> ...",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[]
                     {
                         "meta view entity Cube",
-                        "meta view row Cube 1",
+                        "meta view instance Cube 1",
                     },
                     next: "meta view entity --help");
                 return true;
@@ -276,26 +259,26 @@ internal static class HelpTopics
                     next: "meta list properties <Entity>");
                 return true;
 
-            case "view row":
+            case "view instance":
                 document = BuildTopicDocument(
-                    title: "Command: view row",
-                    summary: "Show one row as field/value table.",
-                    usage: "meta view row <Entity> <Id> [--workspace <path>]",
+                    title: "Command: view instance",
+                    summary: "Show one instance as field/value table.",
+                    usage: "meta view instance <Entity> <Id> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
-                    examples: new[] { "meta view row Cube 1" },
+                    examples: new[] { "meta view instance Cube 1" },
                     next: "meta query <Entity> --contains <Field> <Value>");
                 return true;
 
             case "query":
                 document = BuildTopicDocument(
                     title: "Command: query",
-                    summary: "Search rows using equals/contains filters.",
+                    summary: "Search instances using equals/contains filters.",
                     usage: "meta query <Entity> [--equals <Field> <Value>]... [--contains <Field> <Value>]... [--top <n>] [--workspace <path>]",
                     options: new[]
                     {
                         ("--equals <Field> <Value>", "Exact field value match (repeatable)."),
                         ("--contains <Field> <Value>", "Contains match (repeatable)."),
-                        ("--top <n>", "Limit preview rows (default 200)."),
+                        ("--top <n>", "Limit preview instances (default 200)."),
                         ("--workspace <path>", "Override workspace root."),
                     },
                     examples: new[]
@@ -303,7 +286,7 @@ internal static class HelpTopics
                         "meta query Cube --contains CubeName Sales",
                         "meta query Cube --equals Id 1 --top 20",
                     },
-                    next: "meta view row <Entity> <Id>");
+                    next: "meta view instance <Entity> <Id>");
                 return true;
 
             case "graph":
@@ -456,13 +439,13 @@ internal static class HelpTopics
                     usage: "meta model drop-relationship <FromEntity> <ToEntity> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta model drop-relationship Measure Cube" },
-                    next: "meta row relationship clear --help");
+                    next: "meta instance relationship clear --help");
                 return true;
 
             case "model drop-entity":
                 document = BuildTopicDocument(
                     title: "Command: model drop-entity",
-                    summary: "Drop an entity (blocked if rows or inbound relationships exist).",
+                    summary: "Drop an entity (blocked if instances or inbound relationships exist).",
                     usage: "meta model drop-entity <Entity> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta model drop-entity SourceSystem" },
@@ -472,11 +455,11 @@ internal static class HelpTopics
             case "insert":
                 document = BuildTopicDocument(
                     title: "Command: insert",
-                    summary: "Insert one row by explicit Id or auto-generated numeric Id.",
+                    summary: "Insert one instance by explicit Id or auto-generated numeric Id.",
                     usage: "meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Value ...] [--workspace <path>]",
                     options: new[]
                     {
-                        ("--auto-id", "Generate next numeric Id from existing rows."),
+                        ("--auto-id", "Generate next numeric Id from existing instances."),
                         ("--set Field=Value", "Set property/relationship values."),
                         ("--workspace <path>", "Override workspace root."),
                     },
@@ -485,13 +468,13 @@ internal static class HelpTopics
                         "meta insert Cube 10 --set \"CubeName=Ops Cube\"",
                         "meta insert Cube --auto-id --set \"CubeName=Ops Cube\"",
                     },
-                    next: "meta row update --help");
+                    next: "meta instance update --help");
                 return true;
 
             case "bulk-insert":
                 document = BuildTopicDocument(
                     title: "Command: bulk-insert",
-                    summary: "Bulk insert rows from tsv/csv/jsonl input with optional auto-generated numeric Ids.",
+                    summary: "Bulk insert instances from tsv/csv/jsonl input with optional auto-generated numeric Ids.",
                     usage: "meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]",
                     options: new[]
                     {
@@ -499,7 +482,7 @@ internal static class HelpTopics
                         ("--file <path>", "Input file."),
                         ("--stdin", "Read input from stdin."),
                         ("--key Field[,Field2...]", "Match key fields."),
-                        ("--auto-id", "Generate numeric Id for rows that omit Id."),
+                        ("--auto-id", "Generate numeric Id for instances that omit Id."),
                         ("--workspace <path>", "Override workspace root."),
                     },
                     examples: new[]
@@ -510,87 +493,88 @@ internal static class HelpTopics
                     next: "meta query --help");
                 return true;
 
-            case "row":
+            case "instance":
                 document = BuildTopicDocument(
-                    title: "Command: row",
-                    summary: "Update rows and relationship usage.",
-                    usage: "meta row <update|relationship> ...",
+                    title: "Command: instance",
+                    summary: "Diff/merge instances and apply instance updates.",
+                    usage: "meta instance <diff|merge|diff-aligned|merge-aligned|update|relationship> ...",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[]
                     {
-                        "meta row update Cube 1 --set RefreshMode=Manual",
-                        "meta row relationship set Measure 1 --to Cube 2",
+                        "meta instance update Cube 1 --set RefreshMode=Manual",
+                        "meta instance relationship set Measure 1 --to Cube 2",
+                        "meta instance diff .\\LeftWorkspace .\\RightWorkspace",
                     },
-                    next: "meta row update --help");
+                    next: "meta instance update --help");
                 return true;
 
-            case "row update":
+            case "instance update":
                 document = BuildTopicDocument(
-                    title: "Command: row update",
-                    summary: "Update fields on one row by Id.",
-                    usage: "meta row update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]",
+                    title: "Command: instance update",
+                    summary: "Update fields on one instance by Id.",
+                    usage: "meta instance update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]",
                     options: new[]
                     {
                         ("--set Field=Value", "Field assignment (repeatable)."),
                         ("--workspace <path>", "Override workspace root."),
                     },
-                    examples: new[] { "meta row update Cube 1 --set RefreshMode=Manual" },
+                    examples: new[] { "meta instance update Cube 1 --set RefreshMode=Manual" },
                     next: "meta delete --help");
                 return true;
 
-            case "row relationship":
+            case "instance relationship":
                 document = BuildTopicDocument(
-                    title: "Command: row relationship",
-                    summary: "Set, clear, or list relationship usage for one row.",
-                    usage: "meta row relationship <set|clear|list> ...",
+                    title: "Command: instance relationship",
+                    summary: "Set, clear, or list relationship usage for one instance.",
+                    usage: "meta instance relationship <set|clear|list> ...",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[]
                     {
-                        "meta row relationship set Measure 1 --to Cube 2",
-                        "meta row relationship clear Measure 1 --to-entity Cube",
-                        "meta row relationship list Measure 1",
+                        "meta instance relationship set Measure 1 --to Cube 2",
+                        "meta instance relationship clear Measure 1 --to-entity Cube",
+                        "meta instance relationship list Measure 1",
                     },
-                    next: "meta row relationship set --help");
+                    next: "meta instance relationship set --help");
                 return true;
 
-            case "row relationship set":
+            case "instance relationship set":
                 document = BuildTopicDocument(
-                    title: "Command: row relationship set",
+                    title: "Command: instance relationship set",
                     summary: "Set exact-one relationship usage for target entity.",
-                    usage: "meta row relationship set <FromEntity> <FromId> --to <ToEntity> <ToId> [--workspace <path>]",
+                    usage: "meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
-                    examples: new[] { "meta row relationship set Measure 1 --to Cube 2" },
-                    next: "meta row relationship list --help");
+                    examples: new[] { "meta instance relationship set Measure 1 --to Cube 2" },
+                    next: "meta instance relationship list --help");
                 return true;
 
-            case "row relationship clear":
+            case "instance relationship clear":
                 document = BuildTopicDocument(
-                    title: "Command: row relationship clear",
-                    summary: "Clear all usage from one row to one target entity (idempotent).",
-                    usage: "meta row relationship clear <FromEntity> <FromId> --to-entity <ToEntity> [--workspace <path>]",
+                    title: "Command: instance relationship clear",
+                    summary: "Clear all usage from one instance to one target entity (idempotent).",
+                    usage: "meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
-                    examples: new[] { "meta row relationship clear Measure 1 --to-entity Cube" },
-                    next: "meta row relationship list --help");
+                    examples: new[] { "meta instance relationship clear Measure 1 --to-entity Cube" },
+                    next: "meta instance relationship list --help");
                 return true;
 
-            case "row relationship list":
+            case "instance relationship list":
                 document = BuildTopicDocument(
-                    title: "Command: row relationship list",
-                    summary: "List relationship usage for one row.",
-                    usage: "meta row relationship list <FromEntity> <FromId> [--workspace <path>]",
+                    title: "Command: instance relationship list",
+                    summary: "List relationship usage for one instance.",
+                    usage: "meta instance relationship list <FromEntity> <FromId> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
-                    examples: new[] { "meta row relationship list Measure 1" },
-                    next: "meta row relationship set --help");
+                    examples: new[] { "meta instance relationship list Measure 1" },
+                    next: "meta instance relationship set --help");
                 return true;
 
             case "delete":
                 document = BuildTopicDocument(
                     title: "Command: delete",
-                    summary: "Delete one row by Id.",
+                    summary: "Delete one instance by Id.",
                     usage: "meta delete <Entity> <Id> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta delete Cube 10" },
-                    next: "meta view row <Entity> <Id>");
+                    next: "meta view instance <Entity> <Id>");
                 return true;
 
             case "generate":
@@ -688,23 +672,6 @@ internal static class HelpTopics
                     next: "meta status --workspace <path>");
                 return true;
 
-            case "random":
-            case "random create":
-                document = BuildTopicDocument(
-                    title: "Command: random create",
-                    summary: "Generate a random workspace for stress testing.",
-                    usage: "meta random create [options]",
-                    options: new[]
-                    {
-                        ("--workspace <path>", "Output workspace path."),
-                        ("--entities <count>", "Entity count."),
-                        ("--seed <int>", "Random seed."),
-                        ("--no-database", "Skip database apply."),
-                    },
-                    examples: new[] { "meta random create --workspace Samples\\Random100 --entities 100 --seed 123 --no-database" },
-                    next: "meta graph stats --workspace <path>");
-                return true;
-
             default:
                 return false;
         }
@@ -732,3 +699,4 @@ internal static class HelpTopics
             Next: next);
     }
 }
+

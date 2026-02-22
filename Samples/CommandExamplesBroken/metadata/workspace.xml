@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<MetaWorkspace>
+  <Workspaces>
+    <Workspace Id="1">
+      <Name>Workspace</Name>
+      <FormatVersion>1.0</FormatVersion>
+    </Workspace>
+  </Workspaces>
+  <WorkspacePaths>
+    <WorkspacePath Id="1" WorkspaceId="1">
+      <Key>ModelFile</Key>
+      <Path>metadata/model.xml</Path>
+    </WorkspacePath>
+    <WorkspacePath Id="2" WorkspaceId="1">
+      <Key>InstanceDir</Key>
+      <Path>metadata/instance</Path>
+    </WorkspacePath>
+  </WorkspacePaths>
+  <GeneratorSettings>
+    <GeneratorSetting Id="1" WorkspaceId="1">
+      <Key>Encoding</Key>
+      <Value>utf-8-no-bom</Value>
+    </GeneratorSetting>
+    <GeneratorSetting Id="2" WorkspaceId="1">
+      <Key>Newlines</Key>
+      <Value>lf</Value>
+    </GeneratorSetting>
+  </GeneratorSettings>
+</MetaWorkspace>

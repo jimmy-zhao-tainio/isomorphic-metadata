@@ -17,16 +17,16 @@ Workspace discovery:
 - Override: `--workspace <path>`.
 
 Canonical files:
-- `metadata/workspace.json`
+- `metadata/workspace.xml`
 - `metadata/model.xml`
 - `metadata/instance/<Entity>.xml`
 
 ## Instance XML contract
 
-Every instance row uses one strict shape:
+Every instance element uses one strict shape:
 
 - Entity element name is the model entity name.
-- Mandatory row identity attribute: `Id="<positive-integer-string>"`.
+- Mandatory identity attribute: `Id="<positive-integer-string>"`.
 - Relationship usage is single-target and stored only as attributes:
   - attribute name: `<TargetEntity>Id`
   - value: positive integer string
@@ -38,7 +38,7 @@ Every instance row uses one strict shape:
 
 Writer/reader rules:
 
-- No other row attributes are allowed in strict mode.
+- No other instance attributes are allowed in strict mode.
 - No relationship child elements are allowed in strict mode.
 - No null-to-empty coercion at persistence boundaries.
 
@@ -47,7 +47,7 @@ Writer/reader rules:
 Writers are byte-stable for identical logical state.
 
 - UTF-8 (no BOM), LF line endings.
-- Stable ordering for entities, properties, relationships, shards, rows, and attributes.
+- Stable ordering for entities, properties, relationships, shards, instances, and attributes.
 - Mutating commands normalize implicitly before save.
 
 ## Diff and merge identity rules
@@ -65,18 +65,18 @@ Writers are byte-stable for identical logical state.
 - Diff semantics:
   - no persisted booleans, hashes, fingerprints, or timestamps.
   - no packed field formats.
-  - set differences are represented by row presence (`*NotIn*` entities).
+  - set differences are represented by instance presence (`*NotIn*` entities).
   - FK-like references use `<Entity>Id` naming.
 
-## Row and relationship addressing
+## Instance and relationship addressing
 
-Row addressing:
+Instance addressing:
 - `<Entity> <Id>` only.
 
 Relationship usage:
-- `meta row relationship set <FromEntity> <FromId> --to <ToEntity> <ToId>`
-- `meta row relationship clear <FromEntity> <FromId> --to-entity <ToEntity>`
-- `meta row relationship list <FromEntity> <FromId>`
+- `meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId>`
+- `meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity>`
+- `meta instance relationship list <FromEntity> <FromId>`
 
 Semantics:
 - `set` leaves exactly one usage to the target entity.
@@ -123,7 +123,7 @@ Workspace:
 
 Inspect:
 - `meta list <entities|properties|relationships|tasks> ...`
-- `meta view <entity|row> ...`
+- `meta view <entity|instance> ...`
 - `meta query <Entity> [--equals <Field> <Value>]... [--contains <Field> <Value>]... [--top <n>] [--workspace <path>]`
 - `meta graph <stats|inbound> ...`
 - `meta check [--workspace <path>]`
@@ -136,17 +136,14 @@ Modify:
 - `meta model <add-entity|rename-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
 - `meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Value ...] [--workspace <path>]`
 - `meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]`
-- `meta row update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]`
+- `meta instance update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]`
 - `meta delete <Entity> <Id> [--workspace <path>]`
-- `meta row relationship <set|clear|list> ...`
+- `meta instance relationship <set|clear|list> ...`
 
 Generate:
 - `meta generate <sql|csharp|ssdt> --out <dir> [--workspace <path>]`
 - `meta import xml <modelXmlPath> <instanceXmlPath> --new-workspace <path>`
 - `meta import sql <connectionString> <schema> --new-workspace <path>`
-
-Utility:
-- `meta random create [options]`
 
 ## Diff/merge example
 
@@ -157,6 +154,4 @@ meta instance diff .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDi
 meta instance merge .\Samples\CommandExamplesDiffLeft "<path from diff output>"
 ```
 
-## Compatibility rule
 
-Docs and help prefer `meta instance ...` commands for diff/merge.

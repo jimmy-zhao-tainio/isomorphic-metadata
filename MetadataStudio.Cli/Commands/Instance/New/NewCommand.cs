@@ -1,4 +1,4 @@
-internal sealed partial class CliRuntime
+﻿internal sealed partial class CliRuntime
 {
     async Task<int> InsertAsync(string[] commandArgs)
     {
@@ -15,9 +15,9 @@ internal sealed partial class CliRuntime
         {
             explicitId = commandArgs[2];
             optionsStartIndex = 3;
-            if (ContainsLegacyRowReferenceSyntax(explicitId))
+            if (ContainsLegacyInstanceReferenceSyntax(explicitId))
             {
-                return PrintArgumentError($"Error: unsupported row reference '{explicitId}'. Use <Entity> <Id>.");
+                return PrintArgumentError($"Error: unsupported instance reference '{explicitId}'. Use <Entity> <Id>.");
             }
         }
 
@@ -69,7 +69,7 @@ internal sealed partial class CliRuntime
                     workspace,
                     new[] { operation },
                     commandName: "insert",
-                    successMessage: $"created {BuildEntityRowAddress(entityName, rowPatch.Id)}",
+                    successMessage: $"created {BuildEntityInstanceAddress(entityName, rowPatch.Id)}",
                     successDetails: BuildRowPreviewDetails(entity, rowPatch))
                 .ConfigureAwait(false);
         }
@@ -105,3 +105,4 @@ internal sealed partial class CliRuntime
         return next.ToString();
     }
 }
+

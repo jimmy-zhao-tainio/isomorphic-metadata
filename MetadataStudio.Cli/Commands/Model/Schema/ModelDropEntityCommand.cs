@@ -1,4 +1,4 @@
-internal sealed partial class CliRuntime
+﻿internal sealed partial class CliRuntime
 {
     async Task<int> ModelDropEntityAsync(string[] commandArgs)
     {
@@ -36,8 +36,8 @@ internal sealed partial class CliRuntime
                         ("rows", rows.Count.ToString(CultureInfo.InvariantCulture))),
                     hints: new[]
                     {
-                        $"{entityName} has {rows.Count.ToString(CultureInfo.InvariantCulture)} rows.",
-                        $"Next: meta view row {entityName} {QuoteRowId(firstRow.Id)}",
+                        $"{entityName} has {rows.Count.ToString(CultureInfo.InvariantCulture)} instances.",
+                        $"Next: meta view instance {entityName} {QuoteInstanceId(firstRow.Id)}",
                     });
             }
     
@@ -99,3 +99,4 @@ internal sealed partial class CliRuntime
         }
     }
 }
+

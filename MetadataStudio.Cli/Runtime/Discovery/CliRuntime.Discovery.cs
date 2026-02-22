@@ -110,13 +110,13 @@ internal sealed partial class CliRuntime
         return command switch
         {
             "view" when args.Length >= 3 && string.Equals(args[1], "entity", StringComparison.OrdinalIgnoreCase) => args[2],
-            "view" when args.Length >= 4 && string.Equals(args[1], "row", StringComparison.OrdinalIgnoreCase) => args[2],
+            "view" when args.Length >= 4 && string.Equals(args[1], "instance", StringComparison.OrdinalIgnoreCase) => args[2],
             "query" when args.Length >= 2 => args[1],
             "insert" when args.Length >= 2 => args[1],
             "bulk-insert" when args.Length >= 2 => args[1],
             "delete" when args.Length >= 2 => args[1],
-            "row" when args.Length >= 3 && string.Equals(args[1], "update", StringComparison.OrdinalIgnoreCase) => args[2],
-            "row" when args.Length >= 4 && string.Equals(args[1], "relationship", StringComparison.OrdinalIgnoreCase) => args[3],
+            "instance" when args.Length >= 3 && string.Equals(args[1], "update", StringComparison.OrdinalIgnoreCase) => args[2],
+            "instance" when args.Length >= 4 && string.Equals(args[1], "relationship", StringComparison.OrdinalIgnoreCase) => args[3],
             _ => null,
         };
     }

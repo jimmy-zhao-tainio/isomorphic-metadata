@@ -96,11 +96,27 @@ public static class WorkspaceOperationApplier
             throw new InvalidOperationException($"Entity '{entityName}' has inbound relationships and cannot be removed.");
         }
 
-        var hasRelationshipUsage = workspace.Instance.RecordsByEntity.Values
-            .SelectMany(entityRecords => entityRecords)
-            .Any(record => record.RelationshipIds.Any(pair =>
-                string.Equals(pair.Key, entityName, StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(pair.Value)));
+        var hasRelationshipUsage = workspace.Instance.RecordsByEntity.Any(entityRecords =>
+        {
+            var sourceEntity = workspace.Model.FindEntity(entityRecords.Key);
+            if (sourceEntity == null)
+            {
+                return false;
+            }
+
+            var relationshipUsageNames = sourceEntity.Relationships
+                .Where(relationship => string.Equals(relationship.Entity, entityName, StringComparison.OrdinalIgnoreCase))
+                .Select(relationship => relationship.GetUsageName())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (relationshipUsageNames.Count == 0)
+            {
+                return false;
+            }
+
+            return entityRecords.Value.Any(record => relationshipUsageNames.Any(usageName =>
+                record.RelationshipIds.TryGetValue(usageName, out var relationshipId) &&
+                !string.IsNullOrWhiteSpace(relationshipId)));
+        });
         if (hasRelationshipUsage)
         {
             throw new InvalidOperationException($"Entity '{entityName}' has relationship usage and cannot be removed.");
@@ -127,23 +143,27 @@ public static class WorkspaceOperationApplier
 
         foreach (var modelEntity in workspace.Model.Entities)
         {
+            var modelEntityRecords = workspace.Instance.GetOrCreateEntityRecords(modelEntity.Name);
             foreach (var relationship in modelEntity.Relationships)
             {
                 if (string.Equals(relationship.Entity, entityName, StringComparison.OrdinalIgnoreCase))
                 {
+                    var previousUsageName = relationship.GetUsageName();
                     relationship.Entity = newEntityName;
-                }
-            }
-        }
+                    var updatedUsageName = relationship.GetUsageName();
+                    if (!string.Equals(previousUsageName, updatedUsageName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var record in modelEntityRecords)
+                        {
+                            if (!record.RelationshipIds.TryGetValue(previousUsageName, out var relatedId))
+                            {
+                                continue;
+                            }
 
-        foreach (var entityRecords in workspace.Instance.RecordsByEntity.Values)
-        {
-            foreach (var record in entityRecords)
-            {
-                if (record.RelationshipIds.TryGetValue(entityName, out var relatedId))
-                {
-                    record.RelationshipIds.Remove(entityName);
-                    record.RelationshipIds[newEntityName] = relatedId;
+                            record.RelationshipIds.Remove(previousUsageName);
+                            record.RelationshipIds[updatedUsageName] = relatedId;
+                        }
+                    }
                 }
             }
         }
@@ -257,36 +277,41 @@ public static class WorkspaceOperationApplier
         var relatedEntity = RequireValue(operation.RelatedEntity, nameof(operation.RelatedEntity));
         RequireEntity(workspace.Model, relatedEntity);
 
-        if (entity.Relationships.Any(relationship =>
-                string.Equals(relationship.Entity, relatedEntity, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException($"Relationship '{entity.Name}->{relatedEntity}' already exists.");
-        }
-
-        entity.Relationships.Add(new RelationshipDefinition
+        var newRelationship = new RelationshipDefinition
         {
             Entity = relatedEntity,
-        });
+        };
+
+        var usageName = newRelationship.GetUsageName();
+        var columnName = newRelationship.GetColumnName();
+        if (entity.Relationships.Any(relationship =>
+                string.Equals(relationship.GetUsageName(), usageName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"Relationship '{entity.Name}.{usageName}' already exists.");
+        }
+
+        if (entity.Relationships.Any(relationship =>
+                string.Equals(relationship.GetColumnName(), columnName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"Relationship column '{entity.Name}.{columnName}' already exists.");
+        }
+
+        entity.Relationships.Add(newRelationship);
     }
 
     private static void DeleteRelationship(Workspace workspace, WorkspaceOp operation)
     {
         var entityName = RequireValue(operation.EntityName, nameof(operation.EntityName));
-        var relatedEntity = RequireValue(operation.RelatedEntity, nameof(operation.RelatedEntity));
+        var relationshipSelector = RequireValue(operation.RelatedEntity, nameof(operation.RelatedEntity));
         var entity = RequireEntity(workspace.Model, entityName);
-        var relationship = entity.Relationships.FirstOrDefault(item =>
-            string.Equals(item.Entity, relatedEntity, StringComparison.OrdinalIgnoreCase));
-        if (relationship == null)
-        {
-            throw new InvalidOperationException($"Relationship '{entityName}->{relatedEntity}' does not exist.");
-        }
+        var relationship = ResolveRelationship(entity, relationshipSelector);
 
         if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records) &&
             records.Any(record => record.RelationshipIds.Any(pair =>
-                string.Equals(pair.Key, relatedEntity, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(pair.Key, relationship.GetUsageName(), StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(pair.Value))))
         {
-            throw new InvalidOperationException($"Relationship '{entityName}->{relatedEntity}' is in use and cannot be removed.");
+            throw new InvalidOperationException($"Relationship '{entityName}.{relationship.GetUsageName()}' is in use and cannot be removed.");
         }
 
         entity.Relationships.Remove(relationship);
@@ -295,34 +320,32 @@ public static class WorkspaceOperationApplier
     private static void RenameRelationship(Workspace workspace, WorkspaceOp operation)
     {
         var entityName = RequireValue(operation.EntityName, nameof(operation.EntityName));
-        var relatedEntity = RequireValue(operation.RelatedEntity, nameof(operation.RelatedEntity));
+        var relationshipSelector = RequireValue(operation.RelatedEntity, nameof(operation.RelatedEntity));
         var newRelatedEntity = RequireValue(operation.NewRelatedEntity, nameof(operation.NewRelatedEntity));
         RequireEntity(workspace.Model, newRelatedEntity);
 
         var entity = RequireEntity(workspace.Model, entityName);
-        var relationship = entity.Relationships.FirstOrDefault(item =>
-            string.Equals(item.Entity, relatedEntity, StringComparison.OrdinalIgnoreCase));
-        if (relationship == null)
-        {
-            throw new InvalidOperationException($"Relationship '{entityName}->{relatedEntity}' does not exist.");
-        }
+        var relationship = ResolveRelationship(entity, relationshipSelector);
+        var oldUsageName = relationship.GetUsageName();
 
         if (entity.Relationships.Any(item =>
                 !ReferenceEquals(item, relationship) &&
+                string.Equals(item.GetUsageName(), relationship.GetUsageName(), StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(item.Entity, newRelatedEntity, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException($"Relationship '{entityName}->{newRelatedEntity}' already exists.");
         }
 
         relationship.Entity = newRelatedEntity;
+        var newUsageName = relationship.GetUsageName();
         if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records))
         {
             foreach (var record in records)
             {
-                if (record.RelationshipIds.TryGetValue(relatedEntity, out var value))
+                if (record.RelationshipIds.TryGetValue(oldUsageName, out var value))
                 {
-                    record.RelationshipIds.Remove(relatedEntity);
-                    record.RelationshipIds[newRelatedEntity] = value;
+                    record.RelationshipIds.Remove(oldUsageName);
+                    record.RelationshipIds[newUsageName] = value;
                 }
             }
         }
@@ -437,5 +460,40 @@ public static class WorkspaceOperationApplier
         }
 
         return value.Trim();
+    }
+
+    private static RelationshipDefinition ResolveRelationship(EntityDefinition entity, string selector)
+    {
+        var normalizedSelector = selector.Trim();
+        var byUsage = entity.Relationships
+            .Where(item => string.Equals(item.GetUsageName(), normalizedSelector, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (byUsage.Count == 1)
+        {
+            return byUsage[0];
+        }
+
+        if (byUsage.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"Relationship selector '{selector}' is ambiguous in entity '{entity.Name}'.");
+        }
+
+        var byTarget = entity.Relationships
+            .Where(item => string.Equals(item.Entity, normalizedSelector, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (byTarget.Count == 1)
+        {
+            return byTarget[0];
+        }
+
+        if (byTarget.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"Relationship target '{selector}' is ambiguous in entity '{entity.Name}'. Use relationship name.");
+        }
+
+        throw new InvalidOperationException(
+            $"Relationship '{entity.Name}.{selector}' does not exist.");
     }
 }

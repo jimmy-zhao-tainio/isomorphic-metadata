@@ -43,81 +43,42 @@ namespace GeneratedModel
         internal SystemTypes SystemTypes { get; }
     }
 
-    public static class EnterpriseBIPlatform
+    public sealed class EnterpriseBIPlatform
     {
-        private static EnterpriseBIPlatformData _data;
-        private static readonly object SyncRoot = new object();
+        private EnterpriseBIPlatformData _data;
 
-        public static Cubes Cubes
+        internal EnterpriseBIPlatform(EnterpriseBIPlatformData data)
         {
-            get { return EnsureLoaded().Cubes; }
-        }
-        public static Dimensions Dimensions
-        {
-            get { return EnsureLoaded().Dimensions; }
-        }
-        public static Facts Facts
-        {
-            get { return EnsureLoaded().Facts; }
-        }
-        public static Measures Measures
-        {
-            get { return EnsureLoaded().Measures; }
-        }
-        public static Systems Systems
-        {
-            get { return EnsureLoaded().Systems; }
-        }
-        public static SystemCubes SystemCubes
-        {
-            get { return EnsureLoaded().SystemCubes; }
-        }
-        public static SystemDimensions SystemDimensions
-        {
-            get { return EnsureLoaded().SystemDimensions; }
-        }
-        public static SystemFacts SystemFacts
-        {
-            get { return EnsureLoaded().SystemFacts; }
-        }
-        public static SystemTypes SystemTypes
-        {
-            get { return EnsureLoaded().SystemTypes; }
+            _data = data ?? throw new ArgumentNullException(nameof(data));
         }
 
-        internal static void Install(EnterpriseBIPlatformData data)
+        public Cubes Cubes => _data.Cubes;
+        public Dimensions Dimensions => _data.Dimensions;
+        public Facts Facts => _data.Facts;
+        public Measures Measures => _data.Measures;
+        public Systems Systems => _data.Systems;
+        public SystemCubes SystemCubes => _data.SystemCubes;
+        public SystemDimensions SystemDimensions => _data.SystemDimensions;
+        public SystemFacts SystemFacts => _data.SystemFacts;
+        public SystemTypes SystemTypes => _data.SystemTypes;
+
+        internal void ReplaceData(EnterpriseBIPlatformData data)
         {
-            if (data == null)
-            {
-                throw new ArgumentNullException(nameof(data));
-            }
-
-            lock (SyncRoot)
-            {
-                if (_data != null)
-                {
-                    throw new InvalidOperationException("EnterpriseBIPlatform is already loaded. Double install is not allowed.");
-                }
-
-                _data = data;
-            }
-        }
-
-        private static EnterpriseBIPlatformData EnsureLoaded()
-        {
-            var data = _data;
-            if (data == null)
-            {
-                throw new InvalidOperationException("EnterpriseBIPlatform is not loaded. Call EnterpriseBIPlatformModel.LoadFromXml/LoadFromSql first.");
-            }
-
-            return data;
+            _data = data ?? throw new ArgumentNullException(nameof(data));
         }
     }
 
     public static class EnterpriseBIPlatformModel
     {
-        public static void LoadFromXml(string workspacePath)
+        private static readonly object SyncRoot = new object();
+        private static readonly EnterpriseBIPlatform _current = new EnterpriseBIPlatform(CreateEmptyData());
+
+        public static EnterpriseBIPlatform Current
+        {
+            get { return _current; }
+        }
+
+        public static EnterpriseBIPlatform LoadFromXml(string workspacePath)
         {
             if (string.IsNullOrWhiteSpace(workspacePath))
             {
@@ -138,10 +99,15 @@ namespace GeneratedModel
             EnsureNoErrors(instanceResult.Errors, "instance XML load");
 
             var data = BuildData(instanceResult.ModelInstance);
-            EnterpriseBIPlatform.Install(data);
+            lock (SyncRoot)
+            {
+                _current.ReplaceData(data);
+            }
+
+            return _current;
         }
 
-        public static void LoadFromSql(DbConnection connection, string schemaName = "dbo")
+        public static EnterpriseBIPlatform LoadFromSql(DbConnection connection, string schemaName = "dbo")
         {
             if (connection == null)
             {
@@ -163,7 +129,26 @@ namespace GeneratedModel
 
             var instance = new DatabaseInstanceReader().Read(connection.ConnectionString, modelResult.Model, schemaName);
             var data = BuildData(instance);
-            EnterpriseBIPlatform.Install(data);
+            lock (SyncRoot)
+            {
+                _current.ReplaceData(data);
+            }
+
+            return _current;
+        }
+
+        private static EnterpriseBIPlatformData CreateEmptyData()
+        {
+            return new EnterpriseBIPlatformData(
+                new Cubes(Array.Empty<Cube>()),
+                new Dimensions(Array.Empty<Dimension>()),
+                new Facts(Array.Empty<Fact>()),
+                new Measures(Array.Empty<Measure>()),
+                new Systems(Array.Empty<System>()),
+                new SystemCubes(Array.Empty<SystemCube>()),
+                new SystemDimensions(Array.Empty<SystemDimension>()),
+                new SystemFacts(Array.Empty<SystemFact>()),
+                new SystemTypes(Array.Empty<SystemType>()));
         }
 
         private static EnterpriseBIPlatformData BuildData(ModelInstance instance)
@@ -523,7 +508,6 @@ namespace GeneratedModel
             var candidates = new[]
             {
                 Path.Combine(workspacePath, "metadata", "model.xml"),
-                Path.Combine(workspacePath, "SampleModel.xml"),
                 Path.Combine(workspacePath, "model.xml"),
             };
 

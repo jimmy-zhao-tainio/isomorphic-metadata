@@ -87,19 +87,22 @@ namespace Metadata.Framework.Generic
 
         private static void ParseShardedWorkspace(string shardDirectory, Model model, InstanceReadResult result)
         {
+            var shardRoots = Directory.GetFiles(shardDirectory, "*.xml")
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .Select(path => XDocument.Load(path).Root)
+                .Where(root => root != null)
+                .ToList();
+
             foreach (var entityDefinition in model.Entities.Where(item => !string.IsNullOrWhiteSpace(item.Name)))
             {
                 var entityInstance = new EntityInstance { Entity = entityDefinition };
                 result.ModelInstance.Entities.Add(entityInstance);
 
-                var shardPath = Path.Combine(shardDirectory, entityDefinition.Name + ".xml");
-                if (!File.Exists(shardPath))
+                foreach (var root in shardRoots)
                 {
-                    continue;
+                    ParseEntityFromRoot(root, entityDefinition, model, entityInstance, result.Errors);
                 }
 
-                var document = XDocument.Load(shardPath);
-                ParseEntityFromRoot(document.Root, entityDefinition, model, entityInstance, result.Errors);
                 SortEntityRecordsById(entityInstance, entityDefinition.Name);
             }
         }
@@ -162,7 +165,10 @@ namespace Metadata.Framework.Generic
             var modelEntityLookup = model.Entities
                 .Where(entity => entity != null && !string.IsNullOrWhiteSpace(entity.Name))
                 .ToDictionary(entity => entity.Name, StringComparer.OrdinalIgnoreCase);
-            var recordIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var recordIds = entityInstance.Records
+                .Where(item => !string.IsNullOrWhiteSpace(item.Id))
+                .Select(item => item.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var collectionElement in collectionElements)
             {
@@ -201,9 +207,6 @@ namespace Metadata.Framework.Generic
             {
                 entityDefinition.GetPluralName(),
             };
-
-            var legacyName = entityDefinition.Name + "List";
-            names.Add(legacyName);
 
             return root.Elements()
                 .Where(element => names.Contains(element.Name.LocalName));
@@ -408,7 +411,6 @@ namespace Metadata.Framework.Generic
             var candidates = new[]
             {
                 Path.Combine(workspacePath, "metadata", "instance.xml"),
-                Path.Combine(workspacePath, "SampleInstance.xml"),
                 Path.Combine(workspacePath, "instance.xml"),
             };
 

@@ -1,4 +1,4 @@
-internal sealed partial class CliRuntime
+﻿internal sealed partial class CliRuntime
 {
     private readonly ServiceCollection services = new();
     private readonly ConsolePresenter presenter = new();
@@ -37,11 +37,6 @@ internal sealed partial class CliRuntime
         var command = args[0].Trim().ToLowerInvariant();
         try
         {
-            if (string.Equals(command, "workspace", StringComparison.OrdinalIgnoreCase))
-            {
-                return await WorkspaceAsync(args).ConfigureAwait(false);
-            }
-
             if (commandRegistry.TryGetValue(command, out var registration))
             {
                 return await registration.Handler(args).ConfigureAwait(false);
@@ -568,7 +563,7 @@ internal sealed partial class CliRuntime
     }
     
     (bool Ok, string ToEntity, string ToId, string WorkspacePath, string ErrorMessage)
-        ParseRowRelationshipSetOptions(string[] commandArgs, int startIndex)
+        ParseInstanceRelationshipSetOptions(string[] commandArgs, int startIndex)
     {
         var toEntity = string.Empty;
         var toId = string.Empty;
@@ -607,7 +602,7 @@ internal sealed partial class CliRuntime
     }
     
     (bool Ok, string ToEntity, string WorkspacePath, string ErrorMessage)
-        ParseRowRelationshipClearOptions(string[] commandArgs, int startIndex)
+        ParseInstanceRelationshipClearOptions(string[] commandArgs, int startIndex)
     {
         var toEntity = string.Empty;
         var workspacePath = DefaultWorkspacePath();
@@ -894,19 +889,16 @@ internal sealed partial class CliRuntime
         Register("graph", "Model", "Graph stats and inbound relationships.", GraphAsync);
         Register("list", "Model", "List entities, properties, relationships, and tasks.", ListAsync);
         Register("model", "Model", "Mutate model entities, properties, and relationships.", ModelAsync);
-        Register("view", "Model", "View entity or row details.", ViewAsync);
+        Register("view", "Model", "View entity or instance details.", ViewAsync);
 
         Register("instance", "Instance", "Diff and merge instance artifacts.", InstanceAsync);
-        Register("insert", "Instance", "Insert one row: <Entity> <Id> or --auto-id.", InsertAsync);
-        Register("delete", "Instance", "Delete one row: <Entity> <Id>.", DeleteAsync);
-        Register("query", "Instance", "Search rows with equals/contains filters.", QueryAsync);
-        Register("bulk-insert", "Instance", "Insert many rows from tsv/csv/jsonl input (supports --auto-id).", BulkInsertAsync);
-        Register("row", "Instance", "Row updates and relationship commands.", RowAsync);
+        Register("insert", "Instance", "Insert one instance: <Entity> <Id> or --auto-id.", InsertAsync);
+        Register("delete", "Instance", "Delete one instance: <Entity> <Id>.", DeleteAsync);
+        Register("query", "Instance", "Search instances with equals/contains filters.", QueryAsync);
+        Register("bulk-insert", "Instance", "Insert many instances from tsv/csv/jsonl input (supports --auto-id).", BulkInsertAsync);
 
         Register("import", "Pipeline", "Import into a NEW workspace.", ImportAsync);
         Register("generate", "Pipeline", "Generate artifacts from the workspace.", GenerateAsync);
-
-        Register("random", "Utility", "Generate random stress-test workspace.", RandomAsync);
     
         return registry;
     
@@ -928,3 +920,4 @@ internal sealed partial class CliRuntime
         int TotalRelationships,
         int TotalRows);
 }
+
