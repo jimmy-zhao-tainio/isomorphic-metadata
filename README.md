@@ -1,14 +1,32 @@
-# MetadataStudio
+# isomorphic-metadata
 
-MetadataStudio is a deterministic CLI for editing metadata models and metadata instance data, then generating artifacts (SQL, C#, SSDT).
+`isomorphic-metadata` is a deterministic, git-first backend for metadata. You keep a **model** and **instance data** in a workspace on disk, validate and edit it with `meta`, and generate artifacts (SQL, C#, SSDT) with minimal diff noise.
 
-The project is built around one workspace contract:
+This repo ships two CLI tools:
 
-- `metadata/workspace.xml`
-- `metadata/model.xml`
-- `metadata/instance/<Entity>.xml`
+`meta` (MetadataStudio CLI): workspace/model/instance operations, diff/merge, import, generate.  
+`meta-schema` (MetaSchema CLI): schema extraction and sanctioned catalogs (for example `TypeConversionCatalog`).
 
-## Format first: one sample across XML, SQL, and C#
+## Workspace contract
+
+A workspace is a directory containing:
+
+`metadata/workspace.xml`  
+`metadata/model.xml`  
+`metadata/instance/...`
+
+Instance data may be sharded: multiple instance files can contain rows for the same entity; load merges those shards and save preserves existing shard file layout (new rows for an entity are written to that entity's primary shard).
+
+## What `meta` supports
+
+`meta` operates on workspaces and provides four broad capabilities.
+
+Workspace operations: create and inspect workspaces (`init`, `status`).  
+Validation and inspection: check integrity and explore model/instance (`check`, `list`, `view`, `query`, `graph`).  
+Edits: mutate models and instance data (`model ...`, `insert`, `delete`, `bulk-insert`, `instance update`, `instance relationship set|list|clear`, `instance diff`, `instance merge`).  
+Pipelines: import and generate (`import ...`, `generate ...`).
+
+## One sample across XML, SQL, and C#
 
 ### XML model (`metadata/model.xml`)
 
@@ -23,6 +41,7 @@ The project is built around one workspace contract:
         <Property name="RefreshMode" isRequired="false" />
       </Properties>
     </Entity>
+
     <Entity name="Measure" plural="Measures">
       <Properties>
         <Property name="MeasureName" />
@@ -47,6 +66,7 @@ The project is built around one workspace contract:
       <RefreshMode>Scheduled</RefreshMode>
     </Cube>
   </Cubes>
+
   <Measures>
     <Measure Id="1" CubeId="1">
       <MeasureName>Sales Amount</MeasureName>
@@ -55,7 +75,9 @@ The project is built around one workspace contract:
 </EnterpriseBIPlatform>
 ```
 
-### Equivalent SQL model + instance
+### Generated SQL (`meta generate sql`)
+
+`meta generate sql` writes `schema.sql` and `data.sql` (deterministic DDL and INSERT scripts).
 
 ```sql
 CREATE TABLE [dbo].[Cube] (
@@ -74,74 +96,30 @@ CREATE TABLE [dbo].[Measure] (
 ALTER TABLE [dbo].[Measure]
 ADD CONSTRAINT [FK_Measure_Cube_CubeId]
 FOREIGN KEY ([CubeId]) REFERENCES [dbo].[Cube]([Id]);
-
-INSERT INTO [dbo].[Cube] ([CubeName], [Purpose], [RefreshMode])
-VALUES (N'Sales Performance', N'Monthly revenue and margin tracking.', N'Scheduled');
-
-INSERT INTO [dbo].[Measure] ([MeasureName], [CubeId])
-VALUES (N'Sales Amount', 1);
 ```
 
-### Equivalent generated C# shape
+### Generated C# (`meta generate csharp`)
+
+Generated models have two usage modes.
+
+Consumer usage: `<ModelName>.<EntityPlural>` iterates over a built-in generated snapshot (no disk I/O).  
+Tooling usage: `<ModelName>Model.LoadFromXmlWorkspace(...)` loads an explicit instance object from a workspace and can be saved back.
 
 ```csharp
-public sealed class Cube
+using GeneratedModel;
+using System;
+
+// Consumer usage (built-in generated snapshot; no disk I/O):
+foreach (var m in EnterpriseBIPlatform.Measures)
 {
-    public int Id { get; }
-    public string CubeName { get; }
-    public string Purpose { get; }
-    public string RefreshMode { get; }
-    public string Name { get; } // alias from CubeName
+    Console.WriteLine(m.Id);
+    Console.WriteLine(m.Cube.Name); // relationships are required
 }
 
-public sealed class Measure
-{
-    public int Id { get; }
-    public string MeasureName { get; }
-    public int CubeId { get; }
-    public Cube Cube { get; }
-    public string Name { get; } // alias from MeasureName
-}
-
-public sealed class Cubes : IEnumerable<Cube>
-{
-    public Cube GetId(int id);
-    public bool TryGetId(int id, out Cube instance);
-}
-
-public sealed class Measures : IEnumerable<Measure>
-{
-    public Measure GetId(int id);
-    public bool TryGetId(int id, out Measure instance);
-}
-
-public sealed class EnterpriseBIPlatformInstance
-{
-    public Cubes Cubes { get; }
-    public Measures Measures { get; }
-}
-
-public static class EnterpriseBIPlatform
-{
-    public static EnterpriseBIPlatformInstance BuiltIn { get; }
-    public static Cubes Cubes { get; }
-    public static Measures Measures { get; }
-}
-
-public static class EnterpriseBIPlatformModel
-{
-    public static EnterpriseBIPlatformInstance LoadFromXmlWorkspace(string workspacePath);
-    public static void SaveToXmlWorkspace(EnterpriseBIPlatformInstance model, string workspacePath);
-    public static EnterpriseBIPlatformInstance LoadFromSql(DbConnection connection, string schemaName = "dbo");
-}
+// Tooling usage (explicit workspace I/O):
+var model = EnterpriseBIPlatformModel.LoadFromXmlWorkspace(@"C:\repo\Metadata\Samples");
+EnterpriseBIPlatformModel.SaveToXmlWorkspace(model, @"C:\repo\Metadata\Samples");
 ```
-
-## Why this exists
-
-- Keep metadata in git as plain XML.
-- Make model and data edits fast and scriptable.
-- Fail hard on integrity issues.
-- Generate stable outputs with minimal diff noise.
 
 ## Install and run
 
@@ -169,58 +147,41 @@ Optional PowerShell profile install (so `meta ...` works without `./`):
 powershell -ExecutionPolicy Bypass -File .\install-meta.ps1
 ```
 
-## Top-level command map
-
-```powershell
-meta help
-```
-
-Main groups:
-
-- Workspace: `init`, `status`
-- Model: `check`, `graph`, `list`, `model`, `view`
-- Instance: `instance`, `insert`, `delete`, `query`, `bulk-insert`
-- Pipeline: `import`, `generate`
-
-## Workspace quick start
-
-Create a workspace:
-
-```powershell
-meta init .\Samples\MyWorkspace
-```
-
-Inspect it:
-
-```powershell
-meta status --workspace .\Samples\MyWorkspace
-```
-
 ## XML contracts summary
 
-Model XML:
+### Model XML
 
-- `dataType="string"` is default and omitted.
-- `isRequired="true"` is default and omitted.
-- `Entity plural="..."` is optional; default is `<EntityName>s`.
+`Id` is implicit on every entity (so `Property name="Id"` is not written).  
+`dataType="string"` is the default and omitted.  
+`isRequired="true"` is the default and omitted.  
+`Entity plural="..."` is optional; default is `<EntityName>s`.
 
-Instance XML (strict contract):
+Relationships are declared as:
 
-- Root element is the model name (for example `<EnterpriseBIPlatform>`).
-- Under root, each entity uses a plural container element (for example `<Cubes>`, `<Measures>`).
-- Inside each container, each instance uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
-- Sharded instance mode supports split entity files: multiple `metadata/instance/*.xml` files may each contain instances for the same entity container, and load merges them.
-- Save preserves split layout by instance shard origin; new instances are assigned to that entity's primary shard file.
-- Direct instance elements under root are invalid; instances must be inside their plural container.
-- Instance `Id` attribute is mandatory.
-- Declared relationships are required and stored as instance attributes named `<TargetEntity>Id`.
-- Missing relationship attributes for declared relationships are invalid.
-- Scalar properties are child elements.
-- Missing property element means unset; empty property element means explicit empty string.
+`<Relationship entity="TargetEntity" />`
+
+To support multiple relationships to the same target, or to control the instance attribute / SQL column name, relationships may specify a usage name and/or explicit column name:
+
+`<Relationship entity="TargetEntity" name="UsageName" column="ColumnName" />`
+
+Defaults are:
+
+If `name` is omitted, usage name defaults to the target entity name.  
+If `column` is omitted, the column/attribute defaults to `${name}Id`.
+
+### Instance XML
+
+Root element is the model name (for example `<EnterpriseBIPlatform>`).  
+Under root, each entity uses a plural container element (for example `<Cubes>`, `<Measures>`).  
+Inside each container, each instance uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
+
+Instance `Id` attribute is mandatory.  
+Declared relationships are required and stored as instance attributes named by the relationship column (defaults described above).  
+Scalar properties are child elements. Missing property element means unset; empty property element means explicit empty string.
 
 ## Core workflows with examples
 
-### 1) Inspect
+Inspect:
 
 ```powershell
 meta status --workspace .\Samples\CommandExamples
@@ -232,7 +193,7 @@ meta graph stats --workspace .\Samples\CommandExamples
 meta check --workspace .\Samples\CommandExamples
 ```
 
-### 2) Model edits
+Model edits:
 
 ```powershell
 meta model add-entity SourceSystem --workspace .\Samples\CommandExamples
@@ -241,139 +202,40 @@ meta model add-relationship System SourceSystem --workspace .\Samples\CommandExa
 meta model rename-property Cube Purpose BusinessPurpose --workspace .\Samples\CommandExamples
 ```
 
-### 3) Instance edits
-
-Insert explicit Id:
+Instance edits:
 
 ```powershell
 meta insert Cube 10 --set "CubeName=Ops Cube" --set "RefreshMode=Manual" --workspace .\Samples\CommandExamples
-```
-
-Insert with identity allocation:
-
-```powershell
 meta insert Cube --auto-id --set "CubeName=Auto Cube" --workspace .\Samples\CommandExamples
-```
 
-Update one instance:
-
-```powershell
 meta instance update Cube 10 --set "Purpose=Operations reporting" --workspace .\Samples\CommandExamples
-```
 
-Set/list relationship usage:
-
-```powershell
 meta instance relationship set Measure 1 --to Cube 10 --workspace .\Samples\CommandExamples
 meta instance relationship list Measure 1 --workspace .\Samples\CommandExamples
-```
+meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity> --workspace <path>
 
-Declared relationships are required; use `instance relationship set` to retarget, or delete the instance if it should no longer exist.
-
-Delete one instance:
-
-```powershell
 meta delete Cube 10 --workspace .\Samples\CommandExamples
 ```
 
-### 4) Bulk insert
+`meta instance relationship clear` is available for usage cleanup, but declared relationships are required; clearing a required relationship usage fails validation.
 
-TSV example file (`cube-insert.tsv`):
-
-```text
-CubeName	Purpose	RefreshMode
-Planning Cube	Annual planning	Manual
-Daily Ops	Daily operational cube	Scheduled
-```
-
-Load with auto identity:
-
-```powershell
-meta bulk-insert Cube --from tsv --file .\cube-insert.tsv --auto-id --workspace .\Samples\CommandExamples
-```
-
-### 5) Import and generate
-
-Import XML into a new workspace:
+Import and generate:
 
 ```powershell
 meta import xml .\Samples\SampleModel.xml .\Samples\SampleInstance.xml --new-workspace .\Samples\ImportedXml
-```
-
-Import SQL into a new workspace:
-
-```powershell
 meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\Samples\ImportedSql
-```
 
-Generate artifacts:
-
-```powershell
 meta generate sql --out .\out\sql --workspace .\Samples\CommandExamples
 meta generate csharp --out .\out\csharp --workspace .\Samples\CommandExamples
 meta generate ssdt --out .\out\ssdt --workspace .\Samples\CommandExamples
 ```
 
-## Instance diff and merge
-
-### Equal-model mode
-
-Mental model:
-
-- `meta instance diff <left> <right>` produces a diff artifact that describes how to transform Left instance data into Right instance data.
-- `meta instance merge <target> <diffWorkspace>` applies that Left -> Right transformation to a target workspace (typically the same workspace used as Left when the diff was created).
-- The diff artifact is a deterministic, scoped change-set: it captures only instance/property/relationship differences, not a full copy of the right workspace instance.
-- Merge applies that scoped change-set to the target workspace and validates integrity while applying.
-
-What the diff captures:
-
-- Instance identity by `(Entity, Id)`.
-- Scalar property value differences.
-- Relationship usage differences via `<TargetEntity>Id` attributes.
-- Instance-level insert/update/delete outcomes implied by Left-only and Right-only identities.
-
-Instance semantics are preserved:
-
-- Unset property (missing element) and explicit empty string (`<PropertyName></PropertyName>`) are different states.
-- Diff and merge preserve that distinction; they do not collapse missing into empty.
-
-Constraints and failure modes:
-
-- Left and Right `model.xml` files must be identical for equal-model mode.
-- Merge fails hard if preconditions or integrity rules are violated (for example, applying a change that would delete a referenced instance).
+Instance diff and merge:
 
 ```powershell
-meta instance diff .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDiffRight
-meta instance merge .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDiffRight.instance-diff
+meta instance diff .\LeftWs .\RightWs
+meta instance merge .\TargetWs .\RightWs.instance-diff
 ```
-
-### Aligned mode
-
-Aligned mode supports model differences by introducing an explicit alignment workspace.
-
-- The alignment workspace defines correspondence (and therefore comparison scope) between left and right models.
-- `meta instance diff-aligned` includes only aligned scope in the diff artifact.
-- `meta instance merge-aligned` applies only within that aligned scope on the target workspace.
-- Integrity rules still apply; merge-aligned fails hard on invalid operations.
-- In practice this means aligned mode can merge mapped subsets across different models while leaving out-of-scope data unchanged.
-
-```powershell
-meta instance diff-aligned .\LeftWs .\RightWs .\AlignmentWs
-meta instance merge-aligned .\TargetWs .\RightWs.instance-diff-aligned
-```
-
-Determinism:
-
-- Diff artifacts are written with stable ordering and formatting.
-- Merged instance output is produced by deterministic writers, so identical logical state yields stable file output.
-
-## Determinism and integrity notes
-
-- Writers are deterministic (stable ordering and formatting).
-- Commands fail hard on invalid model/instance state.
-- Missing value and explicit empty value are distinct.
-- Relationship targets are single-target and validated.
-- Declared relationships are required; missing relationship usage is invalid.
 
 ## MetaSchema
 
@@ -385,69 +247,13 @@ meta-schema extract sqlserver --help
 meta-schema seed type-conversion --new-workspace .\MetaSchema.Catalogs\TypeConversionCatalog
 ```
 
-## Generated C# API usage
+## References
 
-Generated model API shape:
-
-- Root static facade named by model (example: `EnterpriseBIPlatform`) exposes built-in generated instance data with zero disk I/O
-- Separate instance root type `<ModelName>Instance` (example: `EnterpriseBIPlatformInstance`) is used for explicit tooling load/save
-- Loader class `<ModelName>Model` (example: `EnterpriseBIPlatformModel`) loads/saves explicit instances
-- Entity collections exposed as plural names (`<EntityName>s` by default, or model `plural=` override)
-- Rows expose `Id`, scalar properties, `<TargetEntity>Id`, and `<TargetEntity>` navigation
-
-Example:
-
-```csharp
-using GeneratedModel;
-using System;
-using System.Data.Common;
-
-// Consumer usage (built-in generated snapshot; no disk I/O):
-foreach (var m in EnterpriseBIPlatform.Measures)
-{
-    Console.WriteLine(m.Id);
-    Console.WriteLine(m.Cube.Name);
-}
-
-// Tooling usage (explicit workspace I/O):
-var model = EnterpriseBIPlatformModel.LoadFromXmlWorkspace(@"C:\repo\Metadata\Samples");
-EnterpriseBIPlatformModel.SaveToXmlWorkspace(model, @"C:\repo\Metadata\Samples");
-
-// Or load from SQL:
-// DbConnection conn = ...;
-// var model = EnterpriseBIPlatformModel.LoadFromSql(conn, "dbo");
-
-foreach (var m in model.Measures)
-{
-    Console.WriteLine(m.Id);
-    Console.WriteLine(m.Cube.Name);
-}
-
-var m0 = model.Measures.GetId(1);
-var cubeName = m0.Cube.Name;
-```
-
-Notes:
-
-- `EnterpriseBIPlatform` static properties forward to a fixed built-in instance generated into code.
-- `LoadFromXmlWorkspace` / `LoadFromSql` return explicit model instances and do not mutate the built-in snapshot.
-- Collections implement `IEnumerable<T>` and provide `GetId(int)` / `TryGetId(int, out T)`.
-
-## Command references
-
-- Full surface and contracts: `COMMANDS.md`
-- Real command transcript examples: `COMMANDS-EXAMPLES.md`
+Full command surface and contracts: `COMMANDS.md`  
+Transcript-style examples: `COMMANDS-EXAMPLES.md`
 
 ## Tests
 
-Run all tests:
-
 ```powershell
 dotnet test Metadata.Framework.sln
-```
-
-Run CLI-focused tests only:
-
-```powershell
-dotnet test MetadataStudio.Core.Tests/MetadataStudio.Core.Tests.csproj
 ```
