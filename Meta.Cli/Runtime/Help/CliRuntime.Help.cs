@@ -24,9 +24,8 @@ internal sealed partial class CliRuntime
                     "relationship" when args.Length >= 3 => args[2].Trim().ToLowerInvariant() switch
                     {
                         "set" => "meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId> [--workspace <path>]",
-                        "clear" => "meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity> [--workspace <path>]",
                         "list" => "meta instance relationship list <FromEntity> <FromId> [--workspace <path>]",
-                        _ => "meta instance relationship <set|clear|list> ...",
+                        _ => "meta instance relationship <set|list> ...",
                     },
                     _ => "meta instance <diff|merge|diff-aligned|merge-aligned|update|relationship> ...",
                 }
@@ -64,9 +63,9 @@ internal sealed partial class CliRuntime
                 {
                     "add-entity" => "meta model add-entity <Name> [--workspace <path>]",
                     "rename-entity" => "meta model rename-entity <Old> <New> [--workspace <path>]",
-                    "add-property" => "meta model add-property <Entity> <Property> [--required true|false] [--workspace <path>]",
+                    "add-property" => "meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]",
                     "rename-property" => "meta model rename-property <Entity> <Old> <New> [--workspace <path>]",
-                    "add-relationship" => "meta model add-relationship <FromEntity> <ToEntity> [--workspace <path>]",
+                    "add-relationship" => "meta model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]",
                     "drop-property" => "meta model drop-property <Entity> <Property> [--workspace <path>]",
                     "drop-relationship" => "meta model drop-relationship <FromEntity> <ToEntity> [--workspace <path>]",
                     "drop-entity" => "meta model drop-entity <Entity> [--workspace <path>]",

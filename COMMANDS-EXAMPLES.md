@@ -95,7 +95,7 @@ Examples:
 
   meta model add-entity SalesCube
   meta model rename-entity OldName NewName
-  meta model add-property Cube Purpose --required true
+  meta model add-property Cube Purpose --required true --default-value Unknown
 
 Next: meta model <subcommand> help
 ```
@@ -470,11 +470,12 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd model add-property CmdEntityRenamed Label --required true --workspace Samples\CommandExamples
+> .\\meta.cmd model add-property CmdEntityRenamed Label --required true --default-value Unknown --workspace Samples\CommandExamples
 [exit 0]
 OK: property added
 Entity: CmdEntityRenamed
 Property: Label (required)
+DefaultValue: Unknown
 ```
 
 Failure:
@@ -511,16 +512,18 @@ Next: meta list properties CmdEntityRenamed
 
 Success:
 ```powershell
-> .\\meta.cmd model add-relationship CmdEntityRenamed Cube --workspace Samples\CommandExamples
+> .\\meta.cmd model add-relationship CmdEntityRenamed Cube --default-id 1 --workspace Samples\CommandExamples
 [exit 0]
 OK: relationship added
 From: CmdEntityRenamed
 To: Cube
+Name: CubeId
+DefaultId: 1
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd model add-relationship CmdEntityRenamed MissingTarget --workspace Samples\CommandExamples
+> .\\meta.cmd model add-relationship CmdEntityRenamed MissingTarget --default-id 1 --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingTarget' was not found.
 
@@ -692,28 +695,6 @@ Failure:
 Error: Instance 'Measure 999' was not found.
 
 Next: meta query Measure --contains Id 999
-```
-
-## instance relationship clear
-
-Success:
-```powershell
-> .\\meta.cmd instance relationship clear Measure 1 --to-entity Cube --workspace Samples\CommandExamples
-[exit 4]
-Error: Cannot clear required relationship 'Measure->Cube'.
-
-Instance: Measure 1
-
-Next: meta instance relationship set Measure 1 --to Cube <ToId>
-```
-
-Failure:
-```powershell
-> .\\meta.cmd instance relationship clear Cube 1 --to-entity System --workspace Samples\CommandExamples
-[exit 4]
-Error: Relationship 'Cube->System' was not found.
-
-Next: meta list relationships Cube
 ```
 
 ## bulk-insert

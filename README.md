@@ -197,7 +197,7 @@ Model edits:
 
 ```powershell
 meta model add-entity SourceSystem --workspace .\Samples\CommandExamples
-meta model add-property SourceSystem Name --required true --workspace .\Samples\CommandExamples
+meta model add-property SourceSystem Name --required true --default-value Unknown --workspace .\Samples\CommandExamples
 meta model add-relationship System SourceSystem --default-id 1 --workspace .\Samples\CommandExamples
 meta model rename-property Cube Purpose BusinessPurpose --workspace .\Samples\CommandExamples
 ```

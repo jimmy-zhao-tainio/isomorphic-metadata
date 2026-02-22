@@ -352,7 +352,7 @@ internal static class HelpTopics
                     {
                         "meta model add-entity SalesCube",
                         "meta model rename-entity OldName NewName",
-                        "meta model add-property Cube Purpose --required true",
+                        "meta model add-property Cube Purpose --required true --default-value Unknown",
                     },
                     next: "meta model <subcommand> help",
                     subcommands: new[]
@@ -392,13 +392,14 @@ internal static class HelpTopics
                 document = BuildTopicDocument(
                     title: "Command: model add-property",
                     summary: "Add an entity property.",
-                    usage: "meta model add-property <Entity> <Property> [--required true|false] [--workspace <path>]",
+                    usage: "meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]",
                     options: new[]
                     {
                         ("--required true|false", "Set required/nullable state."),
+                        ("--default-value <Value>", "Backfill existing rows (required for required properties when entity already has rows)."),
                         ("--workspace <path>", "Override workspace root."),
                     },
-                    examples: new[] { "meta model add-property Cube Purpose --required false" },
+                    examples: new[] { "meta model add-property Cube Purpose --required true --default-value Unknown" },
                     next: "meta model rename-property --help");
                 return true;
 
@@ -415,10 +416,15 @@ internal static class HelpTopics
             case "model add-relationship":
                 document = BuildTopicDocument(
                     title: "Command: model add-relationship",
-                    summary: "Add a relationship from one entity to another.",
-                    usage: "meta model add-relationship <FromEntity> <ToEntity> [--workspace <path>]",
-                    options: new[] { ("--workspace <path>", "Override workspace root.") },
-                    examples: new[] { "meta model add-relationship Measure Cube" },
+                    summary: "Add a required relationship; use --default-id to backfill existing source instances.",
+                    usage: "meta model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]",
+                    options: new[]
+                    {
+                        ("--role <RoleName>", "Optional relationship role (column becomes <RoleName>Id)."),
+                        ("--default-id <ToId>", "Required when source entity already has rows; must exist in target entity."),
+                        ("--workspace <path>", "Override workspace root."),
+                    },
+                    examples: new[] { "meta model add-relationship Measure Cube --default-id 1" },
                     next: "meta model drop-relationship --help");
                 return true;
 
@@ -439,7 +445,7 @@ internal static class HelpTopics
                     usage: "meta model drop-relationship <FromEntity> <ToEntity> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta model drop-relationship Measure Cube" },
-                    next: "meta instance relationship clear --help");
+                    next: "meta instance relationship set --help");
                 return true;
 
             case "model drop-entity":
@@ -525,13 +531,12 @@ internal static class HelpTopics
             case "instance relationship":
                 document = BuildTopicDocument(
                     title: "Command: instance relationship",
-                    summary: "Set, clear, or list relationship usage for one instance.",
-                    usage: "meta instance relationship <set|clear|list> ...",
+                    summary: "Set or list relationship usage for one instance.",
+                    usage: "meta instance relationship <set|list> ...",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[]
                     {
                         "meta instance relationship set Measure 1 --to Cube 2",
-                        "meta instance relationship clear Measure 1 --to-entity Cube",
                         "meta instance relationship list Measure 1",
                     },
                     next: "meta instance relationship set --help");
@@ -544,16 +549,6 @@ internal static class HelpTopics
                     usage: "meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta instance relationship set Measure 1 --to Cube 2" },
-                    next: "meta instance relationship list --help");
-                return true;
-
-            case "instance relationship clear":
-                document = BuildTopicDocument(
-                    title: "Command: instance relationship clear",
-                    summary: "Clear all usage from one instance to one target entity (idempotent).",
-                    usage: "meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity> [--workspace <path>]",
-                    options: new[] { ("--workspace <path>", "Override workspace root.") },
-                    examples: new[] { "meta instance relationship clear Measure 1 --to-entity Cube" },
                     next: "meta instance relationship list --help");
                 return true;
 

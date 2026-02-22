@@ -5,12 +5,12 @@ internal sealed partial class CliRuntime
         if (commandArgs.Length < 4)
         {
             return PrintUsageError(
-                "Usage: model add-relationship <FromEntity> <ToEntity> [--workspace <path>]");
+                "Usage: model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]");
         }
     
         var fromEntity = commandArgs[2];
         var toEntity = commandArgs[3];
-        var options = ParseMutatingCommonOptions(commandArgs, startIndex: 4);
+        var options = ParseModelAddRelationshipOptions(commandArgs, startIndex: 4);
         if (!options.Ok)
         {
             return PrintArgumentError(options.ErrorMessage);
@@ -21,15 +21,28 @@ internal sealed partial class CliRuntime
             Type = WorkspaceOpTypes.AddRelationship,
             EntityName = fromEntity,
             RelatedEntity = toEntity,
+            RelatedRole = options.Role,
+            RelatedDefaultId = options.DefaultId,
         };
+
+        var relationshipColumnName = (string.IsNullOrWhiteSpace(options.Role) ? toEntity : options.Role) + "Id";
+        var successDetails = new List<(string Key, string Value)>
+        {
+            ("From", fromEntity),
+            ("To", toEntity),
+            ("Name", relationshipColumnName),
+        };
+        if (!string.IsNullOrWhiteSpace(options.DefaultId))
+        {
+            successDetails.Add(("DefaultId", options.DefaultId));
+        }
     
         return await ExecuteOperationAsync(
                 options.WorkspacePath,
                 operation,
                 "model add-relationship",
                 "relationship added",
-                ("From", fromEntity),
-                ("To", toEntity))
+                successDetails.ToArray())
             .ConfigureAwait(false);
     }
 }

@@ -28,8 +28,11 @@ public sealed class WorkspaceOp
     public PropertyDefinition? Property { get; set; }
     public string PropertyName { get; set; } = string.Empty;
     public string NewPropertyName { get; set; } = string.Empty;
+    public string? PropertyDefaultValue { get; set; }
     public bool? IsNullable { get; set; }
     public string RelatedEntity { get; set; } = string.Empty;
+    public string RelatedRole { get; set; } = string.Empty;
+    public string RelatedDefaultId { get; set; } = string.Empty;
     public string NewRelatedEntity { get; set; } = string.Empty;
     public List<RowPatch> RowPatches { get; set; } = new();
     public List<string> Ids { get; set; } = new();

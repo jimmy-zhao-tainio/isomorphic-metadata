@@ -727,6 +727,65 @@
     
         return (true, workspacePath, string.Empty);
     }
+
+    (bool Ok, string Role, string DefaultId, string WorkspacePath, string ErrorMessage)
+        ParseModelAddRelationshipOptions(string[] commandArgs, int startIndex)
+    {
+        var role = string.Empty;
+        var defaultId = string.Empty;
+        var workspacePath = DefaultWorkspacePath();
+
+        for (var i = startIndex; i < commandArgs.Length; i++)
+        {
+            var arg = commandArgs[i];
+            if (string.Equals(arg, "--role", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return (false, role, defaultId, workspacePath, "Error: --role requires a value.");
+                }
+
+                role = commandArgs[++i];
+                if (string.IsNullOrWhiteSpace(role))
+                {
+                    return (false, role, defaultId, workspacePath, "Error: --role requires a non-empty value.");
+                }
+
+                continue;
+            }
+
+            if (string.Equals(arg, "--default-id", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return (false, role, defaultId, workspacePath, "Error: --default-id requires a value.");
+                }
+
+                defaultId = commandArgs[++i];
+                if (string.IsNullOrWhiteSpace(defaultId))
+                {
+                    return (false, role, defaultId, workspacePath, "Error: --default-id requires a non-empty value.");
+                }
+
+                continue;
+            }
+
+            if (string.Equals(arg, "--workspace", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return (false, role, defaultId, workspacePath, "Error: --workspace requires a path.");
+                }
+
+                workspacePath = commandArgs[++i];
+                continue;
+            }
+
+            return (false, role, defaultId, workspacePath, $"Error: unknown option '{arg}'.");
+        }
+
+        return (true, role, defaultId, workspacePath, string.Empty);
+    }
     
     (bool Ok, string Format, string FilePath, bool UseStdin, string WorkspacePath, IReadOnlyList<string> KeyFields, bool AutoId, string ErrorMessage)
         ParseUpsertOptions(string[] commandArgs, int startIndex)

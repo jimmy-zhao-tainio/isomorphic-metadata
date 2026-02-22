@@ -75,12 +75,10 @@ Instance addressing:
 
 Relationship usage:
 - `meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId>`
-- `meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity>`
 - `meta instance relationship list <FromEntity> <FromId>`
 
 Semantics:
 - `set` leaves exactly one usage to the target entity.
-- `clear` removes all usage to the target entity (idempotent).
 
 ## Query filters
 
@@ -134,11 +132,15 @@ Inspect:
 
 Modify:
 - `meta model <add-entity|rename-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
+  - `add-property` usage: `meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]`
+  - `--default-value` is required when adding a required property to an entity that already has rows (used for backfill).
+  - `add-relationship` usage: `meta model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]`
+  - `--default-id` is required when `<FromEntity>` already has rows (used for backfill).
 - `meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Value ...] [--workspace <path>]`
 - `meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]`
 - `meta instance update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]`
 - `meta delete <Entity> <Id> [--workspace <path>]`
-- `meta instance relationship <set|clear|list> ...`
+- `meta instance relationship <set|list> ...`
 
 Generate:
 - `meta generate <sql|csharp|ssdt> --out <dir> [--workspace <path>]`

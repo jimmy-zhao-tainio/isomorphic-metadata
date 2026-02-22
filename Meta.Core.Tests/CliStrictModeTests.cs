@@ -154,11 +154,12 @@ public sealed class CliStrictModeTests
             var missingRelationship = await RunCliAsync(
                 "instance",
                 "relationship",
-                "clear",
+                "set",
                 "Cube",
                 "1",
-                "--to-entity",
+                "--to",
                 "System",
+                "1",
                 "--workspace",
                 workspaceRoot);
 
@@ -753,7 +754,7 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task ModelDropRelationship_FailsWhenRelationshipUsageExists()
+    public async Task ModelDropRelationship_RewritesInstanceUsageAndSucceeds()
     {
         var workspaceRoot = CreateTempWorkspaceFromSamples();
         try
@@ -766,19 +767,32 @@ public sealed class CliStrictModeTests
                 "--workspace",
                 workspaceRoot);
 
-            Assert.Equal(4, result.ExitCode);
-            Assert.Contains("Relationship 'Measure->Cube' is in use", result.CombinedOutput, StringComparison.Ordinal);
-            Assert.Contains("Relationship usage blockers:", result.CombinedOutput, StringComparison.Ordinal);
-            Assert.Contains("Next: meta instance relationship set Measure 1 --to CubeId <ToId>", result.CombinedOutput, StringComparison.Ordinal);
-            var lines = result.CombinedOutput
-                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(line => line.TrimEnd())
-                .ToArray();
-            Assert.True(lines.Length > 0, "Expected non-empty output.");
-            Assert.StartsWith("Next:", lines[^1], StringComparison.Ordinal);
-            Assert.DoesNotContain("Where:", result.CombinedOutput, StringComparison.Ordinal);
-            Assert.DoesNotContain("Hint:", result.CombinedOutput, StringComparison.Ordinal);
-            Assert.DoesNotContain("occurrences=", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("relationship removed", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+
+            var modelPath = Path.Combine(workspaceRoot, "metadata", "model.xml");
+            var model = XDocument.Load(modelPath);
+            var measureEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Measure", StringComparison.OrdinalIgnoreCase));
+            var measureRelationships = measureEntity
+                .Element("Relationships")?
+                .Elements("Relationship") ?? Enumerable.Empty<XElement>();
+            Assert.DoesNotContain(
+                measureRelationships,
+                relationship => string.Equals((string?)relationship.Attribute("entity"), "Cube", StringComparison.OrdinalIgnoreCase));
+
+            var measureRows = LoadEntityRows(workspaceRoot, "Measure");
+            foreach (var row in measureRows)
+            {
+                Assert.Null(row.Attribute("CubeId"));
+            }
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
         }
         finally
         {
@@ -821,7 +835,10 @@ public sealed class CliStrictModeTests
             Assert.Equal(0, (await RunCliAsync("init", workspaceRoot)).ExitCode);
             Assert.Equal(0, (await RunCliAsync("model", "add-entity", "Parent", "--workspace", workspaceRoot)).ExitCode);
             Assert.Equal(0, (await RunCliAsync("model", "add-entity", "Child", "--workspace", workspaceRoot)).ExitCode);
-            Assert.Equal(0, (await RunCliAsync("model", "add-relationship", "Parent", "Child", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-property", "Child", "Name", "--required", "true", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("insert", "Child", "1", "--set", "Name=Default Child", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-relationship", "Parent", "Child", "--default-id", "1", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("delete", "Child", "1", "--workspace", workspaceRoot)).ExitCode);
 
             var result = await RunCliAsync(
                 "model",
@@ -831,11 +848,232 @@ public sealed class CliStrictModeTests
                 workspaceRoot);
 
             Assert.Equal(4, result.ExitCode);
-            Assert.Contains("Entity 'Child' has inbound relationships", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Entity 'Child' has inbound relationships", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Inbound relationships:", result.CombinedOutput, StringComparison.Ordinal);
             Assert.Contains("Parent", result.CombinedOutput, StringComparison.Ordinal);
             Assert.DoesNotContain("Where:", result.CombinedOutput, StringComparison.Ordinal);
             Assert.DoesNotContain("Hint:", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddRelationship_BackfillsExistingRows_WithDefaultId()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Cube",
+                "System",
+                "--default-id",
+                "1",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("relationship added", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Name: SystemId", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("DefaultId: 1", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "metadata", "model.xml");
+            var model = XDocument.Load(modelPath);
+            var cubeEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Cube", StringComparison.OrdinalIgnoreCase));
+            var cubeRelationships = cubeEntity
+                .Element("Relationships")?
+                .Elements("Relationship") ?? Enumerable.Empty<XElement>();
+            Assert.Contains(
+                cubeRelationships,
+                relationship => string.Equals((string?)relationship.Attribute("entity"), "System", StringComparison.OrdinalIgnoreCase));
+
+            var cubeRows = LoadEntityRows(workspaceRoot, "Cube");
+            foreach (var row in cubeRows)
+            {
+                Assert.Equal("1", (string?)row.Attribute("SystemId"));
+            }
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddRelationship_AllowsMissingDefaultId_WhenSourceHasNoRows()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("init", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "FromEntity", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "ToEntity", "--workspace", workspaceRoot)).ExitCode);
+
+            var addRelationship = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "FromEntity",
+                "ToEntity",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, addRelationship.ExitCode);
+            Assert.Contains("relationship added", addRelationship.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("DefaultId:", addRelationship.CombinedOutput, StringComparison.Ordinal);
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddRelationship_RequiresDefaultId_WhenSourceHasRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Cube",
+                "System",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("requires --default-id", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Cube.SystemId", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddProperty_BackfillsExistingRows_WhenRequiredAndDefaultValueProvided()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-property",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--default-value",
+                "General",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("property added", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("DefaultValue: General", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "metadata", "model.xml");
+            var model = XDocument.Load(modelPath);
+            var cubeEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Cube", StringComparison.OrdinalIgnoreCase));
+            var cubeProperties = cubeEntity
+                .Element("Properties")?
+                .Elements("Property") ?? Enumerable.Empty<XElement>();
+            Assert.Contains(
+                cubeProperties,
+                property => string.Equals((string?)property.Attribute("name"), "Category", StringComparison.OrdinalIgnoreCase));
+
+            var cubeRows = LoadEntityRows(workspaceRoot, "Cube");
+            foreach (var row in cubeRows)
+            {
+                Assert.Equal("General", row.Element("Category")?.Value);
+            }
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddProperty_RequiresDefaultValue_WhenRequiredAndEntityHasRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-property",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("requires --default-value", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Cube.Category", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddProperty_AllowsMissingDefaultValue_WhenEntityHasNoRows()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("init", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "Thing", "--workspace", workspaceRoot)).ExitCode);
+
+            var addProperty = await RunCliAsync(
+                "model",
+                "add-property",
+                "Thing",
+                "Name",
+                "--required",
+                "true",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, addProperty.ExitCode);
+            Assert.DoesNotContain("DefaultValue:", addProperty.CombinedOutput, StringComparison.Ordinal);
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
         }
         finally
         {
@@ -921,7 +1159,7 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task RowRelationship_Clear_FailsBecauseRelationshipsAreRequired()
+    public async Task RowRelationship_Clear_IsNotExposed()
     {
         var workspaceRoot = CreateTempWorkspaceFromSamples();
         try
@@ -932,13 +1170,10 @@ public sealed class CliStrictModeTests
                 "clear",
                 "Measure",
                 "1",
-                "--to-entity",
-                "Cube",
                 "--workspace",
                 workspaceRoot);
-            Assert.Equal(4, clearResult.ExitCode);
-            Assert.Contains("Cannot clear required relationship 'Measure->CubeId'", clearResult.CombinedOutput, StringComparison.Ordinal);
-            Assert.Contains("Next: meta instance relationship set Measure 1 --to CubeId <ToId>", clearResult.CombinedOutput, StringComparison.Ordinal);
+            Assert.Equal(1, clearResult.ExitCode);
+            Assert.Contains("Unknown command 'instance relationship clear'.", clearResult.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {

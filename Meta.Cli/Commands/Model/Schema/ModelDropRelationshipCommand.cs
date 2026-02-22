@@ -38,49 +38,6 @@ internal sealed partial class CliRuntime
 
             var relationshipName = relationship.GetColumnName();
             var targetEntityName = relationship.Entity;
-
-            var blockers = workspace.Instance.GetOrCreateEntityRecords(fromEntityName)
-                .Where(row => CountRelationshipUsages(row, relationshipName) > 0)
-                .Select(row => new
-                {
-                    Row = row,
-                    RowAddress = BuildEntityInstanceAddress(fromEntityName, row.Id),
-                    Display = TryGetDisplayValue(fromEntity, row),
-                })
-                .OrderBy(item => string.IsNullOrWhiteSpace(item.Display) ? 1 : 0)
-                .ThenBy(item => item.Display, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => item.Row.Id, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (blockers.Count > 0)
-            {
-                var firstRowId = blockers[0].Row.Id;
-                return PrintFormattedErrorWithTable(
-                    code: "E_RELATIONSHIP_IN_USE",
-                    message: $"Relationship '{fromEntityName}->{targetEntityName}' is in use.",
-                    exitCode: 4,
-                    where: new[]
-                    {
-                        ("fromEntity", fromEntityName),
-                        ("relationship", relationshipName),
-                        ("toEntity", targetEntityName),
-                        ("occurrences", blockers.Count.ToString(CultureInfo.InvariantCulture)),
-                    },
-                    hints: new[]
-                    {
-                        $"Relationship usage exists in {blockers.Count.ToString(CultureInfo.InvariantCulture)} instance(s).",
-                        $"Next: meta instance relationship set {fromEntityName} {QuoteInstanceId(firstRowId)} --to {relationshipName} <ToId>",
-                    },
-                    tableTitle: "Relationship usage blockers",
-                    headers: new[] { "Entity", "Instance" },
-                    rows: blockers
-                        .Take(20)
-                        .Select(item => (IReadOnlyList<string>)new[]
-                        {
-                            fromEntityName,
-                            item.RowAddress,
-                        })
-                        .ToList());
-            }
     
             var operation = new WorkspaceOp
             {

@@ -4,14 +4,13 @@
     {
         if (commandArgs.Length < 3)
         {
-            return PrintUsageError("Usage: instance relationship <set|clear|list> ...");
+            return PrintUsageError("Usage: instance relationship <set|list> ...");
         }
     
         var mode = commandArgs[2].Trim().ToLowerInvariant();
         return mode switch
         {
             "set" => await InstanceRelationshipSetAsync(commandArgs).ConfigureAwait(false),
-            "clear" => await InstanceRelationshipClearAsync(commandArgs).ConfigureAwait(false),
             "list" => await InstanceRelationshipListAsync(commandArgs).ConfigureAwait(false),
             _ => PrintCommandUnknownError($"instance relationship {mode}"),
         };

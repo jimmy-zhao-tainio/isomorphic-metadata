@@ -188,12 +188,30 @@ public static class WorkspaceOperationApplier
             throw new InvalidOperationException($"Property '{entity.Name}.{operation.Property.Name}' already exists.");
         }
 
+        var sourceRows = workspace.Instance.GetOrCreateEntityRecords(entity.Name);
+        var defaultValueProvided = operation.PropertyDefaultValue != null;
+        if (!operation.Property.IsNullable && sourceRows.Count > 0 && !defaultValueProvided)
+        {
+            throw new InvalidOperationException(
+                $"Property '{entity.Name}.{operation.Property.Name}' requires --default-value because entity '{entity.Name}' has existing rows.");
+        }
+
         entity.Properties.Add(new PropertyDefinition
         {
             Name = operation.Property.Name,
             DataType = operation.Property.DataType,
             IsNullable = operation.Property.IsNullable,
         });
+
+        if (!defaultValueProvided)
+        {
+            return;
+        }
+
+        foreach (var record in sourceRows)
+        {
+            record.Values[operation.Property.Name] = operation.PropertyDefaultValue!;
+        }
     }
 
     private static void DeleteProperty(Workspace workspace, WorkspaceOp operation)
@@ -276,10 +294,30 @@ public static class WorkspaceOperationApplier
         var entity = RequireEntity(workspace.Model, RequireValue(operation.EntityName, nameof(operation.EntityName)));
         var relatedEntity = RequireValue(operation.RelatedEntity, nameof(operation.RelatedEntity));
         RequireEntity(workspace.Model, relatedEntity);
+        var defaultTargetId = operation.RelatedDefaultId?.Trim() ?? string.Empty;
+        var relationshipRole = operation.RelatedRole?.Trim() ?? string.Empty;
+        var sourceRows = workspace.Instance.GetOrCreateEntityRecords(entity.Name);
+
+        if (sourceRows.Count > 0 && string.IsNullOrWhiteSpace(defaultTargetId))
+        {
+            throw new InvalidOperationException(
+                $"Relationship '{entity.Name}.{(string.IsNullOrWhiteSpace(relationshipRole) ? relatedEntity : relationshipRole)}Id' requires --default-id because entity '{entity.Name}' has existing rows.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(defaultTargetId))
+        {
+            var targetRows = workspace.Instance.GetOrCreateEntityRecords(relatedEntity);
+            if (!targetRows.Any(row => string.Equals(row.Id, defaultTargetId, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"Relationship default target '{relatedEntity} {defaultTargetId}' does not exist.");
+            }
+        }
 
         var newRelationship = new RelationshipDefinition
         {
             Entity = relatedEntity,
+            Role = relationshipRole,
         };
 
         var relationshipName = newRelationship.GetColumnName();
@@ -290,6 +328,14 @@ public static class WorkspaceOperationApplier
         }
 
         entity.Relationships.Add(newRelationship);
+
+        if (sourceRows.Count > 0)
+        {
+            foreach (var record in sourceRows)
+            {
+                record.RelationshipIds[relationshipName] = defaultTargetId;
+            }
+        }
     }
 
     private static void DeleteRelationship(Workspace workspace, WorkspaceOp operation)
@@ -298,13 +344,14 @@ public static class WorkspaceOperationApplier
         var relationshipSelector = RequireValue(operation.RelatedEntity, nameof(operation.RelatedEntity));
         var entity = RequireEntity(workspace.Model, entityName);
         var relationship = ResolveRelationship(entity, relationshipSelector);
+        var relationshipColumnName = relationship.GetColumnName();
 
-        if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records) &&
-            records.Any(record => record.RelationshipIds.Any(pair =>
-                string.Equals(pair.Key, relationship.GetColumnName(), StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(pair.Value))))
+        if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records))
         {
-            throw new InvalidOperationException($"Relationship '{entityName}.{relationship.GetColumnName()}' is in use and cannot be removed.");
+            foreach (var record in records)
+            {
+                record.RelationshipIds.Remove(relationshipColumnName);
+            }
         }
 
         entity.Relationships.Remove(relationship);

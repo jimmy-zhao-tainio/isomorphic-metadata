@@ -226,7 +226,7 @@ Add-Case -Name "model add-entity" -SuccessArgs @("model", "add-entity", "CmdEnti
 Add-Case -Name "model rename-entity" -SuccessArgs @("model", "rename-entity", "CmdEntity", "CmdEntityRenamed", "--workspace", $baseWorkspace) -FailureArgs @("model", "rename-entity", "MissingEntity", "Anything", "--workspace", $baseWorkspace)
 Add-Case -Name "model add-property" -SuccessArgs @("model", "add-property", "CmdEntityRenamed", "Label", "--required", "true", "--workspace", $baseWorkspace) -FailureArgs @("model", "add-property", "MissingEntity", "Label", "--workspace", $baseWorkspace)
 Add-Case -Name "model rename-property" -SuccessArgs @("model", "rename-property", "CmdEntityRenamed", "Label", "LabelText", "--workspace", $baseWorkspace) -FailureArgs @("model", "rename-property", "CmdEntityRenamed", "MissingProp", "Anything", "--workspace", $baseWorkspace)
-Add-Case -Name "model add-relationship" -SuccessArgs @("model", "add-relationship", "CmdEntityRenamed", "Cube", "--workspace", $baseWorkspace) -FailureArgs @("model", "add-relationship", "CmdEntityRenamed", "MissingTarget", "--workspace", $baseWorkspace)
+Add-Case -Name "model add-relationship" -SuccessArgs @("model", "add-relationship", "CmdEntityRenamed", "Cube", "--default-id", "1", "--workspace", $baseWorkspace) -FailureArgs @("model", "add-relationship", "CmdEntityRenamed", "MissingTarget", "--default-id", "1", "--workspace", $baseWorkspace)
 Add-Case -Name "model drop-relationship" -SuccessArgs @("model", "drop-relationship", "CmdEntityRenamed", "Cube", "--workspace", $baseWorkspace) -FailureArgs @("model", "drop-relationship", "Measure", "Cube", "--workspace", $baseWorkspace)
 Add-Case -Name "model drop-property" -SuccessArgs @("model", "drop-property", "CmdEntityRenamed", "LabelText", "--workspace", $baseWorkspace) -FailureArgs @("model", "drop-property", "CmdEntityRenamed", "MissingProp", "--workspace", $baseWorkspace)
 Add-Case -Name "model drop-entity" -SuccessArgs @("model", "drop-entity", "CmdEntityRenamed", "--workspace", $baseWorkspace) -FailureArgs @("model", "drop-entity", "Cube", "--workspace", $baseWorkspace)
@@ -236,18 +236,6 @@ Add-Case -Name "insert auto-id" -SuccessArgs @("insert", "Cube", "--auto-id", "-
 Add-Case -Name "instance update" -SuccessArgs @("instance", "update", "Cube", "10", "--set", "RefreshMode=Manual", "--workspace", $baseWorkspace) -FailureArgs @("instance", "update", "Cube", "1", "--set", "MissingField=BadValue", "--workspace", $baseWorkspace)
 Add-Case -Name "instance relationship set" -SuccessArgs @("instance", "relationship", "set", "Measure", "1", "--to", "Cube", "2", "--workspace", $baseWorkspace) -FailureArgs @("instance", "relationship", "set", "Measure", "1", "--to", "Cube", "999", "--workspace", $baseWorkspace)
 Add-Case -Name "instance relationship list" -SuccessArgs @("instance", "relationship", "list", "Measure", "1", "--workspace", $baseWorkspace) -FailureArgs @("instance", "relationship", "list", "Measure", "999", "--workspace", $baseWorkspace)
-
-$measureShardPath = Join-Path $baseWorkspace "metadata\instance\Measure.xml"
-if (Test-Path $measureShardPath)
-{
-    $measureXml = Get-Content -Path $measureShardPath -Raw
-    $measureXml = [regex]::Replace($measureXml, '\s*<Cube Id="[^"]+"\s*/>', "", [System.Text.RegularExpressions.RegexOptions]::Singleline)
-    Set-Content -Path $measureShardPath -Value $measureXml -Encoding utf8
-}
-
-Add-Case -Name "instance relationship clear" -SuccessArgs @("instance", "relationship", "clear", "Measure", "1", "--to-entity", "Cube", "--workspace", $baseWorkspace) -FailureArgs @("instance", "relationship", "clear", "Cube", "1", "--to-entity", "System", "--workspace", $baseWorkspace)
-
-Invoke-MetaStrict -MetaArgs @("instance", "relationship", "set", "Measure", "1", "--to", "Cube", "2", "--workspace", $baseWorkspace) | Out-Null
 
 Add-Case -Name "bulk-insert" -SuccessArgs @("bulk-insert", "Cube", "--from", "tsv", "--file", $bulkFile, "--key", "Id", "--workspace", $baseWorkspace) -FailureArgs @("bulk-insert", "Cube", "--from", "tsv", "--file", $bulkInvalidFile, "--key", "Id", "--workspace", $baseWorkspace)
 Add-Case -Name "bulk-insert auto-id" -SuccessArgs @("bulk-insert", "Cube", "--from", "tsv", "--file", $bulkAutoIdFile, "--auto-id", "--workspace", $baseWorkspace) -FailureArgs @("bulk-insert", "Cube", "--from", "tsv", "--file", $bulkAutoIdFile, "--auto-id", "--key", "Id", "--workspace", $baseWorkspace)

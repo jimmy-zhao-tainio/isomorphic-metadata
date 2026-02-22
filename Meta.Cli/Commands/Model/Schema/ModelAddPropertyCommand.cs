@@ -5,12 +5,13 @@ internal sealed partial class CliRuntime
         if (commandArgs.Length < 4)
         {
             return PrintUsageError(
-                "Usage: model add-property <Entity> <Property> [--required true|false] [--workspace <path>]");
+                "Usage: model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]");
         }
     
         var entityName = commandArgs[2];
         var propertyName = commandArgs[3];
         var required = true;
+        string? defaultValue = null;
         var workspacePath = DefaultWorkspacePath();
     
         for (var i = 4; i < commandArgs.Length; i++)
@@ -28,6 +29,17 @@ internal sealed partial class CliRuntime
                     return PrintArgumentError("Error: --required must be true or false.");
                 }
     
+                continue;
+            }
+
+            if (string.Equals(arg, "--default-value", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return PrintArgumentError("Error: --default-value requires a value.");
+                }
+
+                defaultValue = commandArgs[++i];
                 continue;
             }
     
@@ -55,16 +67,26 @@ internal sealed partial class CliRuntime
                 DataType = "string",
                 IsNullable = !required,
             },
+            PropertyDefaultValue = defaultValue,
         };
     
         var requiredText = required ? "required" : "optional";
+        var successDetails = new List<(string Key, string Value)>
+        {
+            ("Entity", entityName),
+            ("Property", $"{propertyName} ({requiredText})"),
+        };
+        if (defaultValue != null)
+        {
+            successDetails.Add(("DefaultValue", defaultValue.Length == 0 ? "(empty)" : defaultValue));
+        }
+
         return await ExecuteOperationAsync(
                 workspacePath,
                 operation,
                 "model add-property",
                 "property added",
-                ("Entity", entityName),
-                ("Property", $"{propertyName} ({requiredText})"))
+                successDetails.ToArray())
             .ConfigureAwait(false);
     }
 }
