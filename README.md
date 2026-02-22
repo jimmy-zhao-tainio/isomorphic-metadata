@@ -151,33 +151,59 @@ powershell -ExecutionPolicy Bypass -File .\install-meta.ps1
 
 ### Model XML
 
-`Id` is implicit on every entity (so `Property name="Id"` is not written).  
-`dataType="string"` is the default and omitted.  
-`isRequired="true"` is the default and omitted.  
-`Entity plural="..."` is optional; default is `<EntityName>s`.
+`metadata/model.xml` defines the schema for your metadata workspace: which entities exist, what properties they have, and how entities relate to each other.
 
-Relationships are declared as:
+A model has one root `<Model name="...">` and then:
 
-`<Relationship entity="TargetEntity" />`
+- `<Entity>` defines a record type (like a table).
+- `name="Cube"` is the singular name.
+- `plural="Cubes"` controls how instances are grouped in instance XML (and exposed in generated APIs). If omitted, plural defaults to `<EntityName>s`.
+- `<Properties>` lists scalar fields for the entity. `dataType="string"` is the default and omitted; properties are required by default (`isRequired="true"`), and optional fields use `isRequired="false"`.
+- `<Relationships>` lists required foreign-key style references to other entities. A relationship points to a target entity and is required by default. In instance XML it becomes `${TargetEntity}Id` by default. If you need multiple relationships to the same target, specify `role="..."` and it becomes `${Role}Id`.
+- `Id` is implicit on every entity, so `Property name="Id"` is not written.
 
-To support multiple relationships to the same target, specify a role:
+Example:
 
-`<Relationship entity="TypeSystem" role="SourceTypeSystem" />`
-
-Defaults are:
-
-If `role` is omitted, the relationship role defaults to `${TargetEntity}`.  
-The serialized instance attribute / SQL column is always `${Role}Id` or `${TargetEntity}Id`.
+```xml
+<Model name="EnterpriseBIPlatform">
+  <Entities>
+    <Entity name="Measure" plural="Measures">
+      <Properties>
+        <Property name="MeasureName" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="Cube" />
+        <Relationship entity="Cube" role="SourceCube" />
+      </Relationships>
+    </Entity>
+  </Entities>
+</Model>
+```
 
 ### Instance XML
 
-Root element is the model name (for example `<EnterpriseBIPlatform>`).  
-Under root, each entity uses a plural container element (for example `<Cubes>`, `<Measures>`).  
-Inside each container, each instance uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
+`metadata/instance/*.xml` stores the data for a model.
 
-Instance `Id` attribute is mandatory.  
-Declared relationships are required and stored as instance attributes named by `${Role}Id` or `${TargetEntity}Id`.  
-Scalar properties are child elements. Missing property element means unset; empty property element means explicit empty string.
+The root element is the model name (for example `<EnterpriseBIPlatform>`).
+
+Each entity's instances are grouped under a plural container element (for example `<Cubes>`, `<Measures>`). Inside the container, each record is written as the singular entity element (for example `<Cube ...>`, `<Measure ...>`).
+
+Every record must have an `Id="..."` attribute.
+
+Relationships are stored as `...Id` attributes on the record. By default a relationship to `Cube` is stored as `CubeId="..."`. If the relationship has a role like `role="SourceCube"`, it is stored as `SourceCubeId="..."`.
+
+Scalar properties are written as child elements. Missing element means unset. An empty element means explicit empty string.
+
+Example:
+
+```xml
+<Measures>
+  <Measure Id="1" CubeId="10" SourceCubeId="11">
+    <MeasureName>Sales Amount</MeasureName>
+    <Notes />
+  </Measure>
+</Measures>
+```
 
 ## Core workflows with examples
 
