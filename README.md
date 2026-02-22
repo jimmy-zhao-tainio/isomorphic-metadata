@@ -23,7 +23,7 @@ Instance data may be sharded: multiple instance files can contain rows for the s
 
 Workspace operations: create and inspect workspaces (`init`, `status`).  
 Validation and inspection: check integrity and explore model/instance (`check`, `list`, `view`, `query`, `graph`).  
-Edits: mutate models and instance data (`model ...`, `insert`, `delete`, `bulk-insert`, `instance update`, `instance relationship set|list|clear`, `instance diff`, `instance merge`).  
+Edits: mutate models and instance data (`model ...`, `insert`, `delete`, `bulk-insert`, `instance update`, `instance relationship set|list`, `instance diff`, `instance merge`).  
 Pipelines: import and generate (`import ...`, `generate ...`).
 
 ## One sample across XML, SQL, and C#

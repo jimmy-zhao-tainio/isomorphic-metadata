@@ -601,43 +601,6 @@
         return (true, toEntity, toId, workspacePath, string.Empty);
     }
     
-    (bool Ok, string ToEntity, string WorkspacePath, string ErrorMessage)
-        ParseInstanceRelationshipClearOptions(string[] commandArgs, int startIndex)
-    {
-        var toEntity = string.Empty;
-        var workspacePath = DefaultWorkspacePath();
-    
-        for (var i = startIndex; i < commandArgs.Length; i++)
-        {
-            var arg = commandArgs[i];
-            if (string.Equals(arg, "--to-entity", StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 >= commandArgs.Length)
-                {
-                    return (false, toEntity, workspacePath, "Error: --to-entity requires a value.");
-                }
-    
-                toEntity = commandArgs[++i];
-                continue;
-            }
-    
-            if (string.Equals(arg, "--workspace", StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 >= commandArgs.Length)
-                {
-                    return (false, toEntity, workspacePath, "Error: --workspace requires a path.");
-                }
-    
-                workspacePath = commandArgs[++i];
-                continue;
-            }
-    
-            return (false, toEntity, workspacePath, $"Error: unknown option '{arg}'.");
-        }
-    
-        return (true, toEntity, workspacePath, string.Empty);
-    }
-    
     (bool Ok, Dictionary<string, string> SetValues, string WorkspacePath, bool AutoId, string ErrorMessage)
         ParseMutatingEntityOptions(string[] commandArgs, int startIndex, bool allowAutoId = false)
     {
