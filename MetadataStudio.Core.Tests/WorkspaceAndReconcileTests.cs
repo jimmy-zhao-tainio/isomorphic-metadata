@@ -117,8 +117,10 @@ public sealed class WorkspaceServiceTests
             File.Delete(workspaceXmlPath);
             await File.WriteAllTextAsync(workspaceJsonPath, legacyJson);
 
-            var loaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
-            Assert.Equal("1.0", loaded.Manifest.ContractVersion);
+            var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+                services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false));
+            Assert.Contains("workspace.xml", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("workspace.json", exception.Message, StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(workspaceXmlPath), "workspace.xml should not be auto-created from legacy workspace.json.");
         }
         finally
