@@ -167,7 +167,7 @@ To support multiple relationships to the same target, specify a role:
 Defaults are:
 
 If `role` is omitted, the relationship role defaults to `${TargetEntity}`.  
-The serialized instance attribute / SQL column is always `${roleOrTarget}Id`.
+The serialized instance attribute / SQL column is always `${Role}Id` or `${TargetEntity}Id`.
 
 ### Instance XML
 
@@ -176,7 +176,7 @@ Under root, each entity uses a plural container element (for example `<Cubes>`, 
 Inside each container, each instance uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
 
 Instance `Id` attribute is mandatory.  
-Declared relationships are required and stored as instance attributes named by `${roleOrTarget}Id`.  
+Declared relationships are required and stored as instance attributes named by `${Role}Id` or `${TargetEntity}Id`.  
 Scalar properties are child elements. Missing property element means unset; empty property element means explicit empty string.
 
 ## Core workflows with examples
@@ -198,7 +198,7 @@ Model edits:
 ```powershell
 meta model add-entity SourceSystem --workspace .\Samples\CommandExamples
 meta model add-property SourceSystem Name --required true --workspace .\Samples\CommandExamples
-meta model add-relationship System SourceSystem --workspace .\Samples\CommandExamples
+meta model add-relationship System SourceSystem --default-id 1 --workspace .\Samples\CommandExamples
 meta model rename-property Cube Purpose BusinessPurpose --workspace .\Samples\CommandExamples
 ```
 
@@ -212,12 +212,9 @@ meta instance update Cube 10 --set "Purpose=Operations reporting" --workspace .\
 
 meta instance relationship set Measure 1 --to Cube 10 --workspace .\Samples\CommandExamples
 meta instance relationship list Measure 1 --workspace .\Samples\CommandExamples
-meta instance relationship clear <FromEntity> <FromId> --to-entity <ToEntity> --workspace <path>
 
 meta delete Cube 10 --workspace .\Samples\CommandExamples
 ```
-
-`meta instance relationship clear` is available for usage cleanup, but declared relationships are required; clearing a required relationship usage fails validation.
 
 Import and generate:
 
@@ -239,12 +236,81 @@ meta instance merge .\TargetWs .\RightWs.instance-diff
 
 ## MetaSchema
 
-MetaSchema is the separate schema/canonical-catalog toolchain (schema extraction plus sanctioned catalogs like `TypeConversionCatalog`).
+MetaSchema is the separate schema/canonical-catalog toolchain.
+
+It handles schema extraction and sanctioned catalogs that `meta` can treat as metadata workspaces.
+
+Current status: `meta-schema extract sqlserver` is implemented as a scaffold and does not query SQL Server yet.
+
+### TypeConversionCatalog
+
+`TypeConversionCatalog` is a workspace that models a canonical type system (`Meta`) and mappings to/from platform type systems (SqlServer, Synapse, Snowflake, SSIS, CSharp). The model centers around TypeSystems/DataTypes, facets, and mapping rules.
+
+Key entities include `TypeSystem`, `DataType`, `TypeSpec`, `TypeMapping`, `TypeMappingCondition`, `TypeMappingFacetTransform`, `Setting`, and `ConversionImplementation`.
+
+#### Seeded conversion table excerpt: Meta -> SqlServer
+
+| Meta type | SqlServer type | Lossiness | Implementation |
+|---|---|---|---|
+| AnsiString | varchar | Exact | Sql.Cast |
+| AnsiStringFixedLength | char | Exact | Sql.Cast |
+| Binary | varbinary | Exact | Sql.Cast |
+| Boolean | bit | Exact | Sql.Identity |
+| Date | date | Exact | Sql.Identity |
+| DateTime2 | datetime2 | Exact | Sql.Cast |
+| DateTimeOffset | datetimeoffset | Exact | Sql.Cast |
+| Decimal | decimal | Exact | Sql.Cast |
+| Guid | uniqueidentifier | Exact | Sql.Identity |
+| Int32 | int | Exact | Sql.Identity |
+| Int64 | bigint | Exact | Sql.Identity |
+| Object | sql_variant | Lossy | Sql.Convert |
+| String | nvarchar | Exact | Sql.Cast |
+| StringFixedLength | nchar | Exact | Sql.Cast |
+| Time | time | Exact | Sql.Cast |
+| Xml | xml | Exact | Sql.Identity |
+
+#### Seeded conversion table excerpt: SqlServer -> SSIS
+
+| SqlServer type | SSIS type | Lossiness | Implementation |
+|---|---|---|---|
+| bigint | DT_I8 | Exact | Ssis.DataConversion |
+| bit | DT_BOOL | Exact | Ssis.DataConversion |
+| datetime2 | DT_DBTIMESTAMP2 | Exact | Ssis.DataConversion |
+| datetimeoffset | DT_DBTIMESTAMPOFFSET | Exact | Ssis.DataConversion |
+| decimal | DT_NUMERIC | Exact | Ssis.DataConversion |
+| int | DT_I4 | Exact | Ssis.DataConversion |
+| nvarchar | DT_WSTR | Exact | Ssis.DataConversion |
+| smallint | DT_I2 | Exact | Ssis.DataConversion |
+| time | DT_DBTIME2 | Exact | Ssis.DataConversion |
+| tinyint | DT_UI1 | Exact | Ssis.DataConversion |
+| uniqueidentifier | DT_GUID | Exact | Ssis.DataConversion |
+| xml | DT_NTEXT | Lossy | Ssis.DataConversion |
+
+#### Defaulting rules excerpt
+
+Some platform-defaulting rules are encoded as mappings with conditions/transforms. (`Length=-1` means MAX.)
+
+| Meta type | SqlServer type | When | Then |
+|---|---|---|---|
+| Decimal | decimal | Precision missing | Precision=18 |
+| Decimal | decimal | Scale missing | Scale=0 |
+| Time | time | TimePrecision missing | TimePrecision=7 |
+| DateTime2 | datetime2 | TimePrecision missing | TimePrecision=7 |
+| DateTimeOffset | datetimeoffset | TimePrecision missing | TimePrecision=7 |
+| AnsiString | varchar | Length >= 8001 | Length=-1 |
+| String | nvarchar | Length >= 4001 | Length=-1 |
+| Binary | varbinary | Length >= 8001 | Length=-1 |
+
+#### Commands
 
 ```powershell
 meta-schema help
 meta-schema extract sqlserver --help
 meta-schema seed type-conversion --new-workspace .\MetaSchema.Catalogs\TypeConversionCatalog
+
+meta check --workspace .\MetaSchema.Catalogs\TypeConversionCatalog
+meta list entities --workspace .\MetaSchema.Catalogs\TypeConversionCatalog
+meta query TypeMapping --contains Name Meta. --workspace .\MetaSchema.Catalogs\TypeConversionCatalog
 ```
 
 ## References
