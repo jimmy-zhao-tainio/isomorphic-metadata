@@ -84,7 +84,7 @@ public sealed class CliStrictModeTests
         Directory.CreateDirectory(Path.Combine(brokenWorkspaceRoot, "metadata", "instance"));
         await File.WriteAllTextAsync(
             Path.Combine(brokenWorkspaceRoot, "metadata", "workspace.xml"),
-            "<MetaWorkspace><Workspaces><Workspace Id=\"1\"><Name>Workspace</Name><FormatVersion>1.0</FormatVersion></Workspace></Workspaces><WorkspacePaths><WorkspacePath Id=\"1\" WorkspaceId=\"1\"><Key>ModelFile</Key><Path>metadata/model.xml</Path></WorkspacePath><WorkspacePath Id=\"2\" WorkspaceId=\"1\"><Key>InstanceDir</Key><Path>metadata/instance</Path></WorkspacePath></WorkspacePaths><GeneratorSettings><GeneratorSetting Id=\"1\" WorkspaceId=\"1\"><Key>Encoding</Key><Value>utf-8-no-bom</Value></GeneratorSetting><GeneratorSetting Id=\"2\" WorkspaceId=\"1\"><Key>Newlines</Key><Value>lf</Value></GeneratorSetting></GeneratorSettings></MetaWorkspace>");
+            "<MetaWorkspace><Workspaces><Workspace Id=\"1\" WorkspaceLayoutId=\"1\" EncodingId=\"1\" NewlinesId=\"1\" EntitiesOrderId=\"1\" PropertiesOrderId=\"1\" RelationshipsOrderId=\"1\" RowsOrderId=\"2\" AttributesOrderId=\"3\"><Name>Workspace</Name><FormatVersion>1.0</FormatVersion></Workspace></Workspaces><WorkspaceLayouts><WorkspaceLayout Id=\"1\"><ModelFilePath>metadata/model.xml</ModelFilePath><InstanceDirPath>metadata/instance</InstanceDirPath></WorkspaceLayout></WorkspaceLayouts><Encodings><Encoding Id=\"1\"><Name>utf-8-no-bom</Name></Encoding></Encodings><NewlinesValues><Newlines Id=\"1\"><Name>lf</Name></Newlines></NewlinesValues><CanonicalOrders><CanonicalOrder Id=\"1\"><Name>name-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"2\"><Name>id-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"3\"><Name>id-first-then-name-ordinal</Name></CanonicalOrder></CanonicalOrders><EntityStorages /></MetaWorkspace>");
         await File.WriteAllTextAsync(
             Path.Combine(brokenWorkspaceRoot, "metadata", "model.xml"),
             "<Model name=\"Broken\"><Entities><Entity name=\"X\"></Entities></Model>");
@@ -181,7 +181,7 @@ public sealed class CliStrictModeTests
         Directory.CreateDirectory(Path.Combine(brokenWorkspaceRoot, "metadata", "instance"));
         await File.WriteAllTextAsync(
             Path.Combine(brokenWorkspaceRoot, "metadata", "workspace.xml"),
-            "<MetaWorkspace><Workspaces><Workspace Id=\"1\"><Name>Workspace</Name><FormatVersion>1.0</FormatVersion></Workspace></Workspaces><WorkspacePaths><WorkspacePath Id=\"1\" WorkspaceId=\"1\"><Key>ModelFile</Key><Path>metadata/model.xml</Path></WorkspacePath><WorkspacePath Id=\"2\" WorkspaceId=\"1\"><Key>InstanceDir</Key><Path>metadata/instance</Path></WorkspacePath></WorkspacePaths><GeneratorSettings><GeneratorSetting Id=\"1\" WorkspaceId=\"1\"><Key>Encoding</Key><Value>utf-8-no-bom</Value></GeneratorSetting><GeneratorSetting Id=\"2\" WorkspaceId=\"1\"><Key>Newlines</Key><Value>lf</Value></GeneratorSetting></GeneratorSettings></MetaWorkspace>");
+            "<MetaWorkspace><Workspaces><Workspace Id=\"1\" WorkspaceLayoutId=\"1\" EncodingId=\"1\" NewlinesId=\"1\" EntitiesOrderId=\"1\" PropertiesOrderId=\"1\" RelationshipsOrderId=\"1\" RowsOrderId=\"2\" AttributesOrderId=\"3\"><Name>Workspace</Name><FormatVersion>1.0</FormatVersion></Workspace></Workspaces><WorkspaceLayouts><WorkspaceLayout Id=\"1\"><ModelFilePath>metadata/model.xml</ModelFilePath><InstanceDirPath>metadata/instance</InstanceDirPath></WorkspaceLayout></WorkspaceLayouts><Encodings><Encoding Id=\"1\"><Name>utf-8-no-bom</Name></Encoding></Encodings><NewlinesValues><Newlines Id=\"1\"><Name>lf</Name></Newlines></NewlinesValues><CanonicalOrders><CanonicalOrder Id=\"1\"><Name>name-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"2\"><Name>id-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"3\"><Name>id-first-then-name-ordinal</Name></CanonicalOrder></CanonicalOrders><EntityStorages /></MetaWorkspace>");
         await File.WriteAllTextAsync(
             Path.Combine(brokenWorkspaceRoot, "metadata", "model.xml"),
             "<Model name=\"Broken\"><Entities><Entity name=\"X\"></Entities></Model>");
@@ -2815,4 +2815,5 @@ public sealed class CliStrictModeTests
         return diffPathMatch.Groups[1].Value.Trim();
     }
 }
+
 

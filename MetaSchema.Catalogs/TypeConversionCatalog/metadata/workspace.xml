@@ -1,49 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <MetaWorkspace>
   <Workspaces>
-    <Workspace Id="1">
+    <Workspace Id="1" WorkspaceLayoutId="1" EncodingId="1" NewlinesId="1" EntitiesOrderId="1" PropertiesOrderId="1" RelationshipsOrderId="1" RowsOrderId="2" AttributesOrderId="3">
       <Name>Workspace</Name>
       <FormatVersion>1.0</FormatVersion>
     </Workspace>
   </Workspaces>
-  <WorkspacePaths>
-    <WorkspacePath Id="1" WorkspaceId="1">
-      <Key>ModelFile</Key>
-      <Path>metadata/model.xml</Path>
-    </WorkspacePath>
-    <WorkspacePath Id="2" WorkspaceId="1">
-      <Key>InstanceDir</Key>
-      <Path>metadata/instance</Path>
-    </WorkspacePath>
-  </WorkspacePaths>
-  <GeneratorSettings>
-    <GeneratorSetting Id="1" WorkspaceId="1">
-      <Key>Encoding</Key>
-      <Value>utf-8-no-bom</Value>
-    </GeneratorSetting>
-    <GeneratorSetting Id="2" WorkspaceId="1">
-      <Key>Newlines</Key>
-      <Value>lf</Value>
-    </GeneratorSetting>
-    <GeneratorSetting Id="3" WorkspaceId="1">
-      <Key>CanonicalSort.Entities</Key>
-      <Value>name-ordinal</Value>
-    </GeneratorSetting>
-    <GeneratorSetting Id="4" WorkspaceId="1">
-      <Key>CanonicalSort.Properties</Key>
-      <Value>name-ordinal</Value>
-    </GeneratorSetting>
-    <GeneratorSetting Id="5" WorkspaceId="1">
-      <Key>CanonicalSort.Relationships</Key>
-      <Value>name-ordinal</Value>
-    </GeneratorSetting>
-    <GeneratorSetting Id="6" WorkspaceId="1">
-      <Key>CanonicalSort.Rows</Key>
-      <Value>id-ordinal</Value>
-    </GeneratorSetting>
-    <GeneratorSetting Id="7" WorkspaceId="1">
-      <Key>CanonicalSort.Attributes</Key>
-      <Value>id-first-then-name-ordinal</Value>
-    </GeneratorSetting>
-  </GeneratorSettings>
+  <WorkspaceLayouts>
+    <WorkspaceLayout Id="1">
+      <ModelFilePath>metadata/model.xml</ModelFilePath>
+      <InstanceDirPath>metadata/instance</InstanceDirPath>
+    </WorkspaceLayout>
+  </WorkspaceLayouts>
+  <Encodings>
+    <Encoding Id="1">
+      <Name>utf-8-no-bom</Name>
+    </Encoding>
+  </Encodings>
+  <NewlinesValues>
+    <Newlines Id="1">
+      <Name>lf</Name>
+    </Newlines>
+  </NewlinesValues>
+  <CanonicalOrders>
+    <CanonicalOrder Id="1">
+      <Name>name-ordinal</Name>
+    </CanonicalOrder>
+    <CanonicalOrder Id="2">
+      <Name>id-ordinal</Name>
+    </CanonicalOrder>
+    <CanonicalOrder Id="3">
+      <Name>id-first-then-name-ordinal</Name>
+    </CanonicalOrder>
+  </CanonicalOrders>
+  <EntityStorages />
 </MetaWorkspace>

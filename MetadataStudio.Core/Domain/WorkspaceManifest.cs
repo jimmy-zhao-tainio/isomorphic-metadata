@@ -8,11 +8,21 @@ public sealed class WorkspaceManifest
     public string Encoding { get; set; } = "utf-8-no-bom";
     public string Newlines { get; set; } = "lf";
     public CanonicalSortManifest CanonicalSort { get; set; } = new();
+    public List<EntityStorageManifest> EntityStorages { get; set; } = new();
 
     public static WorkspaceManifest CreateDefault()
     {
         return new WorkspaceManifest();
     }
+}
+
+public sealed class EntityStorageManifest
+{
+    public string EntityName { get; set; } = string.Empty;
+    public string StorageKind { get; set; } = "Sharded";
+    public string DirectoryPath { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+    public string Pattern { get; set; } = string.Empty;
 }
 
 public sealed class CanonicalSortManifest

@@ -12,8 +12,11 @@ public static class MetaWorkspace
     private static MetaWorkspaceData? data;
 
     public static Workspaces Workspaces => EnsureLoaded().Workspaces;
-    public static WorkspacePaths WorkspacePaths => EnsureLoaded().WorkspacePaths;
-    public static GeneratorSettings GeneratorSettings => EnsureLoaded().GeneratorSettings;
+    public static WorkspaceLayouts WorkspaceLayouts => EnsureLoaded().WorkspaceLayouts;
+    public static Encodings Encodings => EnsureLoaded().Encodings;
+    public static NewlinesValues NewlinesValues => EnsureLoaded().NewlinesValues;
+    public static CanonicalOrders CanonicalOrders => EnsureLoaded().CanonicalOrders;
+    public static EntityStorages EntityStorages => EnsureLoaded().EntityStorages;
 
     internal static void Install(MetaWorkspaceData snapshot)
     {
@@ -75,8 +78,11 @@ public static class MetaWorkspaceModel
 
         var root = new XElement(MetaWorkspaceModels.ModelName);
         root.Add(BuildWorkspaces(snapshot.Workspaces));
-        root.Add(BuildWorkspacePaths(snapshot.WorkspacePaths));
-        root.Add(BuildGeneratorSettings(snapshot.GeneratorSettings));
+        root.Add(BuildWorkspaceLayouts(snapshot.WorkspaceLayouts));
+        root.Add(BuildNamedRows("Encodings", "Encoding", snapshot.Encodings));
+        root.Add(BuildNamedRows("NewlinesValues", "Newlines", snapshot.NewlinesValues));
+        root.Add(BuildNamedRows("CanonicalOrders", "CanonicalOrder", snapshot.CanonicalOrders));
+        root.Add(BuildEntityStorages(snapshot.EntityStorages));
 
         return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
     }
@@ -86,17 +92,16 @@ public static class MetaWorkspaceModel
         var root = document.Root ?? throw new InvalidDataException("workspace.xml has no root element.");
         if (!string.Equals(root.Name.LocalName, MetaWorkspaceModels.ModelName, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException(
-                $"workspace.xml root must be <{MetaWorkspaceModels.ModelName}>.");
+            throw new InvalidDataException($"workspace.xml root must be <{MetaWorkspaceModels.ModelName}>.");
         }
 
-        var workspaces = ParseWorkspaces(root.Element("Workspaces"), sourcePath);
-        var workspacePaths = ParseWorkspacePaths(root.Element("WorkspacePaths"), sourcePath);
-        var generatorSettings = ParseGeneratorSettings(root.Element("GeneratorSettings"), sourcePath);
         return new MetaWorkspaceData(
-            workspaces,
-            workspacePaths,
-            generatorSettings);
+            ParseWorkspaces(root.Element("Workspaces"), sourcePath),
+            ParseWorkspaceLayouts(root.Element("WorkspaceLayouts"), sourcePath),
+            ParseNamedRows<EncodingRow, Encodings>(root.Element("Encodings"), "Encoding", "Encoding", sourcePath, (id, name) => new EncodingRow(id, name)),
+            ParseNamedRows<NewlinesRow, NewlinesValues>(root.Element("NewlinesValues"), "Newlines", "Newlines", sourcePath, (id, name) => new NewlinesRow(id, name)),
+            ParseNamedRows<CanonicalOrderRow, CanonicalOrders>(root.Element("CanonicalOrders"), "CanonicalOrder", "CanonicalOrder", sourcePath, (id, name) => new CanonicalOrderRow(id, name)),
+            ParseEntityStorages(root.Element("EntityStorages"), sourcePath));
     }
 
     private static Workspaces ParseWorkspaces(XElement? container, string sourcePath)
@@ -113,76 +118,133 @@ public static class MetaWorkspaceModel
         return new Workspaces(rows);
     }
 
-    private static WorkspacePaths ParseWorkspacePaths(XElement? container, string sourcePath)
+    private static WorkspaceLayouts ParseWorkspaceLayouts(XElement? container, string sourcePath)
     {
         if (container == null)
         {
-            return new WorkspacePaths(Array.Empty<WorkspacePathRow>());
+            return new WorkspaceLayouts(Array.Empty<WorkspaceLayoutRow>());
         }
 
         var rows = container.Elements()
-            .Select(row => ParseWorkspacePathRow(row, sourcePath))
+            .Select(row => ParseWorkspaceLayoutRow(row, sourcePath))
             .OrderBy(row => row.Id)
             .ToList();
-        return new WorkspacePaths(rows);
+        return new WorkspaceLayouts(rows);
     }
 
-    private static GeneratorSettings ParseGeneratorSettings(XElement? container, string sourcePath)
+    private static TSet ParseNamedRows<TRow, TSet>(
+        XElement? container,
+        string elementName,
+        string fieldPrefix,
+        string sourcePath,
+        Func<int, string, TRow> factory)
+        where TSet : IdRowSet<TRow>
+        where TRow : INamedRow
+    {
+        var rows = new List<TRow>();
+        if (container != null)
+        {
+            rows = container.Elements()
+                .Select(row =>
+                {
+                    EnsureElementName(row, elementName, sourcePath);
+                    var id = ParsePositiveIdentity(ReadRequiredAttribute(row, "Id", sourcePath), $"{fieldPrefix}.Id", sourcePath);
+                    var name = ReadRequiredPropertyElement(row, "Name", sourcePath);
+                    EnsureNoExtraAttributes(row, new[] { "Id" }, sourcePath);
+                    EnsureNoUnexpectedPropertyElements(row, new[] { "Name" }, sourcePath);
+                    return factory(id, name);
+                })
+                .OrderBy(row => row.Id)
+                .ToList();
+        }
+
+        return (TSet)Activator.CreateInstance(typeof(TSet), rows)!;
+    }
+
+    private static EntityStorages ParseEntityStorages(XElement? container, string sourcePath)
     {
         if (container == null)
         {
-            return new GeneratorSettings(Array.Empty<GeneratorSettingRow>());
+            return new EntityStorages(Array.Empty<EntityStorageRow>());
         }
 
         var rows = container.Elements()
-            .Select(row => ParseGeneratorSettingRow(row, sourcePath))
+            .Select(row => ParseEntityStorageRow(row, sourcePath))
             .OrderBy(row => row.Id)
             .ToList();
-        return new GeneratorSettings(rows);
+        return new EntityStorages(rows);
     }
 
     private static WorkspaceRow ParseWorkspaceRow(XElement row, string sourcePath)
     {
         EnsureElementName(row, "Workspace", sourcePath);
         var id = ParsePositiveIdentity(ReadRequiredAttribute(row, "Id", sourcePath), "Workspace.Id", sourcePath);
+        var workspaceLayoutId = ParsePositiveIdentity(ReadRequiredAttribute(row, "WorkspaceLayoutId", sourcePath), "Workspace.WorkspaceLayoutId", sourcePath);
+        var encodingId = ParsePositiveIdentity(ReadRequiredAttribute(row, "EncodingId", sourcePath), "Workspace.EncodingId", sourcePath);
+        var newlinesId = ParsePositiveIdentity(ReadRequiredAttribute(row, "NewlinesId", sourcePath), "Workspace.NewlinesId", sourcePath);
+        var entitiesOrderId = ParsePositiveIdentity(ReadRequiredAttribute(row, "EntitiesOrderId", sourcePath), "Workspace.EntitiesOrderId", sourcePath);
+        var propertiesOrderId = ParsePositiveIdentity(ReadRequiredAttribute(row, "PropertiesOrderId", sourcePath), "Workspace.PropertiesOrderId", sourcePath);
+        var relationshipsOrderId = ParsePositiveIdentity(ReadRequiredAttribute(row, "RelationshipsOrderId", sourcePath), "Workspace.RelationshipsOrderId", sourcePath);
+        var rowsOrderId = ParsePositiveIdentity(ReadRequiredAttribute(row, "RowsOrderId", sourcePath), "Workspace.RowsOrderId", sourcePath);
+        var attributesOrderId = ParsePositiveIdentity(ReadRequiredAttribute(row, "AttributesOrderId", sourcePath), "Workspace.AttributesOrderId", sourcePath);
         var name = ReadRequiredPropertyElement(row, "Name", sourcePath);
         var formatVersion = ReadRequiredPropertyElement(row, "FormatVersion", sourcePath);
-        EnsureNoExtraAttributes(row, new[] { "Id" }, sourcePath);
+
+        EnsureNoExtraAttributes(
+            row,
+            new[]
+            {
+                "Id",
+                "WorkspaceLayoutId",
+                "EncodingId",
+                "NewlinesId",
+                "EntitiesOrderId",
+                "PropertiesOrderId",
+                "RelationshipsOrderId",
+                "RowsOrderId",
+                "AttributesOrderId",
+            },
+            sourcePath);
         EnsureNoUnexpectedPropertyElements(row, new[] { "Name", "FormatVersion" }, sourcePath);
-        return new WorkspaceRow(id, name, formatVersion);
+
+        return new WorkspaceRow(
+            id,
+            name,
+            formatVersion,
+            workspaceLayoutId,
+            encodingId,
+            newlinesId,
+            entitiesOrderId,
+            propertiesOrderId,
+            relationshipsOrderId,
+            rowsOrderId,
+            attributesOrderId);
     }
 
-    private static WorkspacePathRow ParseWorkspacePathRow(XElement row, string sourcePath)
+    private static WorkspaceLayoutRow ParseWorkspaceLayoutRow(XElement row, string sourcePath)
     {
-        EnsureElementName(row, "WorkspacePath", sourcePath);
-        var id = ParsePositiveIdentity(ReadRequiredAttribute(row, "Id", sourcePath), "WorkspacePath.Id", sourcePath);
-        var workspaceId = ParsePositiveIdentity(
-            ReadRequiredAttribute(row, "WorkspaceId", sourcePath),
-            "WorkspacePath.WorkspaceId",
-            sourcePath);
-        var key = ReadRequiredPropertyElement(row, "Key", sourcePath);
-        var path = ReadRequiredPropertyElement(row, "Path", sourcePath);
-        EnsureNoExtraAttributes(row, new[] { "Id", "WorkspaceId" }, sourcePath);
-        EnsureNoUnexpectedPropertyElements(row, new[] { "Key", "Path" }, sourcePath);
-        return new WorkspacePathRow(id, workspaceId, key, path);
+        EnsureElementName(row, "WorkspaceLayout", sourcePath);
+        var id = ParsePositiveIdentity(ReadRequiredAttribute(row, "Id", sourcePath), "WorkspaceLayout.Id", sourcePath);
+        var modelFilePath = ReadRequiredPropertyElement(row, "ModelFilePath", sourcePath);
+        var instanceDirPath = ReadRequiredPropertyElement(row, "InstanceDirPath", sourcePath);
+        EnsureNoExtraAttributes(row, new[] { "Id" }, sourcePath);
+        EnsureNoUnexpectedPropertyElements(row, new[] { "ModelFilePath", "InstanceDirPath" }, sourcePath);
+        return new WorkspaceLayoutRow(id, modelFilePath, instanceDirPath);
     }
 
-    private static GeneratorSettingRow ParseGeneratorSettingRow(XElement row, string sourcePath)
+    private static EntityStorageRow ParseEntityStorageRow(XElement row, string sourcePath)
     {
-        EnsureElementName(row, "GeneratorSetting", sourcePath);
-        var id = ParsePositiveIdentity(
-            ReadRequiredAttribute(row, "Id", sourcePath),
-            "GeneratorSetting.Id",
-            sourcePath);
-        var workspaceId = ParsePositiveIdentity(
-            ReadRequiredAttribute(row, "WorkspaceId", sourcePath),
-            "GeneratorSetting.WorkspaceId",
-            sourcePath);
-        var key = ReadRequiredPropertyElement(row, "Key", sourcePath);
-        var value = ReadRequiredPropertyElement(row, "Value", sourcePath);
+        EnsureElementName(row, "EntityStorage", sourcePath);
+        var id = ParsePositiveIdentity(ReadRequiredAttribute(row, "Id", sourcePath), "EntityStorage.Id", sourcePath);
+        var workspaceId = ParsePositiveIdentity(ReadRequiredAttribute(row, "WorkspaceId", sourcePath), "EntityStorage.WorkspaceId", sourcePath);
+        var entityName = ReadRequiredPropertyElement(row, "EntityName", sourcePath);
+        var storageKind = ReadRequiredPropertyElement(row, "StorageKind", sourcePath);
+        var directoryPath = ReadOptionalPropertyElement(row, "DirectoryPath");
+        var filePath = ReadOptionalPropertyElement(row, "FilePath");
+        var pattern = ReadOptionalPropertyElement(row, "Pattern");
         EnsureNoExtraAttributes(row, new[] { "Id", "WorkspaceId" }, sourcePath);
-        EnsureNoUnexpectedPropertyElements(row, new[] { "Key", "Value" }, sourcePath);
-        return new GeneratorSettingRow(id, workspaceId, key, value);
+        EnsureNoUnexpectedPropertyElements(row, new[] { "EntityName", "StorageKind", "DirectoryPath", "FilePath", "Pattern" }, sourcePath);
+        return new EntityStorageRow(id, workspaceId, entityName, storageKind, directoryPath, filePath, pattern);
     }
 
     private static XElement BuildWorkspaces(Workspaces workspaces)
@@ -192,6 +254,14 @@ public static class MetaWorkspaceModel
         {
             container.Add(new XElement("Workspace",
                 new XAttribute("Id", row.Id.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("WorkspaceLayoutId", row.WorkspaceLayoutId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("EncodingId", row.EncodingId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("NewlinesId", row.NewlinesId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("EntitiesOrderId", row.EntitiesOrderId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("PropertiesOrderId", row.PropertiesOrderId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("RelationshipsOrderId", row.RelationshipsOrderId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("RowsOrderId", row.RowsOrderId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("AttributesOrderId", row.AttributesOrderId.ToString(CultureInfo.InvariantCulture)),
                 new XElement("Name", row.Name),
                 new XElement("FormatVersion", row.FormatVersion)));
         }
@@ -199,31 +269,61 @@ public static class MetaWorkspaceModel
         return container;
     }
 
-    private static XElement BuildWorkspacePaths(WorkspacePaths workspacePaths)
+    private static XElement BuildWorkspaceLayouts(WorkspaceLayouts rows)
     {
-        var container = new XElement("WorkspacePaths");
-        foreach (var row in workspacePaths)
+        var container = new XElement("WorkspaceLayouts");
+        foreach (var row in rows)
         {
-            container.Add(new XElement("WorkspacePath",
+            container.Add(new XElement("WorkspaceLayout",
                 new XAttribute("Id", row.Id.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute("WorkspaceId", row.WorkspaceId.ToString(CultureInfo.InvariantCulture)),
-                new XElement("Key", row.Key),
-                new XElement("Path", row.Path)));
+                new XElement("ModelFilePath", row.ModelFilePath),
+                new XElement("InstanceDirPath", row.InstanceDirPath)));
         }
 
         return container;
     }
 
-    private static XElement BuildGeneratorSettings(GeneratorSettings settings)
+    private static XElement BuildNamedRows<TRow>(string containerName, string elementName, IdRowSet<TRow> rows)
+        where TRow : INamedRow
     {
-        var container = new XElement("GeneratorSettings");
-        foreach (var row in settings)
+        var container = new XElement(containerName);
+        foreach (var row in rows)
         {
-            container.Add(new XElement("GeneratorSetting",
+            container.Add(new XElement(elementName,
+                new XAttribute("Id", row.Id.ToString(CultureInfo.InvariantCulture)),
+                new XElement("Name", row.Name)));
+        }
+
+        return container;
+    }
+
+    private static XElement BuildEntityStorages(EntityStorages rows)
+    {
+        var container = new XElement("EntityStorages");
+        foreach (var row in rows)
+        {
+            var element = new XElement("EntityStorage",
                 new XAttribute("Id", row.Id.ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("WorkspaceId", row.WorkspaceId.ToString(CultureInfo.InvariantCulture)),
-                new XElement("Key", row.Key),
-                new XElement("Value", row.Value)));
+                new XElement("EntityName", row.EntityName),
+                new XElement("StorageKind", row.StorageKind));
+
+            if (!string.IsNullOrWhiteSpace(row.DirectoryPath))
+            {
+                element.Add(new XElement("DirectoryPath", row.DirectoryPath));
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.FilePath))
+            {
+                element.Add(new XElement("FilePath", row.FilePath));
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.Pattern))
+            {
+                element.Add(new XElement("Pattern", row.Pattern));
+            }
+
+            container.Add(element);
         }
 
         return container;
@@ -252,8 +352,7 @@ public static class MetaWorkspaceModel
             return;
         }
 
-        throw new InvalidDataException(
-            $"workspace.xml '{sourcePath}' contains unexpected element '{row.Name.LocalName}'. Expected '{expectedName}'.");
+        throw new InvalidDataException($"workspace.xml '{sourcePath}' contains unexpected element '{row.Name.LocalName}'. Expected '{expectedName}'.");
     }
 
     private static string ReadRequiredAttribute(XElement row, string name, string sourcePath)
@@ -264,21 +363,24 @@ public static class MetaWorkspaceModel
             return attribute.Trim();
         }
 
-        throw new InvalidDataException(
-            $"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' is missing required attribute '{name}'.");
+        throw new InvalidDataException($"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' is missing required attribute '{name}'.");
     }
 
     private static string ReadRequiredPropertyElement(XElement row, string name, string sourcePath)
     {
-        var element = row.Elements()
-            .FirstOrDefault(item => string.Equals(item.Name.LocalName, name, StringComparison.OrdinalIgnoreCase));
+        var element = row.Elements().FirstOrDefault(item => string.Equals(item.Name.LocalName, name, StringComparison.OrdinalIgnoreCase));
         if (element != null)
         {
             return element.Value;
         }
 
-        throw new InvalidDataException(
-            $"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' is missing required property element '{name}'.");
+        throw new InvalidDataException($"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' is missing required property element '{name}'.");
+    }
+
+    private static string ReadOptionalPropertyElement(XElement row, string name)
+    {
+        var element = row.Elements().FirstOrDefault(item => string.Equals(item.Name.LocalName, name, StringComparison.OrdinalIgnoreCase));
+        return element?.Value ?? string.Empty;
     }
 
     private static void EnsureNoExtraAttributes(XElement row, IReadOnlyCollection<string> allowedAttributes, string sourcePath)
@@ -287,16 +389,12 @@ public static class MetaWorkspaceModel
         {
             if (!allowedAttributes.Contains(attribute.Name.LocalName, StringComparer.OrdinalIgnoreCase))
             {
-                throw new InvalidDataException(
-                    $"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' has unsupported attribute '{attribute.Name.LocalName}'.");
+                throw new InvalidDataException($"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' has unsupported attribute '{attribute.Name.LocalName}'.");
             }
         }
     }
 
-    private static void EnsureNoUnexpectedPropertyElements(
-        XElement row,
-        IReadOnlyCollection<string> expectedProperties,
-        string sourcePath)
+    private static void EnsureNoUnexpectedPropertyElements(XElement row, IReadOnlyCollection<string> expectedProperties, string sourcePath)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var element in row.Elements())
@@ -304,14 +402,12 @@ public static class MetaWorkspaceModel
             var name = element.Name.LocalName;
             if (!expectedProperties.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
-                throw new InvalidDataException(
-                    $"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' has unknown property element '{name}'.");
+                throw new InvalidDataException($"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' has unknown property element '{name}'.");
             }
 
             if (!seen.Add(name))
             {
-                throw new InvalidDataException(
-                    $"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' has duplicate property element '{name}'.");
+                throw new InvalidDataException($"workspace.xml '{sourcePath}' row '{row.Name.LocalName}' has duplicate property element '{name}'.");
             }
         }
     }
@@ -320,8 +416,7 @@ public static class MetaWorkspaceModel
     {
         if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
         {
-            throw new InvalidDataException(
-                $"workspace.xml '{sourcePath}' field '{fieldName}' has invalid identity value '{value}'.");
+            throw new InvalidDataException($"workspace.xml '{sourcePath}' field '{fieldName}' has invalid identity value '{value}'.");
         }
 
         return parsed;
@@ -332,125 +427,68 @@ public sealed class MetaWorkspaceData
 {
     internal MetaWorkspaceData(
         Workspaces workspaces,
-        WorkspacePaths workspacePaths,
-        GeneratorSettings generatorSettings)
+        WorkspaceLayouts workspaceLayouts,
+        Encodings encodings,
+        NewlinesValues newlinesValues,
+        CanonicalOrders canonicalOrders,
+        EntityStorages entityStorages)
     {
         Workspaces = workspaces ?? throw new ArgumentNullException(nameof(workspaces));
-        WorkspacePaths = workspacePaths ?? throw new ArgumentNullException(nameof(workspacePaths));
-        GeneratorSettings = generatorSettings ?? throw new ArgumentNullException(nameof(generatorSettings));
+        WorkspaceLayouts = workspaceLayouts ?? throw new ArgumentNullException(nameof(workspaceLayouts));
+        Encodings = encodings ?? throw new ArgumentNullException(nameof(encodings));
+        NewlinesValues = newlinesValues ?? throw new ArgumentNullException(nameof(newlinesValues));
+        CanonicalOrders = canonicalOrders ?? throw new ArgumentNullException(nameof(canonicalOrders));
+        EntityStorages = entityStorages ?? throw new ArgumentNullException(nameof(entityStorages));
     }
 
     public Workspaces Workspaces { get; }
-    public WorkspacePaths WorkspacePaths { get; }
-    public GeneratorSettings GeneratorSettings { get; }
+    public WorkspaceLayouts WorkspaceLayouts { get; }
+    public Encodings Encodings { get; }
+    public NewlinesValues NewlinesValues { get; }
+    public CanonicalOrders CanonicalOrders { get; }
+    public EntityStorages EntityStorages { get; }
 }
 
-public sealed record WorkspaceRow(
-    int Id,
-    string Name,
-    string FormatVersion);
-
-public sealed record WorkspacePathRow(
-    int Id,
-    int WorkspaceId,
-    string Key,
-    string Path);
-
-public sealed record GeneratorSettingRow(
-    int Id,
-    int WorkspaceId,
-    string Key,
-    string Value);
-
-public sealed class Workspaces : IEnumerable<WorkspaceRow>
+public interface IIdRow
 {
-    private readonly List<WorkspaceRow> rows;
-    private readonly Dictionary<int, WorkspaceRow> byId;
+    int Id { get; }
+}
 
-    public Workspaces(IEnumerable<WorkspaceRow> source)
+public interface INamedRow : IIdRow
+{
+    string Name { get; }
+}
+
+public abstract class IdRowSet<TRow> : IEnumerable<TRow> where TRow : IIdRow
+{
+    private readonly List<TRow> rows;
+    private readonly Dictionary<int, TRow> byId;
+    private readonly string label;
+
+    protected IdRowSet(IEnumerable<TRow> source, string label)
     {
         ArgumentNullException.ThrowIfNull(source);
+        this.label = label;
         rows = source.OrderBy(item => item.Id).ToList();
         byId = rows.ToDictionary(item => item.Id, item => item);
     }
 
-    public WorkspaceRow GetId(int id)
-    {
-        if (!byId.TryGetValue(id, out var row))
-        {
-            throw new KeyNotFoundException($"Workspace id '{id}' was not found.");
-        }
-
-        return row;
-    }
-
-    public bool TryGetId(int id, out WorkspaceRow row)
-    {
-        return byId.TryGetValue(id, out row!);
-    }
-
-    public IEnumerator<WorkspaceRow> GetEnumerator() => rows.GetEnumerator();
+    public TRow GetId(int id) => byId.TryGetValue(id, out var row) ? row : throw new KeyNotFoundException($"{label} id '{id}' was not found.");
+    public bool TryGetId(int id, out TRow row) => byId.TryGetValue(id, out row!);
+    public IEnumerator<TRow> GetEnumerator() => rows.GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
 
-public sealed class WorkspacePaths : IEnumerable<WorkspacePathRow>
-{
-    private readonly List<WorkspacePathRow> rows;
-    private readonly Dictionary<int, WorkspacePathRow> byId;
+public sealed record WorkspaceRow(int Id, string Name, string FormatVersion, int WorkspaceLayoutId, int EncodingId, int NewlinesId, int EntitiesOrderId, int PropertiesOrderId, int RelationshipsOrderId, int RowsOrderId, int AttributesOrderId) : IIdRow;
+public sealed record WorkspaceLayoutRow(int Id, string ModelFilePath, string InstanceDirPath) : IIdRow;
+public sealed record EncodingRow(int Id, string Name) : INamedRow;
+public sealed record NewlinesRow(int Id, string Name) : INamedRow;
+public sealed record CanonicalOrderRow(int Id, string Name) : INamedRow;
+public sealed record EntityStorageRow(int Id, int WorkspaceId, string EntityName, string StorageKind, string DirectoryPath, string FilePath, string Pattern) : IIdRow;
 
-    public WorkspacePaths(IEnumerable<WorkspacePathRow> source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        rows = source.OrderBy(item => item.Id).ToList();
-        byId = rows.ToDictionary(item => item.Id, item => item);
-    }
-
-    public WorkspacePathRow GetId(int id)
-    {
-        if (!byId.TryGetValue(id, out var row))
-        {
-            throw new KeyNotFoundException($"WorkspacePath id '{id}' was not found.");
-        }
-
-        return row;
-    }
-
-    public bool TryGetId(int id, out WorkspacePathRow row)
-    {
-        return byId.TryGetValue(id, out row!);
-    }
-
-    public IEnumerator<WorkspacePathRow> GetEnumerator() => rows.GetEnumerator();
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-}
-
-public sealed class GeneratorSettings : IEnumerable<GeneratorSettingRow>
-{
-    private readonly List<GeneratorSettingRow> rows;
-    private readonly Dictionary<int, GeneratorSettingRow> byId;
-
-    public GeneratorSettings(IEnumerable<GeneratorSettingRow> source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        rows = source.OrderBy(item => item.Id).ToList();
-        byId = rows.ToDictionary(item => item.Id, item => item);
-    }
-
-    public GeneratorSettingRow GetId(int id)
-    {
-        if (!byId.TryGetValue(id, out var row))
-        {
-            throw new KeyNotFoundException($"GeneratorSetting id '{id}' was not found.");
-        }
-
-        return row;
-    }
-
-    public bool TryGetId(int id, out GeneratorSettingRow row)
-    {
-        return byId.TryGetValue(id, out row!);
-    }
-
-    public IEnumerator<GeneratorSettingRow> GetEnumerator() => rows.GetEnumerator();
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-}
+public sealed class Workspaces : IdRowSet<WorkspaceRow> { public Workspaces(IEnumerable<WorkspaceRow> source) : base(source, "Workspace") { } }
+public sealed class WorkspaceLayouts : IdRowSet<WorkspaceLayoutRow> { public WorkspaceLayouts(IEnumerable<WorkspaceLayoutRow> source) : base(source, "WorkspaceLayout") { } }
+public sealed class Encodings : IdRowSet<EncodingRow> { public Encodings(IEnumerable<EncodingRow> source) : base(source, "Encoding") { } }
+public sealed class NewlinesValues : IdRowSet<NewlinesRow> { public NewlinesValues(IEnumerable<NewlinesRow> source) : base(source, "Newlines") { } }
+public sealed class CanonicalOrders : IdRowSet<CanonicalOrderRow> { public CanonicalOrders(IEnumerable<CanonicalOrderRow> source) : base(source, "CanonicalOrder") { } }
+public sealed class EntityStorages : IdRowSet<EntityStorageRow> { public EntityStorages(IEnumerable<EntityStorageRow> source) : base(source, "EntityStorage") { } }

@@ -311,6 +311,19 @@ public sealed class WorkspaceService : IWorkspaceService
             ? "lf"
             : normalized.Newlines.Trim().ToLowerInvariant();
         normalized.CanonicalSort ??= new CanonicalSortManifest();
+        normalized.EntityStorages ??= new List<EntityStorageManifest>();
+        normalized.EntityStorages = normalized.EntityStorages
+            .Where(item => item != null && !string.IsNullOrWhiteSpace(item.EntityName))
+            .Select(item => new EntityStorageManifest
+            {
+                EntityName = item.EntityName.Trim(),
+                StorageKind = string.IsNullOrWhiteSpace(item.StorageKind) ? "Sharded" : item.StorageKind.Trim(),
+                DirectoryPath = NormalizeRelativePath(item.DirectoryPath, string.Empty),
+                FilePath = NormalizeRelativePath(item.FilePath, string.Empty),
+                Pattern = string.IsNullOrWhiteSpace(item.Pattern) ? string.Empty : item.Pattern.Trim(),
+            })
+            .OrderBy(item => item.EntityName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         return normalized;
     }
 

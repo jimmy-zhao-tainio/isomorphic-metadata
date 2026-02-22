@@ -372,11 +372,8 @@ public sealed class WorkspaceServiceTests
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
             var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
             var manifest = XDocument.Load(manifestPath);
-            var modelPath = manifest
-                .Descendants("WorkspacePath")
-                .First(element =>
-                    string.Equals((string?)element.Element("Key"), "ModelFile", StringComparison.OrdinalIgnoreCase));
-            modelPath.Element("Path")!.Value = "../outside-model.xml";
+            var workspaceLayout = manifest.Descendants("WorkspaceLayout").Single();
+            workspaceLayout.Element("ModelFilePath")!.Value = "../outside-model.xml";
             manifest.Save(manifestPath);
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>

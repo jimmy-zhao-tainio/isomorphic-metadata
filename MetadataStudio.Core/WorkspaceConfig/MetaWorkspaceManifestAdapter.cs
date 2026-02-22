@@ -4,45 +4,82 @@ namespace MetadataStudio.Core.WorkspaceConfig;
 
 internal static class MetaWorkspaceManifestAdapter
 {
-    private const string ModelFileKey = "ModelFile";
-    private const string InstanceDirKey = "InstanceDir";
-    private const string EncodingKey = "Encoding";
-    private const string NewlinesKey = "Newlines";
-    private const string CanonicalSortEntitiesKey = "CanonicalSort.Entities";
-    private const string CanonicalSortPropertiesKey = "CanonicalSort.Properties";
-    private const string CanonicalSortRelationshipsKey = "CanonicalSort.Relationships";
-    private const string CanonicalSortRowsKey = "CanonicalSort.Rows";
-    private const string CanonicalSortAttributesKey = "CanonicalSort.Attributes";
-
     public static MetaWorkspaceData ToMetaWorkspaceData(WorkspaceManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
+        manifest.CanonicalSort ??= new CanonicalSortManifest();
+        manifest.EntityStorages ??= new List<EntityStorageManifest>();
+
+        var canonicalOrderRows = new List<CanonicalOrderRow>();
+        var canonicalOrderIds = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        int EnsureCanonicalOrderId(string value)
+        {
+            var key = (value ?? string.Empty).Trim();
+            if (canonicalOrderIds.TryGetValue(key, out var existingId))
+            {
+                return existingId;
+            }
+
+            var id = canonicalOrderRows.Count + 1;
+            canonicalOrderIds[key] = id;
+            canonicalOrderRows.Add(new CanonicalOrderRow(
+                Id: id,
+                Name: key));
+            return id;
+        }
+
+        var entitiesOrderId = EnsureCanonicalOrderId(manifest.CanonicalSort.Entities);
+        var propertiesOrderId = EnsureCanonicalOrderId(manifest.CanonicalSort.Properties);
+        var relationshipsOrderId = EnsureCanonicalOrderId(manifest.CanonicalSort.Relationships);
+        var rowsOrderId = EnsureCanonicalOrderId(manifest.CanonicalSort.Rows);
+        var attributesOrderId = EnsureCanonicalOrderId(manifest.CanonicalSort.Attributes);
+
         var workspaceRow = new WorkspaceRow(
             Id: 1,
             Name: MetaWorkspaceModels.DefaultWorkspaceName,
-            FormatVersion: manifest.ContractVersion);
+            FormatVersion: manifest.ContractVersion,
+            WorkspaceLayoutId: 1,
+            EncodingId: 1,
+            NewlinesId: 1,
+            EntitiesOrderId: entitiesOrderId,
+            PropertiesOrderId: propertiesOrderId,
+            RelationshipsOrderId: relationshipsOrderId,
+            RowsOrderId: rowsOrderId,
+            AttributesOrderId: attributesOrderId);
 
-        var workspacePaths = new[]
-        {
-            new WorkspacePathRow(1, workspaceRow.Id, ModelFileKey, manifest.ModelFile),
-            new WorkspacePathRow(2, workspaceRow.Id, InstanceDirKey, manifest.InstanceDir),
-        };
+        var layoutRow = new WorkspaceLayoutRow(
+            Id: workspaceRow.WorkspaceLayoutId,
+            ModelFilePath: manifest.ModelFile,
+            InstanceDirPath: manifest.InstanceDir);
 
-        var settings = new[]
-        {
-            new GeneratorSettingRow(1, workspaceRow.Id, EncodingKey, manifest.Encoding),
-            new GeneratorSettingRow(2, workspaceRow.Id, NewlinesKey, manifest.Newlines),
-            new GeneratorSettingRow(3, workspaceRow.Id, CanonicalSortEntitiesKey, manifest.CanonicalSort.Entities),
-            new GeneratorSettingRow(4, workspaceRow.Id, CanonicalSortPropertiesKey, manifest.CanonicalSort.Properties),
-            new GeneratorSettingRow(5, workspaceRow.Id, CanonicalSortRelationshipsKey, manifest.CanonicalSort.Relationships),
-            new GeneratorSettingRow(6, workspaceRow.Id, CanonicalSortRowsKey, manifest.CanonicalSort.Rows),
-            new GeneratorSettingRow(7, workspaceRow.Id, CanonicalSortAttributesKey, manifest.CanonicalSort.Attributes),
-        };
+        var encodingRow = new EncodingRow(
+            Id: workspaceRow.EncodingId,
+            Name: manifest.Encoding);
+
+        var newlinesRow = new NewlinesRow(
+            Id: workspaceRow.NewlinesId,
+            Name: manifest.Newlines);
+
+        var entityStorageRows = manifest.EntityStorages
+            .Where(item => item != null)
+            .Select((item, index) => new EntityStorageRow(
+                Id: index + 1,
+                WorkspaceId: workspaceRow.Id,
+                EntityName: item.EntityName,
+                StorageKind: item.StorageKind,
+                DirectoryPath: item.DirectoryPath,
+                FilePath: item.FilePath,
+                Pattern: item.Pattern))
+            .ToArray();
 
         return new MetaWorkspaceData(
             new Workspaces(new[] { workspaceRow }),
-            new WorkspacePaths(workspacePaths),
-            new GeneratorSettings(settings));
+            new WorkspaceLayouts(new[] { layoutRow }),
+            new Encodings(new[] { encodingRow }),
+            new NewlinesValues(new[] { newlinesRow }),
+            new CanonicalOrders(canonicalOrderRows),
+            new EntityStorages(entityStorageRows));
     }
 
     public static WorkspaceManifest ToWorkspaceManifest(MetaWorkspaceData snapshot, string workspaceXmlPath)
@@ -57,87 +94,116 @@ internal static class MetaWorkspaceManifestAdapter
         }
 
         var workspaceRow = workspaceRows[0];
-        var pathRows = snapshot.WorkspacePaths
-            .Where(row => row.WorkspaceId == workspaceRow.Id)
-            .ToList();
-        var settingRows = snapshot.GeneratorSettings
-            .Where(row => row.WorkspaceId == workspaceRow.Id)
-            .ToList();
 
-        var paths = BuildKeyedValueMap(pathRows.Select(row => (row.Key, row.Path)), "WorkspacePath", workspaceXmlPath);
-        var settings = BuildKeyedValueMap(settingRows.Select(row => (row.Key, row.Value)), "GeneratorSetting", workspaceXmlPath);
+        var layout = FindWorkspaceLayout(snapshot.WorkspaceLayouts, workspaceRow.WorkspaceLayoutId, workspaceXmlPath);
+        var encoding = FindNamedRow(snapshot.Encodings, workspaceRow.EncodingId, "Encoding", workspaceXmlPath);
+        var newlines = FindNamedRow(snapshot.NewlinesValues, workspaceRow.NewlinesId, "Newlines", workspaceXmlPath);
+        var entitiesOrder = FindNamedRow(snapshot.CanonicalOrders, workspaceRow.EntitiesOrderId, "CanonicalOrder.EntitiesOrder", workspaceXmlPath);
+        var propertiesOrder = FindNamedRow(snapshot.CanonicalOrders, workspaceRow.PropertiesOrderId, "CanonicalOrder.PropertiesOrder", workspaceXmlPath);
+        var relationshipsOrder = FindNamedRow(snapshot.CanonicalOrders, workspaceRow.RelationshipsOrderId, "CanonicalOrder.RelationshipsOrder", workspaceXmlPath);
+        var rowsOrder = FindNamedRow(snapshot.CanonicalOrders, workspaceRow.RowsOrderId, "CanonicalOrder.RowsOrder", workspaceXmlPath);
+        var attributesOrder = FindNamedRow(snapshot.CanonicalOrders, workspaceRow.AttributesOrderId, "CanonicalOrder.AttributesOrder", workspaceXmlPath);
 
         var manifest = WorkspaceManifest.CreateDefault();
         manifest.ContractVersion = workspaceRow.FormatVersion;
-        if (paths.TryGetValue(ModelFileKey, out var modelFile))
-        {
-            manifest.ModelFile = modelFile;
-        }
+        manifest.ModelFile = layout.ModelFilePath;
+        manifest.InstanceDir = layout.InstanceDirPath;
+        manifest.Encoding = encoding.Name;
+        manifest.Newlines = newlines.Name;
+        manifest.CanonicalSort.Entities = entitiesOrder.Name;
+        manifest.CanonicalSort.Properties = propertiesOrder.Name;
+        manifest.CanonicalSort.Relationships = relationshipsOrder.Name;
+        manifest.CanonicalSort.Rows = rowsOrder.Name;
+        manifest.CanonicalSort.Attributes = attributesOrder.Name;
 
-        if (paths.TryGetValue(InstanceDirKey, out var instanceDir))
-        {
-            manifest.InstanceDir = instanceDir;
-        }
+        var entityStorages = snapshot.EntityStorages
+            .Where(item => item.WorkspaceId == workspaceRow.Id)
+            .OrderBy(item => item.EntityName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Id)
+            .Select(item => new EntityStorageManifest
+            {
+                EntityName = item.EntityName,
+                StorageKind = item.StorageKind,
+                DirectoryPath = item.DirectoryPath,
+                FilePath = item.FilePath,
+                Pattern = item.Pattern,
+            })
+            .ToList();
 
-        if (settings.TryGetValue(EncodingKey, out var encoding))
-        {
-            manifest.Encoding = encoding;
-        }
-
-        if (settings.TryGetValue(NewlinesKey, out var newlines))
-        {
-            manifest.Newlines = newlines;
-        }
-
-        if (settings.TryGetValue(CanonicalSortEntitiesKey, out var entities))
-        {
-            manifest.CanonicalSort.Entities = entities;
-        }
-
-        if (settings.TryGetValue(CanonicalSortPropertiesKey, out var properties))
-        {
-            manifest.CanonicalSort.Properties = properties;
-        }
-
-        if (settings.TryGetValue(CanonicalSortRelationshipsKey, out var relationships))
-        {
-            manifest.CanonicalSort.Relationships = relationships;
-        }
-
-        if (settings.TryGetValue(CanonicalSortRowsKey, out var rows))
-        {
-            manifest.CanonicalSort.Rows = rows;
-        }
-
-        if (settings.TryGetValue(CanonicalSortAttributesKey, out var attributes))
-        {
-            manifest.CanonicalSort.Attributes = attributes;
-        }
+        EnsureNoDuplicateEntityStorageRows(entityStorages, workspaceXmlPath);
+        manifest.EntityStorages = entityStorages;
 
         return manifest;
     }
 
-    private static Dictionary<string, string> BuildKeyedValueMap(
-        IEnumerable<(string Key, string Value)> pairs,
-        string entityName,
+    private static WorkspaceLayoutRow FindWorkspaceLayout(
+        IEnumerable<WorkspaceLayoutRow> rows,
+        int expectedId,
         string sourcePath)
     {
-        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in pairs)
-        {
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                throw new InvalidDataException(
-                    $"Workspace config '{sourcePath}' contains {entityName} row with empty Key.");
-            }
+        var matches = rows
+            .Where(row => row.Id == expectedId)
+            .ToList();
 
-            if (!map.TryAdd(key, value))
-            {
-                throw new InvalidDataException(
-                    $"Workspace config '{sourcePath}' contains duplicate {entityName} Key '{key}'.");
-            }
+        if (matches.Count == 1)
+        {
+            return matches[0];
         }
 
-        return map;
+        if (matches.Count == 0)
+        {
+            throw new InvalidDataException(
+                $"Workspace config '{sourcePath}' must contain exactly one WorkspaceLayout row with Id '{expectedId}'.");
+        }
+
+        throw new InvalidDataException(
+            $"Workspace config '{sourcePath}' contains duplicate WorkspaceLayout rows with Id '{expectedId}'.");
+    }
+
+    private static TRow FindNamedRow<TRow>(
+        IEnumerable<TRow> rows,
+        int expectedId,
+        string rowName,
+        string sourcePath)
+        where TRow : INamedRow
+    {
+        var matches = rows
+            .Where(row => row.Id == expectedId)
+            .ToList();
+
+        if (matches.Count == 1)
+        {
+            return matches[0];
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new InvalidDataException(
+                $"Workspace config '{sourcePath}' must contain exactly one {rowName} row with Id '{expectedId}'.");
+        }
+
+        throw new InvalidDataException(
+            $"Workspace config '{sourcePath}' contains duplicate {rowName} rows with Id '{expectedId}'.");
+    }
+
+    private static void EnsureNoDuplicateEntityStorageRows(
+        IReadOnlyCollection<EntityStorageManifest> rows,
+        string sourcePath)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            if (string.IsNullOrWhiteSpace(row.EntityName))
+            {
+                throw new InvalidDataException(
+                    $"Workspace config '{sourcePath}' contains EntityStorage row with empty EntityName.");
+            }
+
+            if (!seen.Add(row.EntityName.Trim()))
+            {
+                throw new InvalidDataException(
+                    $"Workspace config '{sourcePath}' contains duplicate EntityStorage rows for entity '{row.EntityName}'.");
+            }
+        }
     }
 }
