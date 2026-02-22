@@ -22,14 +22,21 @@ namespace Samples.ConsoleApp
                 return;
             }
 
-            var model = GeneratedModel.EnterpriseBIPlatformModel.LoadFromXml(workspacePath);
+            var model = GeneratedModel.EnterpriseBIPlatformModel.LoadFromXmlWorkspace(workspacePath);
 
             Console.WriteLine("Model: EnterpriseBIPlatform");
+            Console.WriteLine();
+            Console.WriteLine("Built-in snapshot:");
+            foreach (var measure in GeneratedModel.EnterpriseBIPlatform.Measures)
+            {
+                Console.WriteLine($"  Measure Id={measure.Id}, Name={measure.Name}, Cube={measure.Cube.Name}");
+            }
+
             Console.WriteLine();
             Console.WriteLine("Measures:");
             foreach (var measure in model.Measures)
             {
-                Console.WriteLine($"  Measure Id={measure.Id}, Name={measure.Name}, Cube={measure.Cube?.Name ?? "(null)"}");
+                Console.WriteLine($"  Measure Id={measure.Id}, Name={measure.Name}, Cube={measure.Cube.Name}");
             }
 
             Console.WriteLine();
@@ -37,7 +44,7 @@ namespace Samples.ConsoleApp
             try
             {
                 var measure1 = model.Measures.GetId(1);
-                Console.WriteLine($"  Measure 1 cube = {measure1.Cube?.Name ?? "(null)"}");
+                Console.WriteLine($"  Measure 1 cube = {measure1.Cube.Name}");
             }
             catch (Exception ex)
             {

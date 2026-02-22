@@ -98,7 +98,7 @@ public sealed class Measure
 {
     public int Id { get; }
     public string MeasureName { get; }
-    public int? CubeId { get; }
+    public int CubeId { get; }
     public Cube Cube { get; }
     public string Name { get; } // alias from MeasureName
 }
@@ -115,17 +115,24 @@ public sealed class Measures : IEnumerable<Measure>
     public bool TryGetId(int id, out Measure instance);
 }
 
-public sealed class EnterpriseBIPlatform
+public sealed class EnterpriseBIPlatformInstance
 {
     public Cubes Cubes { get; }
     public Measures Measures { get; }
 }
 
+public static class EnterpriseBIPlatform
+{
+    public static EnterpriseBIPlatformInstance BuiltIn { get; }
+    public static Cubes Cubes { get; }
+    public static Measures Measures { get; }
+}
+
 public static class EnterpriseBIPlatformModel
 {
-    public static EnterpriseBIPlatform Current { get; }
-    public static EnterpriseBIPlatform LoadFromXml(string workspacePath);
-    public static EnterpriseBIPlatform LoadFromSql(DbConnection connection, string schemaName = "dbo");
+    public static EnterpriseBIPlatformInstance LoadFromXmlWorkspace(string workspacePath);
+    public static void SaveToXmlWorkspace(EnterpriseBIPlatformInstance model, string workspacePath);
+    public static EnterpriseBIPlatformInstance LoadFromSql(DbConnection connection, string schemaName = "dbo");
 }
 ```
 
@@ -382,8 +389,9 @@ meta-schema seed type-conversion --new-workspace .\MetaSchema.Catalogs\TypeConve
 
 Generated model API shape:
 
-- Root model class named by model (example: `EnterpriseBIPlatform`)
-- Loader class `<ModelName>Model` (example: `EnterpriseBIPlatformModel`) owns one static instance via `Current`
+- Root static facade named by model (example: `EnterpriseBIPlatform`) exposes built-in generated instance data with zero disk I/O
+- Separate instance root type `<ModelName>Instance` (example: `EnterpriseBIPlatformInstance`) is used for explicit tooling load/save
+- Loader class `<ModelName>Model` (example: `EnterpriseBIPlatformModel`) loads/saves explicit instances
 - Entity collections exposed as plural names (`<EntityName>s` by default, or model `plural=` override)
 - Rows expose `Id`, scalar properties, `<TargetEntity>Id`, and `<TargetEntity>` navigation
 
@@ -394,9 +402,16 @@ using GeneratedModel;
 using System;
 using System.Data.Common;
 
-// Load (or refresh) the loader-owned singleton instance and get it:
-var model = EnterpriseBIPlatformModel.LoadFromXml(@"C:\repo\Metadata\Samples");
-var current = EnterpriseBIPlatformModel.Current;
+// Consumer usage (built-in generated snapshot; no disk I/O):
+foreach (var m in EnterpriseBIPlatform.Measures)
+{
+    Console.WriteLine(m.Id);
+    Console.WriteLine(m.Cube.Name);
+}
+
+// Tooling usage (explicit workspace I/O):
+var model = EnterpriseBIPlatformModel.LoadFromXmlWorkspace(@"C:\repo\Metadata\Samples");
+EnterpriseBIPlatformModel.SaveToXmlWorkspace(model, @"C:\repo\Metadata\Samples");
 
 // Or load from SQL:
 // DbConnection conn = ...;
@@ -405,17 +420,17 @@ var current = EnterpriseBIPlatformModel.Current;
 foreach (var m in model.Measures)
 {
     Console.WriteLine(m.Id);
-    Console.WriteLine(m.Cube?.Name);
+    Console.WriteLine(m.Cube.Name);
 }
 
 var m0 = model.Measures.GetId(1);
-var cubeName = m0.Cube?.Name;
+var cubeName = m0.Cube.Name;
 ```
 
 Notes:
 
-- `EnterpriseBIPlatformModel.Current` returns the same model instance object on every call.
-- `LoadFromXml` / `LoadFromSql` populate that same object and return it.
+- `EnterpriseBIPlatform` static properties forward to a fixed built-in instance generated into code.
+- `LoadFromXmlWorkspace` / `LoadFromSql` return explicit model instances and do not mutate the built-in snapshot.
 - Collections implement `IEnumerable<T>` and provide `GetId(int)` / `TryGetId(int, out T)`.
 
 ## Command references

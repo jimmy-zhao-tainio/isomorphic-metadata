@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.IO;
 using System.Linq;
+using System.Xml;
+using System.Xml.Linq;
 using Metadata.Framework.Generic;
 
 namespace GeneratedModel
@@ -43,11 +45,27 @@ namespace GeneratedModel
         internal SystemTypes SystemTypes { get; }
     }
 
-    public sealed class EnterpriseBIPlatform
+    public static class EnterpriseBIPlatform
     {
-        private EnterpriseBIPlatformData _data;
+        private static readonly EnterpriseBIPlatformInstance _builtIn = EnterpriseBIPlatformInstanceFactory.CreateBuiltIn();
 
-        internal EnterpriseBIPlatform(EnterpriseBIPlatformData data)
+        public static Cubes Cubes => _builtIn.Cubes;
+        public static Dimensions Dimensions => _builtIn.Dimensions;
+        public static Facts Facts => _builtIn.Facts;
+        public static Measures Measures => _builtIn.Measures;
+        public static Systems Systems => _builtIn.Systems;
+        public static SystemCubes SystemCubes => _builtIn.SystemCubes;
+        public static SystemDimensions SystemDimensions => _builtIn.SystemDimensions;
+        public static SystemFacts SystemFacts => _builtIn.SystemFacts;
+        public static SystemTypes SystemTypes => _builtIn.SystemTypes;
+        public static EnterpriseBIPlatformInstance BuiltIn => _builtIn;
+    }
+
+    public sealed class EnterpriseBIPlatformInstance
+    {
+        private readonly EnterpriseBIPlatformData _data;
+
+        internal EnterpriseBIPlatformInstance(EnterpriseBIPlatformData data)
         {
             _data = data ?? throw new ArgumentNullException(nameof(data));
         }
@@ -61,24 +79,19 @@ namespace GeneratedModel
         public SystemDimensions SystemDimensions => _data.SystemDimensions;
         public SystemFacts SystemFacts => _data.SystemFacts;
         public SystemTypes SystemTypes => _data.SystemTypes;
+    }
 
-        internal void ReplaceData(EnterpriseBIPlatformData data)
+    internal static class EnterpriseBIPlatformInstanceFactory
+    {
+        internal static EnterpriseBIPlatformInstance CreateBuiltIn()
         {
-            _data = data ?? throw new ArgumentNullException(nameof(data));
+            return EnterpriseBIPlatformModel.CreateBuiltIn();
         }
     }
 
     public static class EnterpriseBIPlatformModel
     {
-        private static readonly object SyncRoot = new object();
-        private static readonly EnterpriseBIPlatform _current = new EnterpriseBIPlatform(CreateEmptyData());
-
-        public static EnterpriseBIPlatform Current
-        {
-            get { return _current; }
-        }
-
-        public static EnterpriseBIPlatform LoadFromXml(string workspacePath)
+        public static EnterpriseBIPlatformInstance LoadFromXmlWorkspace(string workspacePath)
         {
             if (string.IsNullOrWhiteSpace(workspacePath))
             {
@@ -99,15 +112,10 @@ namespace GeneratedModel
             EnsureNoErrors(instanceResult.Errors, "instance XML load");
 
             var data = BuildData(instanceResult.ModelInstance);
-            lock (SyncRoot)
-            {
-                _current.ReplaceData(data);
-            }
-
-            return _current;
+            return new EnterpriseBIPlatformInstance(data);
         }
 
-        public static EnterpriseBIPlatform LoadFromSql(DbConnection connection, string schemaName = "dbo")
+        public static EnterpriseBIPlatformInstance LoadFromSql(DbConnection connection, string schemaName = "dbo")
         {
             if (connection == null)
             {
@@ -129,26 +137,253 @@ namespace GeneratedModel
 
             var instance = new DatabaseInstanceReader().Read(connection.ConnectionString, modelResult.Model, schemaName);
             var data = BuildData(instance);
-            lock (SyncRoot)
-            {
-                _current.ReplaceData(data);
-            }
-
-            return _current;
+            return new EnterpriseBIPlatformInstance(data);
         }
 
-        private static EnterpriseBIPlatformData CreateEmptyData()
+        public static void SaveToXmlWorkspace(EnterpriseBIPlatformInstance model, string workspacePath)
         {
-            return new EnterpriseBIPlatformData(
-                new Cubes(Array.Empty<Cube>()),
-                new Dimensions(Array.Empty<Dimension>()),
-                new Facts(Array.Empty<Fact>()),
-                new Measures(Array.Empty<Measure>()),
-                new Systems(Array.Empty<System>()),
-                new SystemCubes(Array.Empty<SystemCube>()),
-                new SystemDimensions(Array.Empty<SystemDimension>()),
-                new SystemFacts(Array.Empty<SystemFact>()),
-                new SystemTypes(Array.Empty<SystemType>()));
+            if (model == null)
+            {
+                throw new ArgumentNullException(nameof(model));
+            }
+
+            if (string.IsNullOrWhiteSpace(workspacePath))
+            {
+                throw new ArgumentException("Workspace path is required.", nameof(workspacePath));
+            }
+
+            var fullWorkspacePath = Path.GetFullPath(workspacePath);
+            var instanceDirectory = Path.Combine(fullWorkspacePath, "metadata", "instance");
+            Directory.CreateDirectory(instanceDirectory);
+
+            foreach (var staleFile in Directory.GetFiles(instanceDirectory, "*.xml", SearchOption.TopDirectoryOnly))
+            {
+                File.Delete(staleFile);
+            }
+
+            SaveShard(instanceDirectory, "Cube", "Cubes", model.Cubes.Select(row =>
+            {
+                EnsureRequiredProperty("Cube", row.Id, "CubeName", row.CubeName);
+                return new XElement(
+                    "Cube",
+                    new XAttribute("Id", row.Id),
+                    ToPropertyElement("CubeName", row.CubeName),
+                    ToPropertyElement("Purpose", row.Purpose),
+                    ToPropertyElement("RefreshMode", row.RefreshMode));
+            }));
+
+            SaveShard(instanceDirectory, "Dimension", "Dimensions", model.Dimensions.Select(row =>
+            {
+                EnsureRequiredProperty("Dimension", row.Id, "DimensionName", row.DimensionName);
+                EnsureRequiredProperty("Dimension", row.Id, "IsConformed", row.IsConformed);
+                return new XElement(
+                    "Dimension",
+                    new XAttribute("Id", row.Id),
+                    ToPropertyElement("DimensionName", row.DimensionName),
+                    ToPropertyElement("IsConformed", row.IsConformed),
+                    ToPropertyElement("HierarchyCount", row.HierarchyCount));
+            }));
+
+            SaveShard(instanceDirectory, "Fact", "Facts", model.Facts.Select(row =>
+            {
+                EnsureRequiredProperty("Fact", row.Id, "FactName", row.FactName);
+                return new XElement(
+                    "Fact",
+                    new XAttribute("Id", row.Id),
+                    ToPropertyElement("FactName", row.FactName),
+                    ToPropertyElement("Grain", row.Grain),
+                    ToPropertyElement("MeasureCount", row.MeasureCount),
+                    ToPropertyElement("BusinessArea", row.BusinessArea));
+            }));
+
+            SaveShard(instanceDirectory, "Measure", "Measures", model.Measures.Select(row =>
+            {
+                EnsureRequiredProperty("Measure", row.Id, "MeasureName", row.MeasureName);
+                EnsureRequiredRelationshipId("Measure", row.Id, "CubeId", row.CubeId);
+                return new XElement(
+                    "Measure",
+                    new XAttribute("Id", row.Id),
+                    new XAttribute("CubeId", row.CubeId),
+                    ToPropertyElement("MeasureName", row.MeasureName),
+                    ToPropertyElement("MDX", row.MDX));
+            }));
+
+            SaveShard(instanceDirectory, "System", "Systems", model.Systems.Select(row =>
+            {
+                EnsureRequiredProperty("System", row.Id, "SystemName", row.SystemName);
+                EnsureRequiredRelationshipId("System", row.Id, "SystemTypeId", row.SystemTypeId);
+                return new XElement(
+                    "System",
+                    new XAttribute("Id", row.Id),
+                    new XAttribute("SystemTypeId", row.SystemTypeId),
+                    ToPropertyElement("SystemName", row.SystemName),
+                    ToPropertyElement("Version", row.Version),
+                    ToPropertyElement("DeploymentDate", row.DeploymentDate));
+            }));
+
+            SaveShard(instanceDirectory, "SystemCube", "SystemCubes", model.SystemCubes.Select(row =>
+            {
+                EnsureRequiredRelationshipId("SystemCube", row.Id, "CubeId", row.CubeId);
+                EnsureRequiredRelationshipId("SystemCube", row.Id, "SystemId", row.SystemId);
+                return new XElement(
+                    "SystemCube",
+                    new XAttribute("Id", row.Id),
+                    new XAttribute("CubeId", row.CubeId),
+                    new XAttribute("SystemId", row.SystemId),
+                    ToPropertyElement("ProcessingMode", row.ProcessingMode));
+            }));
+
+            SaveShard(instanceDirectory, "SystemDimension", "SystemDimensions", model.SystemDimensions.Select(row =>
+            {
+                EnsureRequiredRelationshipId("SystemDimension", row.Id, "DimensionId", row.DimensionId);
+                EnsureRequiredRelationshipId("SystemDimension", row.Id, "SystemId", row.SystemId);
+                return new XElement(
+                    "SystemDimension",
+                    new XAttribute("Id", row.Id),
+                    new XAttribute("DimensionId", row.DimensionId),
+                    new XAttribute("SystemId", row.SystemId),
+                    ToPropertyElement("ConformanceLevel", row.ConformanceLevel));
+            }));
+
+            SaveShard(instanceDirectory, "SystemFact", "SystemFacts", model.SystemFacts.Select(row =>
+            {
+                EnsureRequiredRelationshipId("SystemFact", row.Id, "FactId", row.FactId);
+                EnsureRequiredRelationshipId("SystemFact", row.Id, "SystemId", row.SystemId);
+                return new XElement(
+                    "SystemFact",
+                    new XAttribute("Id", row.Id),
+                    new XAttribute("FactId", row.FactId),
+                    new XAttribute("SystemId", row.SystemId),
+                    ToPropertyElement("LoadPattern", row.LoadPattern));
+            }));
+
+            SaveShard(instanceDirectory, "SystemType", "SystemTypes", model.SystemTypes.Select(row =>
+            {
+                EnsureRequiredProperty("SystemType", row.Id, "TypeName", row.TypeName);
+                return new XElement(
+                    "SystemType",
+                    new XAttribute("Id", row.Id),
+                    ToPropertyElement("TypeName", row.TypeName),
+                    ToPropertyElement("Description", row.Description));
+            }));
+        }
+
+        internal static EnterpriseBIPlatformInstance CreateBuiltIn()
+        {
+            return new EnterpriseBIPlatformInstance(CreateBuiltInData());
+        }
+
+        private static void SaveShard(string instanceDirectory, string entityName, string pluralName, IEnumerable<XElement> rows)
+        {
+            var root = new XElement("EnterpriseBIPlatform");
+            var container = new XElement(pluralName);
+            foreach (var row in rows.OrderBy(item => ParseRequiredId(entityName, item.Attribute("Id")?.Value)))
+            {
+                container.Add(row);
+            }
+
+            root.Add(container);
+            var document = new XDocument(
+                new XDeclaration("1.0", "utf-8", null),
+                root);
+            WriteXmlDocument(Path.Combine(instanceDirectory, entityName + ".xml"), document);
+        }
+
+        private static XElement ToPropertyElement(string name, string value)
+        {
+            return value == null ? null : new XElement(name, value);
+        }
+
+        private static void EnsureRequiredProperty(string entityName, int id, string propertyName, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new InvalidOperationException($"Entity '{entityName}' row '{id}' is missing required property '{propertyName}'.");
+            }
+        }
+
+        private static void EnsureRequiredRelationshipId(string entityName, int id, string relationshipName, int relationshipId)
+        {
+            if (relationshipId <= 0)
+            {
+                throw new InvalidOperationException($"Entity '{entityName}' row '{id}' is missing required relationship '{relationshipName}'.");
+            }
+        }
+
+        private static void WriteXmlDocument(string path, XDocument document)
+        {
+            var settings = new XmlWriterSettings
+            {
+                Encoding = new global::System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                Indent = true,
+                NewLineChars = "\n",
+                NewLineHandling = NewLineHandling.Replace,
+            };
+
+            using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var writer = XmlWriter.Create(stream, settings))
+            {
+                document.Save(writer);
+            }
+        }
+
+        private static EnterpriseBIPlatformData CreateBuiltInData()
+        {
+            var cubes = new Cubes(new[]
+            {
+                new Cube(1, "Sales Performance", "Monthly revenue and margin tracking.", "Scheduled"),
+                new Cube(2, "Finance Overview", "Quarterly financial statements.", "Manual"),
+            });
+            var dimensions = new Dimensions(new[]
+            {
+                new Dimension(1, "Customer", "True", "2"),
+                new Dimension(2, "Product", "False", "1"),
+            });
+            var facts = new Facts(new[]
+            {
+                new Fact(1, "SalesFact", "Order Line", "12", string.Empty),
+            });
+            var measures = new Measures(new[]
+            {
+                new Measure(1, "number_of_things", "count", 1),
+            });
+            var systems = new Systems(new[]
+            {
+                new System(1, "Enterprise Analytics Platform", "2.1", "2024-11-15", 1),
+                new System(2, "Analytics Sandbox", "1.4", "2023-06-01", 2),
+            });
+            var systemCubes = new SystemCubes(new[]
+            {
+                new SystemCube(1, "InMemory", 1, 1),
+                new SystemCube(2, "DirectQuery", 2, 2),
+            });
+            var systemDimensions = new SystemDimensions(new[]
+            {
+                new SystemDimension(1, "Enterprise", 1, 1),
+                new SystemDimension(2, "Sandbox", 2, 2),
+            });
+            var systemFacts = new SystemFacts(new[]
+            {
+                new SystemFact(1, "Incremental", 1, 1),
+            });
+            var systemTypes = new SystemTypes(new[]
+            {
+                new SystemType(1, "Internal", "Managed within the corporate data center."),
+                new SystemType(2, "External", "Hosted by a third-party vendor."),
+            });
+
+            var data = new EnterpriseBIPlatformData(
+                cubes,
+                dimensions,
+                facts,
+                measures,
+                systems,
+                systemCubes,
+                systemDimensions,
+                systemFacts,
+                systemTypes);
+            ResolveNavigations(data);
+            return data;
         }
 
         private static EnterpriseBIPlatformData BuildData(ModelInstance instance)
@@ -241,7 +476,7 @@ namespace GeneratedModel
                 var id = ParseRequiredId("Measure", record.Id);
                 var measureName = GetRequiredPropertyValue(record, "Measure", "MeasureName", id);
                 var mDX = GetOptionalPropertyValue(record, "MDX");
-                var cubeId = GetOptionalRelationshipId(record, "Measure", "Cube", id);
+                var cubeId = GetRequiredRelationshipId(record, "Measure", "Cube", id);
                 rows.Add(new Measure(id, measureName, mDX, cubeId));
             }
 
@@ -257,7 +492,7 @@ namespace GeneratedModel
                 var systemName = GetRequiredPropertyValue(record, "System", "SystemName", id);
                 var version = GetOptionalPropertyValue(record, "Version");
                 var deploymentDate = GetOptionalPropertyValue(record, "DeploymentDate");
-                var systemTypeId = GetOptionalRelationshipId(record, "System", "SystemType", id);
+                var systemTypeId = GetRequiredRelationshipId(record, "System", "SystemType", id);
                 rows.Add(new System(id, systemName, version, deploymentDate, systemTypeId));
             }
 
@@ -271,8 +506,8 @@ namespace GeneratedModel
             {
                 var id = ParseRequiredId("SystemCube", record.Id);
                 var processingMode = GetOptionalPropertyValue(record, "ProcessingMode");
-                var cubeId = GetOptionalRelationshipId(record, "SystemCube", "Cube", id);
-                var systemId = GetOptionalRelationshipId(record, "SystemCube", "System", id);
+                var cubeId = GetRequiredRelationshipId(record, "SystemCube", "Cube", id);
+                var systemId = GetRequiredRelationshipId(record, "SystemCube", "System", id);
                 rows.Add(new SystemCube(id, processingMode, cubeId, systemId));
             }
 
@@ -286,8 +521,8 @@ namespace GeneratedModel
             {
                 var id = ParseRequiredId("SystemDimension", record.Id);
                 var conformanceLevel = GetOptionalPropertyValue(record, "ConformanceLevel");
-                var dimensionId = GetOptionalRelationshipId(record, "SystemDimension", "Dimension", id);
-                var systemId = GetOptionalRelationshipId(record, "SystemDimension", "System", id);
+                var dimensionId = GetRequiredRelationshipId(record, "SystemDimension", "Dimension", id);
+                var systemId = GetRequiredRelationshipId(record, "SystemDimension", "System", id);
                 rows.Add(new SystemDimension(id, conformanceLevel, dimensionId, systemId));
             }
 
@@ -301,8 +536,8 @@ namespace GeneratedModel
             {
                 var id = ParseRequiredId("SystemFact", record.Id);
                 var loadPattern = GetOptionalPropertyValue(record, "LoadPattern");
-                var factId = GetOptionalRelationshipId(record, "SystemFact", "Fact", id);
-                var systemId = GetOptionalRelationshipId(record, "SystemFact", "System", id);
+                var factId = GetRequiredRelationshipId(record, "SystemFact", "Fact", id);
+                var systemId = GetRequiredRelationshipId(record, "SystemFact", "System", id);
                 rows.Add(new SystemFact(id, loadPattern, factId, systemId));
             }
 
@@ -327,98 +562,77 @@ namespace GeneratedModel
         {
             foreach (var row in data.Measures)
             {
-                if (row.CubeId.HasValue)
+                Cube cube;
+                if (!data.Cubes.TryGetId(row.CubeId, out cube))
                 {
-                    Cube cube;
-                    if (!data.Cubes.TryGetId(row.CubeId.Value, out cube))
-                    {
-                        throw new InvalidOperationException($"Relationship 'Measure->Cube' on row '{row.Id}' references missing target '{row.CubeId.Value}'.");
-                    }
-
-                    row.Cube = cube;
+                    throw new InvalidOperationException($"Relationship 'Measure->Cube' on row '{row.Id}' references missing target '{row.CubeId}'.");
                 }
+
+                row.Cube = cube;
             }
             foreach (var row in data.Systems)
             {
-                if (row.SystemTypeId.HasValue)
+                SystemType systemType;
+                if (!data.SystemTypes.TryGetId(row.SystemTypeId, out systemType))
                 {
-                    SystemType systemType;
-                    if (!data.SystemTypes.TryGetId(row.SystemTypeId.Value, out systemType))
-                    {
-                        throw new InvalidOperationException($"Relationship 'System->SystemType' on row '{row.Id}' references missing target '{row.SystemTypeId.Value}'.");
-                    }
-
-                    row.SystemType = systemType;
+                    throw new InvalidOperationException($"Relationship 'System->SystemType' on row '{row.Id}' references missing target '{row.SystemTypeId}'.");
                 }
+
+                row.SystemType = systemType;
             }
             foreach (var row in data.SystemCubes)
             {
-                if (row.CubeId.HasValue)
+                Cube cube;
+                if (!data.Cubes.TryGetId(row.CubeId, out cube))
                 {
-                    Cube cube;
-                    if (!data.Cubes.TryGetId(row.CubeId.Value, out cube))
-                    {
-                        throw new InvalidOperationException($"Relationship 'SystemCube->Cube' on row '{row.Id}' references missing target '{row.CubeId.Value}'.");
-                    }
-
-                    row.Cube = cube;
+                    throw new InvalidOperationException($"Relationship 'SystemCube->Cube' on row '{row.Id}' references missing target '{row.CubeId}'.");
                 }
-                if (row.SystemId.HasValue)
+
+                row.Cube = cube;
+
+                System system;
+                if (!data.Systems.TryGetId(row.SystemId, out system))
                 {
-                    System system;
-                    if (!data.Systems.TryGetId(row.SystemId.Value, out system))
-                    {
-                        throw new InvalidOperationException($"Relationship 'SystemCube->System' on row '{row.Id}' references missing target '{row.SystemId.Value}'.");
-                    }
-
-                    row.System = system;
+                    throw new InvalidOperationException($"Relationship 'SystemCube->System' on row '{row.Id}' references missing target '{row.SystemId}'.");
                 }
+
+                row.System = system;
             }
             foreach (var row in data.SystemDimensions)
             {
-                if (row.DimensionId.HasValue)
+                Dimension dimension;
+                if (!data.Dimensions.TryGetId(row.DimensionId, out dimension))
                 {
-                    Dimension dimension;
-                    if (!data.Dimensions.TryGetId(row.DimensionId.Value, out dimension))
-                    {
-                        throw new InvalidOperationException($"Relationship 'SystemDimension->Dimension' on row '{row.Id}' references missing target '{row.DimensionId.Value}'.");
-                    }
-
-                    row.Dimension = dimension;
+                    throw new InvalidOperationException($"Relationship 'SystemDimension->Dimension' on row '{row.Id}' references missing target '{row.DimensionId}'.");
                 }
-                if (row.SystemId.HasValue)
+
+                row.Dimension = dimension;
+
+                System system;
+                if (!data.Systems.TryGetId(row.SystemId, out system))
                 {
-                    System system;
-                    if (!data.Systems.TryGetId(row.SystemId.Value, out system))
-                    {
-                        throw new InvalidOperationException($"Relationship 'SystemDimension->System' on row '{row.Id}' references missing target '{row.SystemId.Value}'.");
-                    }
-
-                    row.System = system;
+                    throw new InvalidOperationException($"Relationship 'SystemDimension->System' on row '{row.Id}' references missing target '{row.SystemId}'.");
                 }
+
+                row.System = system;
             }
             foreach (var row in data.SystemFacts)
             {
-                if (row.FactId.HasValue)
+                Fact fact;
+                if (!data.Facts.TryGetId(row.FactId, out fact))
                 {
-                    Fact fact;
-                    if (!data.Facts.TryGetId(row.FactId.Value, out fact))
-                    {
-                        throw new InvalidOperationException($"Relationship 'SystemFact->Fact' on row '{row.Id}' references missing target '{row.FactId.Value}'.");
-                    }
-
-                    row.Fact = fact;
+                    throw new InvalidOperationException($"Relationship 'SystemFact->Fact' on row '{row.Id}' references missing target '{row.FactId}'.");
                 }
-                if (row.SystemId.HasValue)
+
+                row.Fact = fact;
+
+                System system;
+                if (!data.Systems.TryGetId(row.SystemId, out system))
                 {
-                    System system;
-                    if (!data.Systems.TryGetId(row.SystemId.Value, out system))
-                    {
-                        throw new InvalidOperationException($"Relationship 'SystemFact->System' on row '{row.Id}' references missing target '{row.SystemId.Value}'.");
-                    }
-
-                    row.System = system;
+                    throw new InvalidOperationException($"Relationship 'SystemFact->System' on row '{row.Id}' references missing target '{row.SystemId}'.");
                 }
+
+                row.System = system;
             }
         }
 
@@ -467,14 +681,14 @@ namespace GeneratedModel
             return property != null ? property.Value : null;
         }
 
-        private static int? GetOptionalRelationshipId(RecordInstance record, string sourceEntity, string targetEntity, int rowId)
+        private static int GetRequiredRelationshipId(RecordInstance record, string sourceEntity, string targetEntity, int rowId)
         {
             var matches = record.Relationships
                 .Where(item => item != null && item.Entity != null && string.Equals(item.Entity.Name, targetEntity, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             if (matches.Length == 0)
             {
-                return null;
+                throw new InvalidOperationException($"Entity '{sourceEntity}' row '{rowId}' is missing required relationship '{targetEntity}'.");
             }
 
             if (matches.Length > 1)
@@ -577,7 +791,7 @@ namespace GeneratedModel
 
     public sealed class Measure
     {
-        internal Measure(int id, string measureName, string mDX, int? cubeId)
+        internal Measure(int id, string measureName, string mDX, int cubeId)
         {
             Id = id;
             MeasureName = measureName;
@@ -589,13 +803,13 @@ namespace GeneratedModel
         public string MeasureName { get; }
         public string MDX { get; }
         public string Name { get { return MeasureName; } }
-        public int? CubeId { get; }
+        public int CubeId { get; }
         public Cube Cube { get; internal set; }
     }
 
     public sealed class System
     {
-        internal System(int id, string systemName, string version, string deploymentDate, int? systemTypeId)
+        internal System(int id, string systemName, string version, string deploymentDate, int systemTypeId)
         {
             Id = id;
             SystemName = systemName;
@@ -609,13 +823,13 @@ namespace GeneratedModel
         public string Version { get; }
         public string DeploymentDate { get; }
         public string Name { get { return SystemName; } }
-        public int? SystemTypeId { get; }
+        public int SystemTypeId { get; }
         public SystemType SystemType { get; internal set; }
     }
 
     public sealed class SystemCube
     {
-        internal SystemCube(int id, string processingMode, int? cubeId, int? systemId)
+        internal SystemCube(int id, string processingMode, int cubeId, int systemId)
         {
             Id = id;
             ProcessingMode = processingMode;
@@ -625,15 +839,15 @@ namespace GeneratedModel
 
         public int Id { get; }
         public string ProcessingMode { get; }
-        public int? CubeId { get; }
+        public int CubeId { get; }
         public Cube Cube { get; internal set; }
-        public int? SystemId { get; }
+        public int SystemId { get; }
         public System System { get; internal set; }
     }
 
     public sealed class SystemDimension
     {
-        internal SystemDimension(int id, string conformanceLevel, int? dimensionId, int? systemId)
+        internal SystemDimension(int id, string conformanceLevel, int dimensionId, int systemId)
         {
             Id = id;
             ConformanceLevel = conformanceLevel;
@@ -643,15 +857,15 @@ namespace GeneratedModel
 
         public int Id { get; }
         public string ConformanceLevel { get; }
-        public int? DimensionId { get; }
+        public int DimensionId { get; }
         public Dimension Dimension { get; internal set; }
-        public int? SystemId { get; }
+        public int SystemId { get; }
         public System System { get; internal set; }
     }
 
     public sealed class SystemFact
     {
-        internal SystemFact(int id, string loadPattern, int? factId, int? systemId)
+        internal SystemFact(int id, string loadPattern, int factId, int systemId)
         {
             Id = id;
             LoadPattern = loadPattern;
@@ -661,9 +875,9 @@ namespace GeneratedModel
 
         public int Id { get; }
         public string LoadPattern { get; }
-        public int? FactId { get; }
+        public int FactId { get; }
         public Fact Fact { get; internal set; }
-        public int? SystemId { get; }
+        public int SystemId { get; }
         public System System { get; internal set; }
     }
 
