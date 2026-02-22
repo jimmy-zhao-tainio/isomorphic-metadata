@@ -15,10 +15,10 @@
     <Compile Remove="Generated\**" />
     <Compile Remove="Samples\**" />
     <Compile Remove="Samples.Console\**" />
-    <Compile Remove="MetadataStudio.Core\**" />
-    <Compile Remove="MetadataStudio.Adapters\**" />
-    <Compile Remove="MetadataStudio.Cli\**" />
-    <Compile Remove="MetadataStudio.Core.Tests\**" />
+    <Compile Remove="Meta.Core\**" />
+    <Compile Remove="Meta.Adapters\**" />
+    <Compile Remove="Meta.Cli\**" />
+    <Compile Remove="Meta.Core.Tests\**" />
     <Compile Remove="MetaSchema.Core\**" />
     <Compile Remove="MetaSchema.Extractors.SqlServer\**" />
     <Compile Remove="MetaSchema.Cli\**" />

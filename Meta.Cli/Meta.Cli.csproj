@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>meta</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Meta.Adapters\Meta.Adapters.csproj" />
+    <ProjectReference Include="..\Meta.Core\Meta.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\InstanceDiffModel.Equal.xml" />
+    <EmbeddedResource Include="Templates\InstanceDiffModel.Alignment.xml" />
+    <EmbeddedResource Include="Templates\InstanceDiffModel.Aligned.xml" />
+  </ItemGroup>
+
+</Project>

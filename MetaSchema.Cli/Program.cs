@@ -1,6 +1,6 @@
 using MetaSchema.Core;
 using MetaSchema.Extractors.SqlServer;
-using MetadataStudio.Core.Services;
+using Meta.Core.Services;
 
 internal static class Program
 {
@@ -80,7 +80,7 @@ internal static class Program
         if (validation.HasErrors)
         {
             Console.WriteLine("Error: extracted schema workspace is invalid.");
-            foreach (var issue in validation.Issues.Where(item => item.Severity == MetadataStudio.Core.Domain.IssueSeverity.Error))
+            foreach (var issue in validation.Issues.Where(item => item.Severity == Meta.Core.Domain.IssueSeverity.Error))
             {
                 Console.WriteLine($"  - {issue.Code}: {issue.Message}");
             }
@@ -140,7 +140,7 @@ internal static class Program
         if (validation.HasErrors)
         {
             Console.WriteLine("Error: seed catalog workspace is invalid.");
-            foreach (var issue in validation.Issues.Where(item => item.Severity == MetadataStudio.Core.Domain.IssueSeverity.Error))
+            foreach (var issue in validation.Issues.Where(item => item.Severity == Meta.Core.Domain.IssueSeverity.Error))
             {
                 Console.WriteLine($"  - {issue.Code}: {issue.Message}");
             }

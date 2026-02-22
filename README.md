@@ -4,7 +4,7 @@
 
 This repo ships two CLI tools:
 
-`meta` (MetadataStudio CLI): workspace/model/instance operations, diff/merge, import, generate.  
+`meta` (Meta CLI): workspace/model/instance operations, diff/merge, import, generate.  
 `meta-schema` (MetaSchema CLI): schema extraction and sanctioned catalogs (for example `TypeConversionCatalog`).
 
 ## Workspace contract
@@ -132,7 +132,7 @@ dotnet build Metadata.Framework.sln
 Run directly:
 
 ```powershell
-dotnet run --project MetadataStudio.Cli/MetadataStudio.Cli.csproj -- help
+dotnet run --project Meta.Cli/Meta.Cli.csproj -- help
 ```
 
 Or use the launcher in repo root:

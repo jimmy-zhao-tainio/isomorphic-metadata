@@ -1,5 +1,5 @@
 using System.Globalization;
-using MetadataStudio.Core.Domain;
+using Meta.Core.Domain;
 
 namespace MetaSchema.Core;
 

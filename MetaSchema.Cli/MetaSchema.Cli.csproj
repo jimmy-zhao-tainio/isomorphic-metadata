@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MetadataStudio.Core\MetadataStudio.Core.csproj" />
+    <ProjectReference Include="..\Meta.Core\Meta.Core.csproj" />
     <ProjectReference Include="..\MetaSchema.Core\MetaSchema.Core.csproj" />
     <ProjectReference Include="..\MetaSchema.Extractors.SqlServer\MetaSchema.Extractors.SqlServer.csproj" />
   </ItemGroup>

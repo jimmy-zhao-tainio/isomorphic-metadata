@@ -1,0 +1,638 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Meta.Core.Domain;
+
+namespace Meta.Core.Services;
+
+public sealed class ValidationService : IValidationService
+{
+    private static readonly Regex NamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
+
+    public WorkspaceDiagnostics Validate(Workspace workspace)
+    {
+        if (workspace == null)
+        {
+            throw new ArgumentNullException(nameof(workspace));
+        }
+
+        var diagnostics = new WorkspaceDiagnostics();
+        ValidateModel(workspace.Model, diagnostics);
+        ValidateInstance(workspace.Model, workspace.Instance, diagnostics);
+        return diagnostics;
+    }
+
+    public WorkspaceDiagnostics ValidateIncremental(Workspace workspace, IReadOnlyCollection<string> touchedEntities)
+    {
+        if (workspace == null)
+        {
+            throw new ArgumentNullException(nameof(workspace));
+        }
+
+        if (touchedEntities == null || touchedEntities.Count == 0)
+        {
+            return Validate(workspace);
+        }
+
+        var filter = new HashSet<string>(touchedEntities.Where(entity => !string.IsNullOrWhiteSpace(entity)),
+            StringComparer.OrdinalIgnoreCase);
+
+        var diagnostics = new WorkspaceDiagnostics();
+        ValidateModel(workspace.Model, diagnostics, filter);
+        ValidateInstance(workspace.Model, workspace.Instance, diagnostics, filter);
+        return diagnostics;
+    }
+
+    private static void ValidateModel(
+        ModelDefinition model,
+        WorkspaceDiagnostics diagnostics,
+        HashSet<string>? filter = null)
+    {
+        if (model == null)
+        {
+            diagnostics.Issues.Add(new DiagnosticIssue
+            {
+                Code = "model.null",
+                Message = "Model is missing.",
+                Severity = IssueSeverity.Error,
+                Location = "model",
+            });
+            return;
+        }
+
+        if (!IsValidName(model.Name))
+        {
+            diagnostics.Issues.Add(new DiagnosticIssue
+            {
+                Code = "model.name.invalid",
+                Message = $"Model name '{model.Name}' is invalid.",
+                Severity = IssueSeverity.Error,
+                Location = "model/@name",
+            });
+        }
+        var entityNameMap = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var entityContainerNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entity in model.Entities)
+        {
+            if (!entityNameMap.Add(entity.Name))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "entity.duplicate",
+                    Message = $"Entity '{entity.Name}' is duplicated.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}",
+                });
+            }
+
+            var containerName = entity.GetPluralName();
+            if (!IsValidName(containerName))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "entity.plural.invalid",
+                    Message = $"Entity plural name '{containerName}' on '{entity.Name}' is invalid.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}/@plural",
+                });
+            }
+            if (entityContainerNameMap.TryGetValue(containerName, out var existingEntity))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "entity.plural.duplicate",
+                    Message = $"Entity plural name '{containerName}' is duplicated by '{existingEntity}' and '{entity.Name}'.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}/@plural",
+                });
+            }
+            else
+            {
+                entityContainerNameMap[containerName] = entity.Name;
+            }
+
+            if (filter != null && !filter.Contains(entity.Name))
+            {
+                continue;
+            }
+
+            if (!IsValidName(entity.Name))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "entity.name.invalid",
+                    Message = $"Entity name '{entity.Name}' is invalid.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}",
+                });
+            }
+            if (string.Equals(model.Name, entity.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "model.entity.collision",
+                    Message = $"Model name '{model.Name}' collides with entity '{entity.Name}'.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}",
+                });
+            }
+
+            ValidateEntityProperties(entity, diagnostics);
+            ValidateEntityIdProperty(entity, diagnostics);
+            ValidateEntityMemberNameCollisions(entity, diagnostics);
+        }
+
+        ValidateRelationships(model, diagnostics, filter);
+        ValidateCycles(model, diagnostics, filter);
+    }
+
+    private static void ValidateEntityProperties(EntityDefinition entity, WorkspaceDiagnostics diagnostics)
+    {
+        var propertyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in entity.Properties)
+        {
+            if (!propertyNames.Add(property.Name))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "property.duplicate",
+                    Message = $"Property '{entity.Name}.{property.Name}' is duplicated.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}/property/{property.Name}",
+                });
+            }
+
+            if (!IsValidName(property.Name))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "property.name.invalid",
+                    Message = $"Property name '{entity.Name}.{property.Name}' is invalid.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}/property/{property.Name}",
+                });
+            }
+            if (string.IsNullOrWhiteSpace(property.DataType))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "property.datatype.empty",
+                    Message = $"Property '{entity.Name}.{property.Name}' has empty data type.",
+                    Severity = IssueSeverity.Warning,
+                    Location = $"model/entity/{entity.Name}/property/{property.Name}/@dataType",
+                });
+            }
+        }
+    }
+
+    private static void ValidateEntityMemberNameCollisions(EntityDefinition entity, WorkspaceDiagnostics diagnostics)
+    {
+        var memberNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in entity.Properties)
+        {
+            if (string.IsNullOrWhiteSpace(property.Name))
+            {
+                continue;
+            }
+
+            memberNames.Add(property.Name);
+        }
+
+        foreach (var relationship in entity.Relationships)
+        {
+            var usageName = relationship.GetUsageName();
+            if (string.IsNullOrWhiteSpace(usageName))
+            {
+                continue;
+            }
+
+            if (!memberNames.Add(usageName))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "entity.member.collision",
+                    Message =
+                        $"Entity '{entity.Name}' has a name collision between property/member '{usageName}' and relationship '{usageName}'.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity.Name}/relationship/{usageName}",
+                });
+            }
+        }
+    }
+
+    private static void ValidateEntityIdProperty(EntityDefinition entity, WorkspaceDiagnostics diagnostics)
+    {
+        var explicitId = entity.Properties.FirstOrDefault(property =>
+            string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase));
+        if (explicitId == null)
+        {
+            return;
+        }
+
+        diagnostics.Issues.Add(new DiagnosticIssue
+        {
+            Code = "property.id.explicit",
+            Message = $"Entity '{entity.Name}' must not declare property 'Id'. It is implicit.",
+            Severity = IssueSeverity.Error,
+            Location = $"model/entity/{entity.Name}/property/Id",
+        });
+    }
+
+    private static void ValidateRelationships(
+        ModelDefinition model,
+        WorkspaceDiagnostics diagnostics,
+        HashSet<string>? filter = null)
+    {
+        var entityNames = new HashSet<string>(model.Entities.Select(entity => entity.Name), StringComparer.OrdinalIgnoreCase);
+        foreach (var entity in model.Entities)
+        {
+            if (filter != null && !filter.Contains(entity.Name))
+            {
+                continue;
+            }
+
+            var relationUsageNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var relationColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var relationship in entity.Relationships)
+            {
+                var usageName = relationship.GetUsageName();
+                var columnName = relationship.GetColumnName();
+                if (!IsValidName(usageName))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.name.invalid",
+                        Message = $"Relationship name '{entity.Name}.{usageName}' is invalid.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}",
+                    });
+                }
+
+                if (!IsValidName(columnName))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.column.invalid",
+                        Message = $"Relationship column '{entity.Name}.{columnName}' is invalid.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}/@column",
+                    });
+                }
+
+                if (!relationUsageNames.Add(usageName))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.duplicate",
+                        Message = $"Relationship '{entity.Name}.{usageName}' is duplicated.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}",
+                    });
+                }
+
+                if (!relationColumns.Add(columnName))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.column.duplicate",
+                        Message = $"Relationship column '{entity.Name}.{columnName}' is duplicated.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{usageName}/@column",
+                    });
+                }
+
+                if (!entityNames.Contains(relationship.Entity))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "relationship.target.missing",
+                        Message = $"Relationship target '{relationship.Entity}' in entity '{entity.Name}' does not exist.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"model/entity/{entity.Name}/relationship/{relationship.Entity}",
+                    });
+                }
+            }
+        }
+    }
+
+    private static void ValidateCycles(ModelDefinition model, WorkspaceDiagnostics diagnostics, HashSet<string>? filter)
+    {
+        var graph = model.Entities.ToDictionary(
+            entity => entity.Name,
+            entity => entity.Relationships.Select(relationship => relationship.Entity).ToList(),
+            StringComparer.OrdinalIgnoreCase);
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var stack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entity in graph.Keys)
+        {
+            if (filter != null && !filter.Contains(entity))
+            {
+                continue;
+            }
+
+            if (DetectCycle(entity, graph, visited, stack))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "relationship.cycle",
+                    Message = $"Cycle detected from entity '{entity}'.",
+                    Severity = IssueSeverity.Error,
+                    Location = $"model/entity/{entity}",
+                });
+            }
+        }
+    }
+
+    private static bool DetectCycle(
+        string entity,
+        IReadOnlyDictionary<string, List<string>> graph,
+        HashSet<string> visited,
+        HashSet<string> stack)
+    {
+        if (stack.Contains(entity))
+        {
+            return true;
+        }
+
+        if (visited.Contains(entity))
+        {
+            return false;
+        }
+
+        visited.Add(entity);
+        stack.Add(entity);
+        if (graph.TryGetValue(entity, out var neighbors))
+        {
+            foreach (var neighbor in neighbors)
+            {
+                if (!graph.ContainsKey(neighbor))
+                {
+                    continue;
+                }
+
+                if (DetectCycle(neighbor, graph, visited, stack))
+                {
+                    return true;
+                }
+            }
+        }
+
+        stack.Remove(entity);
+        return false;
+    }
+
+    private static void ValidateInstance(
+        ModelDefinition model,
+        InstanceStore instance,
+        WorkspaceDiagnostics diagnostics,
+        HashSet<string>? filter = null)
+    {
+        if (instance == null)
+        {
+            diagnostics.Issues.Add(new DiagnosticIssue
+            {
+                Code = "instance.null",
+                Message = "Instance data is missing.",
+                Severity = IssueSeverity.Error,
+                Location = "instance",
+            });
+            return;
+        }
+
+        var modelByEntity = model.Entities.ToDictionary(entity => entity.Name, StringComparer.OrdinalIgnoreCase);
+        var idsByEntity = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entityRecords in instance.RecordsByEntity)
+        {
+            var entityName = entityRecords.Key;
+            if (filter != null && !filter.Contains(entityName))
+            {
+                continue;
+            }
+
+            if (!modelByEntity.TryGetValue(entityName, out var modelEntity))
+            {
+                diagnostics.Issues.Add(new DiagnosticIssue
+                {
+                    Code = "instance.entity.unknown",
+                    Message = $"Instance includes unknown entity '{entityName}'.",
+                    Severity = IssueSeverity.Warning,
+                    Location = $"instance/{entityName}",
+                });
+                continue;
+            }
+
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            idsByEntity[entityName] = ids;
+
+            foreach (var record in entityRecords.Value)
+            {
+                if (string.IsNullOrWhiteSpace(record.Id))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "instance.id.missing",
+                        Message = $"Entity '{entityName}' has a record with missing Id.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"instance/{entityName}",
+                    });
+                }
+                else if (!IsPositiveIntegerIdentity(record.Id))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "instance.id.invalid",
+                        Message = $"Entity '{entityName}' has non-numeric Id '{record.Id}'.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"instance/{entityName}/{record.Id}",
+                    });
+                }
+                else if (!ids.Add(record.Id))
+                {
+                    diagnostics.Issues.Add(new DiagnosticIssue
+                    {
+                        Code = "instance.id.duplicate",
+                        Message = $"Entity '{entityName}' has duplicate Id '{record.Id}'.",
+                        Severity = IssueSeverity.Error,
+                        Location = $"instance/{entityName}/{record.Id}",
+                    });
+                }
+
+                foreach (var requiredProperty in modelEntity.Properties
+                             .Where(property =>
+                                 !property.IsNullable &&
+                                 !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var hasValue = record.Values.TryGetValue(requiredProperty.Name, out var value);
+                    if (!hasValue)
+                    {
+                        diagnostics.Issues.Add(new DiagnosticIssue
+                        {
+                            Code = "instance.required.missing",
+                            Message = $"Entity '{entityName}' record '{record.Id}' is missing required value '{requiredProperty.Name}'.",
+                            Severity = IssueSeverity.Error,
+                            Location = $"instance/{entityName}/{record.Id}/{requiredProperty.Name}",
+                        });
+
+                        continue;
+                    }
+
+                    if (value == null)
+                    {
+                        diagnostics.Issues.Add(new DiagnosticIssue
+                        {
+                            Code = "instance.required.missing",
+                            Message = $"Entity '{entityName}' record '{record.Id}' is missing required value '{requiredProperty.Name}'.",
+                            Severity = IssueSeverity.Error,
+                            Location = $"instance/{entityName}/{record.Id}/{requiredProperty.Name}",
+                        });
+                    }
+                }
+
+                foreach (var property in modelEntity.Properties
+                             .Where(item => !string.Equals(item.Name, "Id", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (!record.Values.TryGetValue(property.Name, out var propertyValue) || propertyValue == null)
+                    {
+                        continue;
+                    }
+
+                    if (IsStringDataType(property.DataType))
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(propertyValue))
+                    {
+                        diagnostics.Issues.Add(new DiagnosticIssue
+                        {
+                            Code = "instance.property.parse",
+                            Message =
+                                $"Entity '{entityName}' record '{record.Id}' has invalid empty value for non-string property '{property.Name}'.",
+                            Severity = IssueSeverity.Error,
+                            Location = $"instance/{entityName}/{record.Id}/{property.Name}",
+                        });
+                    }
+                }
+            }
+        }
+
+        foreach (var entityRecords in instance.RecordsByEntity)
+        {
+            var entityName = entityRecords.Key;
+            if (filter != null && !filter.Contains(entityName))
+            {
+                continue;
+            }
+
+            if (!modelByEntity.TryGetValue(entityName, out var modelEntity))
+            {
+                continue;
+            }
+
+            foreach (var record in entityRecords.Value)
+            {
+                foreach (var relationship in modelEntity.Relationships)
+                {
+                    var relationshipUsage = relationship.GetUsageName();
+                    var relationshipColumn = relationship.GetColumnName();
+                    if (!record.RelationshipIds.TryGetValue(relationshipUsage, out var relatedId) ||
+                        string.IsNullOrWhiteSpace(relatedId))
+                    {
+                        diagnostics.Issues.Add(new DiagnosticIssue
+                        {
+                            Code = "instance.relationship.missing",
+                            Message = $"Entity '{entityName}' record '{record.Id}' is missing relationship '{relationshipColumn}'.",
+                            Severity = IssueSeverity.Error,
+                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipUsage}",
+                        });
+                        continue;
+                    }
+
+                    if (!IsPositiveIntegerIdentity(relatedId))
+                    {
+                        diagnostics.Issues.Add(new DiagnosticIssue
+                        {
+                            Code = "instance.relationship.invalid",
+                            Message =
+                                $"Entity '{entityName}' record '{record.Id}' has invalid relationship '{relationshipUsage}' id '{relatedId}'.",
+                            Severity = IssueSeverity.Error,
+                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipUsage}/{relatedId}",
+                        });
+                        continue;
+                    }
+
+                    if (!idsByEntity.TryGetValue(relationship.Entity, out var targetIds))
+                    {
+                        targetIds = new HashSet<string>(
+                            instance.RecordsByEntity.TryGetValue(relationship.Entity, out var targetRecords)
+                                ? targetRecords.Select(targetRecord => targetRecord.Id)
+                                : Enumerable.Empty<string>(),
+                            StringComparer.OrdinalIgnoreCase);
+                        idsByEntity[relationship.Entity] = targetIds;
+                    }
+
+                    if (!targetIds.Contains(relatedId))
+                    {
+                        diagnostics.Issues.Add(new DiagnosticIssue
+                        {
+                            Code = "instance.relationship.orphan",
+                            Message = $"Entity '{entityName}' record '{record.Id}' points to missing '{relationship.Entity}' id '{relatedId}'.",
+                            Severity = IssueSeverity.Error,
+                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationship.Entity}/{relatedId}",
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    private static bool IsPositiveIntegerIdentity(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var text = value.Trim();
+        if (text.Length == 0 || text[0] == '-')
+        {
+            return false;
+        }
+
+        var hasNonZeroDigit = false;
+        foreach (var ch in text)
+        {
+            if (!char.IsDigit(ch))
+            {
+                return false;
+            }
+
+            if (ch != '0')
+            {
+                hasNonZeroDigit = true;
+            }
+        }
+
+        return hasNonZeroDigit;
+    }
+
+    private static bool IsStringDataType(string? dataType)
+    {
+        if (string.IsNullOrWhiteSpace(dataType))
+        {
+            return true;
+        }
+
+        return string.Equals(dataType.Trim(), "string", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsValidName(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && NamePattern.IsMatch(value);
+    }
+
+}

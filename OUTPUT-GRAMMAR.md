@@ -1,4 +1,4 @@
-# MetadataStudio CLI Output Grammar (Human Mode)
+# Meta CLI Output Grammar (Human Mode)
 
 This spec defines deterministic plain-text output for `meta` in non-`--json` mode.
 

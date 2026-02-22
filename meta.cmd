@@ -2,7 +2,7 @@
 setlocal
 
 set "ROOT=%~dp0"
-set "PROJECT=%ROOT%MetadataStudio.Cli\MetadataStudio.Cli.csproj"
+set "PROJECT=%ROOT%Meta.Cli\Meta.Cli.csproj"
 set "OUTDIR=%ROOT%.meta"
 set "EXE=%OUTDIR%\meta.exe"
 set "NEEDS_PUBLISH=0"
@@ -12,7 +12,7 @@ if not exist "%EXE%" set "NEEDS_PUBLISH=1"
 if "%NEEDS_PUBLISH%"=="0" (
   powershell -NoProfile -Command ^
     "$exe='%EXE%';" ^
-    "$roots=@('%ROOT%MetadataStudio.Cli','%ROOT%MetadataStudio.Core','%ROOT%MetadataStudio.Adapters');" ^
+    "$roots=@('%ROOT%Meta.Cli','%ROOT%Meta.Core','%ROOT%Meta.Adapters');" ^
     "$exeTime=(Get-Item $exe).LastWriteTimeUtc;" ^
     "$latest=Get-ChildItem -Path $roots -Recurse -File | Where-Object { $_.FullName -notmatch '\\\\(bin|obj)\\\\' -and ($_.Extension -eq '.cs' -or $_.Extension -eq '.csproj') } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1;" ^
     "if ($null -eq $latest -or $latest.LastWriteTimeUtc -le $exeTime) { exit 0 } else { exit 1 }"

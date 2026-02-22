@@ -1,5 +1,5 @@
 using MetaSchema.Core;
-using MetadataStudio.Core.Domain;
+using Meta.Core.Domain;
 
 namespace MetaSchema.Extractors.SqlServer;
 

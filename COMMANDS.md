@@ -1,4 +1,4 @@
-# MetadataStudio CLI Command Spec v1
+# Meta CLI Command Spec v1
 
 This spec defines the canonical `meta` command surface.
 
@@ -55,12 +55,12 @@ Writers are byte-stable for identical logical state.
 - Equal-model instance diff:
   - `meta instance diff <leftWorkspace> <rightWorkspace>`
   - hard-fails unless left/right `model.xml` files are byte-identical.
-  - writes a normal workspace using fixed model template `MetadataStudio.Cli/Templates/InstanceDiffModel.Equal.xml`.
+  - writes a normal workspace using fixed model template `Meta.Cli/Templates/InstanceDiffModel.Equal.xml`.
   - merge command: `meta instance merge <targetWorkspace> <diffWorkspace>`.
 - Aligned instance diff:
   - `meta instance diff-aligned <leftWorkspace> <rightWorkspace> <alignmentWorkspace>`
   - supports model differences using explicit entity/property mappings from fixed alignment contract.
-  - writes a normal workspace using fixed model template `MetadataStudio.Cli/Templates/InstanceDiffModel.Aligned.xml`.
+  - writes a normal workspace using fixed model template `Meta.Cli/Templates/InstanceDiffModel.Aligned.xml`.
   - merge command: `meta instance merge-aligned <targetWorkspace> <diffWorkspace>`.
 - Diff semantics:
   - no persisted booleans, hashes, fingerprints, or timestamps.

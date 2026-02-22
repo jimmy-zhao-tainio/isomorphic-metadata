@@ -1,4 +1,4 @@
-﻿# MetadataStudio CLI Real Command Examples
+# Meta CLI Real Command Examples
 
 All examples below were executed against local workspaces in this repository. Each section includes one successful run and one failing run with captured output and exit code.
 

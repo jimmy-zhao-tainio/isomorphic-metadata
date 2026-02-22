@@ -1,4 +1,4 @@
-# TASK — Remove plan/apply from MetadataStudio CLI (execute-only mental model)
+# TASK — Remove plan/apply from Meta CLI (execute-only mental model)
 
 ## Goal
 

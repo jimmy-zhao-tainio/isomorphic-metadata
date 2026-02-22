@@ -23,10 +23,10 @@ function Normalize-OutputForDocs {
     return $normalized
 }
 
-$cliProject = Join-Path $repoRoot "MetadataStudio.Cli\MetadataStudio.Cli.csproj"
+$cliProject = Join-Path $repoRoot "Meta.Cli\Meta.Cli.csproj"
 if (-not (Test-Path $cliProject))
 {
-    throw "MetadataStudio CLI project was not found at '$cliProject'."
+    throw "Meta CLI project was not found at '$cliProject'."
 }
 
 function Format-Arg {
@@ -282,7 +282,7 @@ $script:Cases.Add([pscustomobject]@{
     })
 
 $content = New-Object System.Text.StringBuilder
-[void]$content.AppendLine("# MetadataStudio CLI Real Command Examples")
+[void]$content.AppendLine("# Meta CLI Real Command Examples")
 [void]$content.AppendLine()
 [void]$content.AppendLine("All examples below were executed against local workspaces in this repository. Each section includes one successful run and one failing run with captured output and exit code.")
 [void]$content.AppendLine()
