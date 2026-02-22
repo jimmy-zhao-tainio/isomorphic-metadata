@@ -60,15 +60,13 @@ public static class DataBatchParser
         var relationshipHeaderMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var relationship in entity.Relationships)
         {
-            var usageName = relationship.GetUsageName();
-            if (string.IsNullOrWhiteSpace(usageName))
+            var relationshipName = relationship.GetName();
+            if (string.IsNullOrWhiteSpace(relationshipName))
             {
                 continue;
             }
 
-            TryAddRelationshipHeaderAlias(entityName, relationshipHeaderMap, usageName, usageName);
-            var columnName = relationship.GetColumnName();
-            TryAddRelationshipHeaderAlias(entityName, relationshipHeaderMap, columnName, usageName);
+            TryAddRelationshipHeaderAlias(entityName, relationshipHeaderMap, relationshipName, relationshipName);
         }
 
         var columnKinds = new List<ColumnKind>(headers.Count);
@@ -87,9 +85,9 @@ public static class DataBatchParser
                 continue;
             }
 
-            if (relationshipHeaderMap.TryGetValue(header, out var relationshipUsageName))
+            if (relationshipHeaderMap.TryGetValue(header, out var relationshipName))
             {
-                columnKinds.Add(new ColumnKind(ColumnType.Relationship, relationshipUsageName));
+                columnKinds.Add(new ColumnKind(ColumnType.Relationship, relationshipName));
                 continue;
             }
 

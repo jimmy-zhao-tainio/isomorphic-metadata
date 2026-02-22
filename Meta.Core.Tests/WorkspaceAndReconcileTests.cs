@@ -462,13 +462,13 @@ public sealed class WorkspaceServiceTests
             {
                 Id = "1",
             });
-            workspace.Instance.GetOrCreateEntityRecords("EntityA")[0].RelationshipIds["EntityB"] = "1";
+            workspace.Instance.GetOrCreateEntityRecords("EntityA")[0].RelationshipIds["EntityBId"] = "1";
 
             workspace.Instance.GetOrCreateEntityRecords("EntityB").Add(new Meta.Core.Domain.InstanceRecord
             {
                 Id = "1",
             });
-            workspace.Instance.GetOrCreateEntityRecords("EntityB")[0].RelationshipIds["EntityA"] = "1";
+            workspace.Instance.GetOrCreateEntityRecords("EntityB")[0].RelationshipIds["EntityAId"] = "1";
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
                 await services.WorkspaceService.SaveAsync(workspace));
@@ -698,7 +698,7 @@ public sealed class WorkspaceServiceTests
 
             var reloaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
             var child = reloaded.Instance.GetOrCreateEntityRecords("Child").Single();
-            Assert.Equal("1", child.RelationshipIds["Parent"]);
+            Assert.Equal("1", child.RelationshipIds["ParentId"]);
             Assert.False(child.RelationshipIds.ContainsKey("Ghost"));
             Assert.False(child.RelationshipIds.ContainsKey("BlankRel"));
         }
@@ -1008,7 +1008,7 @@ public sealed class WorkspaceServiceTests
         {
             Id = "1",
         };
-        childRow.RelationshipIds["Parent"] = "1";
+        childRow.RelationshipIds["ParentId"] = "1";
         workspace.Instance.GetOrCreateEntityRecords("Child").Add(childRow);
 
         return workspace;

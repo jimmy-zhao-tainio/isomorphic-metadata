@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     string BuildWhere(params (string Key, string? Value)[] fields)
     {
@@ -788,7 +788,7 @@
                         entity == null
                             ? Array.Empty<string>()
                         : entity.Properties.Select(property => property.Name)
-                            .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
+                            .Concat(entity.Relationships.Select(relationship => relationship.GetName()))
                             .Concat(new[] { "Id" }));
                 hints.Clear();
                 hints.Add($"Next: meta list properties {entityName}");
@@ -812,7 +812,7 @@
                         entity == null
                             ? Array.Empty<string>()
                         : entity.Properties.Select(property => property.Name)
-                                .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
+                                .Concat(entity.Relationships.Select(relationship => relationship.GetName()))
                                 .Concat(new[] { "Id" }));
                     hints.Clear();
                     hints.Add($"Next: meta list properties {entityName}");
@@ -836,7 +836,7 @@
                                 entity == null
                                     ? Array.Empty<string>()
                                 : entity.Properties.Select(property => property.Name)
-                                    .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
+                                    .Concat(entity.Relationships.Select(relationship => relationship.GetName()))
                                     .Concat(new[] { "Id" }));
                         hints.Clear();
                         hints.Add($"Next: meta list properties {entityName}");
@@ -860,7 +860,7 @@
                                 entity == null
                                     ? Array.Empty<string>()
                                 : entity.Properties.Select(property => property.Name)
-                                        .Concat(entity.Relationships.Select(relationship => relationship.GetUsageName()))
+                                        .Concat(entity.Relationships.Select(relationship => relationship.GetName()))
                                         .Concat(new[] { "Id" }));
                             hints.Clear();
                             hints.Add($"Next: meta list properties {entityName}");

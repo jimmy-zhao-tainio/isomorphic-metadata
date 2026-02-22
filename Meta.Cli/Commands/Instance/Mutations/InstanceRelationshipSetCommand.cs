@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     async Task<int> InstanceRelationshipSetAsync(string[] commandArgs)
     {
@@ -53,7 +53,7 @@
                     $"Relationship '{fromEntityName}->{toEntityName}' does not exist.");
             }
 
-            var toRelationshipName = relationship.GetUsageName();
+            var toRelationshipName = relationship.GetName();
             var toTargetEntityName = relationship.Entity;
             RequireEntity(workspace, toTargetEntityName);
             var targetExists = workspace.Instance.GetOrCreateEntityRecords(toTargetEntityName)

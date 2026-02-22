@@ -37,7 +37,7 @@ public static class BulkRelationshipResolver
         }
 
         var relationTargets = entity.Relationships
-            .Select(relationship => relationship.GetUsageName())
+            .Select(relationship => relationship.GetName())
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 

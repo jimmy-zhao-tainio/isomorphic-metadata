@@ -12,7 +12,7 @@ public sealed class DataBatchParserTests
     public void ParseBulkUpsert_ParsesPropertiesAndRelationships()
     {
         var entity = BuildMeasureEntity();
-        var input = "Id\tMeasureName\tCube\n1\tOrders\t10\n2\tRevenue\t11";
+        var input = "Id\tMeasureName\tCubeId\n1\tOrders\t10\n2\tRevenue\t11";
 
         var operation = DataBatchParser.ParseBulkUpsert("Measure", entity, input);
 
@@ -21,10 +21,10 @@ public sealed class DataBatchParserTests
         Assert.Equal(2, operation.RowPatches.Count);
         Assert.Equal("1", operation.RowPatches[0].Id);
         Assert.Equal("Orders", operation.RowPatches[0].Values["MeasureName"]);
-        Assert.Equal("10", operation.RowPatches[0].RelationshipIds["Cube"]);
+        Assert.Equal("10", operation.RowPatches[0].RelationshipIds["CubeId"]);
         Assert.Equal("2", operation.RowPatches[1].Id);
         Assert.Equal("Revenue", operation.RowPatches[1].Values["MeasureName"]);
-        Assert.Equal("11", operation.RowPatches[1].RelationshipIds["Cube"]);
+        Assert.Equal("11", operation.RowPatches[1].RelationshipIds["CubeId"]);
     }
 
     [Fact]

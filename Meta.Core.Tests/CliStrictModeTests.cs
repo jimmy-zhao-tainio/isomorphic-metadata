@@ -769,7 +769,7 @@ public sealed class CliStrictModeTests
             Assert.Equal(4, result.ExitCode);
             Assert.Contains("Relationship 'Measure->Cube' is in use", result.CombinedOutput, StringComparison.Ordinal);
             Assert.Contains("Relationship usage blockers:", result.CombinedOutput, StringComparison.Ordinal);
-            Assert.Contains("Next: meta instance relationship set Measure 1 --to Cube <ToId>", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Next: meta instance relationship set Measure 1 --to CubeId <ToId>", result.CombinedOutput, StringComparison.Ordinal);
             var lines = result.CombinedOutput
                 .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(line => line.TrimEnd())
@@ -937,8 +937,8 @@ public sealed class CliStrictModeTests
                 "--workspace",
                 workspaceRoot);
             Assert.Equal(4, clearResult.ExitCode);
-            Assert.Contains("Cannot clear required relationship 'Measure->Cube'", clearResult.CombinedOutput, StringComparison.Ordinal);
-            Assert.Contains("Next: meta instance relationship set Measure 1 --to Cube <ToId>", clearResult.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Cannot clear required relationship 'Measure->CubeId'", clearResult.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Next: meta instance relationship set Measure 1 --to CubeId <ToId>", clearResult.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -962,8 +962,8 @@ public sealed class CliStrictModeTests
                 workspaceRoot);
 
             Assert.Equal(4, result.ExitCode);
-            Assert.Contains("insert is missing required relationship 'Cube'", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("--set Cube=<Id>", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("insert is missing required relationship 'CubeId'", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("--set CubeId=<Id>", result.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -993,8 +993,8 @@ public sealed class CliStrictModeTests
                 workspaceRoot);
 
             Assert.Equal(4, result.ExitCode);
-            Assert.Contains("bulk-insert row 1 is missing required relationship 'Cube'", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("Set column 'Cube' to a target Id", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("bulk-insert row 1 is missing required relationship 'CubeId'", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Set column 'CubeId' to a target Id", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -2703,7 +2703,7 @@ public sealed class CliStrictModeTests
                 .Select(item => item.Name)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var relationshipNames = entity.Relationships
-                .Select(item => item.Entity)
+                .Select(item => item.GetName())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var row = new InstanceRecord
             {
@@ -2711,14 +2711,10 @@ public sealed class CliStrictModeTests
             };
             foreach (var (key, value) in values)
             {
-                if (key.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+                if (relationshipNames.Contains(key))
                 {
-                    var relationshipName = key[..^2];
-                    if (relationshipNames.Contains(relationshipName))
-                    {
-                        row.RelationshipIds[relationshipName] = value;
-                        continue;
-                    }
+                    row.RelationshipIds[key] = value;
+                    continue;
                 }
 
                 if (propertyNames.Contains(key))

@@ -54,7 +54,7 @@ public sealed class ValidationServiceTests
         workspace.Model.Entities.Add(cube);
 
         var measure = new EntityDefinition { Name = "Measure" };
-        measure.Properties.Add(new PropertyDefinition { Name = "Cube", DataType = "string", IsNullable = false });
+        measure.Properties.Add(new PropertyDefinition { Name = "CubeId", DataType = "string", IsNullable = false });
         measure.Relationships.Add(new RelationshipDefinition { Entity = "Cube" });
         workspace.Model.Entities.Add(measure);
 

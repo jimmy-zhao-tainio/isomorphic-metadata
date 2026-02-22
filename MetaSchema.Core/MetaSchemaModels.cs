@@ -141,10 +141,10 @@ public static class MetaSchemaModels
         typeMapping.Properties.Add(new PropertyDefinition { Name = "Lossiness" });
         typeMapping.Properties.Add(new PropertyDefinition { Name = "IsImplicit", DataType = "bool" });
         typeMapping.Properties.Add(new PropertyDefinition { Name = "Notes", IsNullable = true });
-        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "TypeSystem", Name = "SourceTypeSystem" });
-        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "TypeSystem", Name = "TargetTypeSystem" });
-        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "DataType", Name = "SourceDataType" });
-        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "DataType", Name = "TargetDataType" });
+        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "TypeSystem", Name = "SourceTypeSystemId" });
+        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "TypeSystem", Name = "TargetTypeSystemId" });
+        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "DataType", Name = "SourceDataTypeId" });
+        typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "DataType", Name = "TargetDataTypeId" });
         typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "ConversionImplementation" });
         typeMapping.Relationships.Add(new RelationshipDefinition { Entity = "Setting" });
 

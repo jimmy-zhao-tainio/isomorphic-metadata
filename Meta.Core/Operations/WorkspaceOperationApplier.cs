@@ -106,7 +106,7 @@ public static class WorkspaceOperationApplier
 
             var relationshipUsageNames = sourceEntity.Relationships
                 .Where(relationship => string.Equals(relationship.Entity, entityName, StringComparison.OrdinalIgnoreCase))
-                .Select(relationship => relationship.GetUsageName())
+                .Select(relationship => relationship.GetName())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (relationshipUsageNames.Count == 0)
             {
@@ -148,9 +148,9 @@ public static class WorkspaceOperationApplier
             {
                 if (string.Equals(relationship.Entity, entityName, StringComparison.OrdinalIgnoreCase))
                 {
-                    var previousUsageName = relationship.GetUsageName();
+                    var previousUsageName = relationship.GetName();
                     relationship.Entity = newEntityName;
-                    var updatedUsageName = relationship.GetUsageName();
+                    var updatedUsageName = relationship.GetName();
                     if (!string.Equals(previousUsageName, updatedUsageName, StringComparison.OrdinalIgnoreCase))
                     {
                         foreach (var record in modelEntityRecords)
@@ -282,18 +282,11 @@ public static class WorkspaceOperationApplier
             Entity = relatedEntity,
         };
 
-        var usageName = newRelationship.GetUsageName();
-        var columnName = newRelationship.GetColumnName();
+        var relationshipName = newRelationship.GetName();
         if (entity.Relationships.Any(relationship =>
-                string.Equals(relationship.GetUsageName(), usageName, StringComparison.OrdinalIgnoreCase)))
+                string.Equals(relationship.GetName(), relationshipName, StringComparison.OrdinalIgnoreCase)))
         {
-            throw new InvalidOperationException($"Relationship '{entity.Name}.{usageName}' already exists.");
-        }
-
-        if (entity.Relationships.Any(relationship =>
-                string.Equals(relationship.GetColumnName(), columnName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException($"Relationship column '{entity.Name}.{columnName}' already exists.");
+            throw new InvalidOperationException($"Relationship '{entity.Name}.{relationshipName}' already exists.");
         }
 
         entity.Relationships.Add(newRelationship);
@@ -308,10 +301,10 @@ public static class WorkspaceOperationApplier
 
         if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records) &&
             records.Any(record => record.RelationshipIds.Any(pair =>
-                string.Equals(pair.Key, relationship.GetUsageName(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(pair.Key, relationship.GetName(), StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(pair.Value))))
         {
-            throw new InvalidOperationException($"Relationship '{entityName}.{relationship.GetUsageName()}' is in use and cannot be removed.");
+            throw new InvalidOperationException($"Relationship '{entityName}.{relationship.GetName()}' is in use and cannot be removed.");
         }
 
         entity.Relationships.Remove(relationship);
@@ -326,18 +319,18 @@ public static class WorkspaceOperationApplier
 
         var entity = RequireEntity(workspace.Model, entityName);
         var relationship = ResolveRelationship(entity, relationshipSelector);
-        var oldUsageName = relationship.GetUsageName();
+        var oldUsageName = relationship.GetName();
 
         if (entity.Relationships.Any(item =>
                 !ReferenceEquals(item, relationship) &&
-                string.Equals(item.GetUsageName(), relationship.GetUsageName(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(item.GetName(), relationship.GetName(), StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(item.Entity, newRelatedEntity, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException($"Relationship '{entityName}->{newRelatedEntity}' already exists.");
         }
 
         relationship.Entity = newRelatedEntity;
-        var newUsageName = relationship.GetUsageName();
+        var newUsageName = relationship.GetName();
         if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var records))
         {
             foreach (var record in records)
@@ -466,7 +459,7 @@ public static class WorkspaceOperationApplier
     {
         var normalizedSelector = selector.Trim();
         var byUsage = entity.Relationships
-            .Where(item => string.Equals(item.GetUsageName(), normalizedSelector, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.Equals(item.GetName(), normalizedSelector, StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (byUsage.Count == 1)
         {

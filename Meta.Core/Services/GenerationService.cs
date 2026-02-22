@@ -191,7 +191,7 @@ public static class GenerationService
             .OrderBy(entity => entity.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var relationships = new List<(string Source, string Target, string Column)>();
+        var relationships = new List<(string Source, string Target, string RelationshipName)>();
         foreach (var entity in entities)
         {
             var columns = new List<string>
@@ -208,12 +208,12 @@ public static class GenerationService
             }
 
             foreach (var relationship in entity.Relationships
-                         .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
-                         .ThenBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase))
+                         .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+                         .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase))
             {
-                var columnName = relationship.GetColumnName();
-                columns.Add($"    [{EscapeSqlIdentifier(columnName)}] NVARCHAR(128) NOT NULL");
-                relationships.Add((entity.Name, relationship.Entity, columnName));
+                var relationshipName = relationship.GetName();
+                columns.Add($"    [{EscapeSqlIdentifier(relationshipName)}] NVARCHAR(128) NOT NULL");
+                relationships.Add((entity.Name, relationship.Entity, relationshipName));
             }
 
             columns.Add($"    CONSTRAINT [PK_{EscapeSqlIdentifier(entity.Name)}] PRIMARY KEY CLUSTERED ([Id] ASC)");
@@ -228,9 +228,9 @@ public static class GenerationService
                      .OrderBy(item => item.Source, StringComparer.OrdinalIgnoreCase)
                      .ThenBy(item => item.Target, StringComparer.OrdinalIgnoreCase))
         {
-            var constraintName = $"FK_{relationship.Source}_{relationship.Target}_{relationship.Column}";
+            var constraintName = $"FK_{relationship.Source}_{relationship.Target}_{relationship.RelationshipName}";
             builder.AppendLine(
-                $"ALTER TABLE [dbo].[{EscapeSqlIdentifier(relationship.Source)}] WITH CHECK ADD CONSTRAINT [{EscapeSqlIdentifier(constraintName)}] FOREIGN KEY([{EscapeSqlIdentifier(relationship.Column)}]) REFERENCES [dbo].[{EscapeSqlIdentifier(relationship.Target)}]([Id]);");
+                $"ALTER TABLE [dbo].[{EscapeSqlIdentifier(relationship.Source)}] WITH CHECK ADD CONSTRAINT [{EscapeSqlIdentifier(constraintName)}] FOREIGN KEY([{EscapeSqlIdentifier(relationship.RelationshipName)}]) REFERENCES [dbo].[{EscapeSqlIdentifier(relationship.Target)}]([Id]);");
             builder.AppendLine("GO");
             builder.AppendLine();
         }
@@ -267,12 +267,12 @@ public static class GenerationService
                 }
 
                 foreach (var relationship in entity.Relationships
-                             .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
-                             .ThenBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase))
+                             .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+                             .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase))
                 {
-                    var columnName = relationship.GetColumnName();
-                    columns.Add($"[{EscapeSqlIdentifier(columnName)}]");
-                    values.Add(row.RelationshipIds.TryGetValue(relationship.GetUsageName(), out var relationshipValue)
+                    var relationshipName = relationship.GetName();
+                    columns.Add($"[{EscapeSqlIdentifier(relationshipName)}]");
+                    values.Add(row.RelationshipIds.TryGetValue(relationship.GetName(), out var relationshipValue)
                         ? ToSqlLiteral(relationshipValue)
                         : "NULL");
                 }
@@ -327,10 +327,13 @@ public static class GenerationService
         }
 
         foreach (var relationship in entity.Relationships
-                     .OrderBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
                      .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase))
         {
-            builder.AppendLine($"        public string {relationship.GetUsageName()} {{ get; set; }} = string.Empty;");
+            var relationshipName = relationship.GetName();
+            var navigationName = relationship.GetNavigationName();
+            builder.AppendLine($"        public string {relationshipName} {{ get; set; }} = string.Empty;");
+            builder.AppendLine($"        public {relationship.Entity} {navigationName} {{ get; set; }} = new {relationship.Entity}();");
         }
 
         builder.AppendLine("    }");

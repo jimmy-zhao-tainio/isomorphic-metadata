@@ -82,7 +82,7 @@ public static class NormalizationService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var relationshipNames = entity.Relationships
-            .Select(relationship => relationship.GetUsageName())
+            .Select(relationship => relationship.GetName())
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 

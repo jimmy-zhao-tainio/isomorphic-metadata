@@ -76,7 +76,7 @@ public static class TypeConversionCatalogSeed
                     },
                     new Dictionary<string, string>
                     {
-                        ["TypeSystem"] = RequireId(typeSystemIds, value.TypeSystem, "TypeSystem"),
+                        ["TypeSystemId"] = RequireId(typeSystemIds, value.TypeSystem, "TypeSystem"),
                     });
                 dataTypeIds[BuildDataTypeKey(value.TypeSystem, value.Name)] = id;
             }
@@ -97,8 +97,8 @@ public static class TypeConversionCatalogSeed
                     },
                     new Dictionary<string, string>
                     {
-                        ["DataType"] = RequireDataTypeId(value.TypeSystem, value.DataType),
-                        ["Facet"] = RequireId(facetIds, value.Facet, "Facet"),
+                        ["DataTypeId"] = RequireDataTypeId(value.TypeSystem, value.DataType),
+                        ["FacetId"] = RequireId(facetIds, value.Facet, "Facet"),
                     });
             }
         }
@@ -120,7 +120,7 @@ public static class TypeConversionCatalogSeed
                     },
                     new Dictionary<string, string>
                     {
-                        ["DataType"] = RequireDataTypeId(value.TypeSystem, value.DataType),
+                        ["DataTypeId"] = RequireDataTypeId(value.TypeSystem, value.DataType),
                     });
             }
         }
@@ -172,14 +172,14 @@ public static class TypeConversionCatalogSeed
                     ["IsImplicit"] = BoolText(value.IsImplicit),
                     ["Notes"] = value.Notes,
                 },
-                new Dictionary<string, string>
-                {
-                    ["SourceTypeSystem"] = RequireId(typeSystemIds, value.SourceTypeSystem, "TypeSystem"),
-                    ["TargetTypeSystem"] = RequireId(typeSystemIds, value.TargetTypeSystem, "TypeSystem"),
-                    ["SourceDataType"] = RequireDataTypeId(value.SourceTypeSystem, value.SourceDataType),
-                    ["TargetDataType"] = RequireDataTypeId(value.TargetTypeSystem, value.TargetDataType),
-                    ["ConversionImplementation"] = RequireId(implementationIds, value.ConversionImplementation, "ConversionImplementation"),
-                    ["Setting"] = RequireId(settingIds, value.Setting, "Setting"),
+                    new Dictionary<string, string>
+                    {
+                    ["SourceTypeSystemId"] = RequireId(typeSystemIds, value.SourceTypeSystem, "TypeSystem"),
+                    ["TargetTypeSystemId"] = RequireId(typeSystemIds, value.TargetTypeSystem, "TypeSystem"),
+                    ["SourceDataTypeId"] = RequireDataTypeId(value.SourceTypeSystem, value.SourceDataType),
+                    ["TargetDataTypeId"] = RequireDataTypeId(value.TargetTypeSystem, value.TargetDataType),
+                    ["ConversionImplementationId"] = RequireId(implementationIds, value.ConversionImplementation, "ConversionImplementation"),
+                    ["SettingId"] = RequireId(settingIds, value.Setting, "Setting"),
                 });
 
             foreach (var condition in value.Conditions ?? Array.Empty<TypeConversionCatalogSeedData.MappingConditionSeed>())
@@ -193,8 +193,8 @@ public static class TypeConversionCatalogSeed
                     },
                     new Dictionary<string, string>
                     {
-                        ["TypeMapping"] = mappingId,
-                        ["Facet"] = RequireId(facetIds, condition.Facet, "Facet"),
+                        ["TypeMappingId"] = mappingId,
+                        ["FacetId"] = RequireId(facetIds, condition.Facet, "Facet"),
                     });
             }
 
@@ -210,8 +210,8 @@ public static class TypeConversionCatalogSeed
                     },
                     new Dictionary<string, string>
                     {
-                        ["TypeMapping"] = mappingId,
-                        ["Facet"] = RequireId(facetIds, transform.Facet, "Facet"),
+                        ["TypeMappingId"] = mappingId,
+                        ["FacetId"] = RequireId(facetIds, transform.Facet, "Facet"),
                     });
             }
         }

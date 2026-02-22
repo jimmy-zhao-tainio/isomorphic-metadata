@@ -35,18 +35,18 @@ public sealed class EntityDefinition
         }
 
         return Relationships.FirstOrDefault(relationship =>
-            string.Equals(relationship.GetUsageName(), usageName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(relationship.GetName(), usageName, StringComparison.OrdinalIgnoreCase));
     }
 
-    public RelationshipDefinition? FindRelationshipByColumnName(string columnName)
+    public RelationshipDefinition? FindRelationshipByName(string relationshipName)
     {
-        if (string.IsNullOrWhiteSpace(columnName))
+        if (string.IsNullOrWhiteSpace(relationshipName))
         {
             return null;
         }
 
         return Relationships.FirstOrDefault(relationship =>
-            string.Equals(relationship.GetColumnName(), columnName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(relationship.GetName(), relationshipName, StringComparison.OrdinalIgnoreCase));
     }
 }
 
@@ -61,16 +61,20 @@ public sealed class RelationshipDefinition
 {
     public string Entity { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string Column { get; set; } = string.Empty;
 
-    public string GetUsageName()
+    public string GetName()
     {
-        return string.IsNullOrWhiteSpace(Name) ? Entity : Name;
+        return string.IsNullOrWhiteSpace(Name) ? Entity + "Id" : Name;
     }
 
-    public string GetColumnName()
+    public string GetNavigationName()
     {
-        var usageName = GetUsageName();
-        return string.IsNullOrWhiteSpace(Column) ? usageName + "Id" : Column;
+        var relationshipName = GetName();
+        if (relationshipName.EndsWith("Id", StringComparison.Ordinal) && relationshipName.Length > 2)
+        {
+            return relationshipName[..^2];
+        }
+
+        return relationshipName;
     }
 }

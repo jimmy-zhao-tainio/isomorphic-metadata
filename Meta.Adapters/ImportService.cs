@@ -111,9 +111,10 @@ public sealed class ImportService : IImportService
                     $"Foreign key '{relationship.ConstraintName}' on '{sourceEntity.Name}.{relationship.SourceColumn}' must reference '{targetEntity.Name}.Id'.");
             }
 
-            var relationshipName = DeriveRelationshipNameFromColumn(relationship.SourceColumn);
+            var relationshipName = relationship.SourceColumn.Trim();
+            ValidateIdentifier(relationshipName, $"Foreign key column on table '{sourceEntity.Name}'");
             if (sourceEntity.Relationships.Any(item =>
-                    string.Equals(item.GetUsageName(), relationshipName, StringComparison.OrdinalIgnoreCase)))
+                    string.Equals(item.GetName(), relationshipName, StringComparison.OrdinalIgnoreCase)))
             {
                 throw new InvalidOperationException(
                     $"Table '{sourceEntity.Name}' has duplicate relationship usage name '{relationshipName}'.");
@@ -123,7 +124,6 @@ public sealed class ImportService : IImportService
             {
                 Entity = targetEntity.Name,
                 Name = relationshipName,
-                Column = relationship.SourceColumn,
             });
         }
 
@@ -306,7 +306,7 @@ public sealed class ImportService : IImportService
 
         var relationshipColumns = entity.Relationships
             .Where(item => !string.IsNullOrWhiteSpace(item.Entity))
-            .Select(item => item.GetColumnName())
+            .Select(item => item.GetName())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         entity.Properties.RemoveAll(property =>
@@ -392,7 +392,7 @@ public sealed class ImportService : IImportService
 
             foreach (var relationship in entity.Relationships)
             {
-                var columnName = relationship.GetColumnName();
+                var columnName = relationship.GetName();
                 if (!columnNames.Contains(columnName))
                 {
                     throw new InvalidOperationException(
@@ -418,7 +418,7 @@ public sealed class ImportService : IImportService
                         $"Table '{schema}.{entity.Name}' has non-numeric relationship value '{relationshipId}' for '{columnName}' on row '{id}'.");
                 }
 
-                record.RelationshipIds[relationship.GetUsageName()] = relationshipId;
+                record.RelationshipIds[relationship.GetName()] = relationshipId;
             }
 
             rows.Add(record);
@@ -449,38 +449,6 @@ public sealed class ImportService : IImportService
     private static string EscapeSqlIdentifier(string value)
     {
         return value.Replace("]", "]]", StringComparison.Ordinal);
-    }
-
-    private static string DeriveRelationshipNameFromColumn(string sourceColumn)
-    {
-        var candidate = sourceColumn;
-        if (candidate.EndsWith("Id", StringComparison.OrdinalIgnoreCase) && candidate.Length > 2)
-        {
-            candidate = candidate[..^2];
-        }
-
-        candidate = candidate.Trim();
-        if (string.IsNullOrWhiteSpace(candidate))
-        {
-            throw new InvalidOperationException(
-                $"Cannot derive relationship name from foreign key column '{sourceColumn}'.");
-        }
-
-        var sanitizedChars = candidate.Select(ch =>
-            char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_').ToArray();
-        var sanitized = new string(sanitizedChars);
-        if (string.IsNullOrWhiteSpace(sanitized))
-        {
-            throw new InvalidOperationException(
-                $"Cannot derive relationship name from foreign key column '{sourceColumn}'.");
-        }
-
-        if (!(char.IsLetter(sanitized[0]) || sanitized[0] == '_'))
-        {
-            sanitized = "_" + sanitized;
-        }
-
-        return sanitized;
     }
 
     private static bool IsPositiveIntegerIdentity(string? value)

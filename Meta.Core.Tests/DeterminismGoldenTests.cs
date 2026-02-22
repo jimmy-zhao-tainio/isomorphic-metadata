@@ -47,15 +47,15 @@ public sealed class DeterminismGoldenTests
             ["Dimension.cs"] = "9bc09e08bd078d0393c892bdfb24dbd06fb1e6899955a84f368df02cbeabaee7",
             ["EnterpriseBIPlatform.cs"] = "506911d4ca17102113054d28366a68e2046d911d3516c1221a48eaf9b82da9d4",
             ["Fact.cs"] = "3ac17b963c93fbd4f56e566dc5c8006f02a4ccdad1f17c4da9602f14ab02c760",
-            ["Measure.cs"] = "5de86e90270a7c10d7aeb9f419b30c341792fcdbac01cbe57299e843651073c1",
-            ["System.cs"] = "b70ee2474fb3ef649b8705aab2b17efbd8d66dfa3ddb87ec279d73acf148e285",
-            ["SystemCube.cs"] = "70a4007f2213e4b2995ae0d9fc150a28b158d9a51472ba1f6dc53f66fd1413d3",
-            ["SystemDimension.cs"] = "9b00644f8f7a9a105276a2babefbc6bfccb935f9b841b0217954df29340748e0",
-            ["SystemFact.cs"] = "144c54d53d4300272a08ed17e645d98fc8eb74eaf9c266e75f22f963ac24290f",
+            ["Measure.cs"] = "77eed83ec53063bcef21ad8e11ff79a85ecf30a39179b1e51010ac9712342ade",
+            ["System.cs"] = "aacf31c6cff5225fbe816da482d650ab2a48934e1a3926dec2326371677a2572",
+            ["SystemCube.cs"] = "5e5fec0ccf027690461d4913eddbd78628479aafbd116322c2285710dda7ef83",
+            ["SystemDimension.cs"] = "4834676f07bff9f1e02089f0b93a3c499d380fdc4b94f0f7c89d36e3c3325edc",
+            ["SystemFact.cs"] = "7faad743945ce43057243112175f4276d499b1048b45ac12e50ae147b5a06e77",
             ["SystemType.cs"] = "a3b54fbdfd2d315b7f3d2501f6f3ffd457dcb320f52f5606fb53c9d1549d8f9a",
         };
 
-    private const string ExpectedCSharpCombinedHash = "ec772cf5df25aff0113850a2c25e2e0ed56fc40cf97314aa82c9dd78b8a1f754";
+    private const string ExpectedCSharpCombinedHash = "49040a8397dae33e630f33652097aa8febf321f384ee622769fc968472a86854";
 
     [Fact]
     public async Task XmlCanonicalOutput_MatchesGoldenHashes()

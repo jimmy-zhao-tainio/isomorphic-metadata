@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     async Task<int> InstanceRelationshipListAsync(string[] commandArgs)
     {
@@ -26,16 +26,16 @@
             var fromEntity = RequireEntity(workspace, fromEntityName);
             var row = ResolveRowById(workspace, fromEntityName, fromId);
             var relationshipRows = fromEntity.Relationships
-                .OrderBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
                 .Where(relationship =>
-                    row.RelationshipIds.TryGetValue(relationship.GetUsageName(), out var relationshipId) &&
+                    row.RelationshipIds.TryGetValue(relationship.GetName(), out var relationshipId) &&
                     !string.IsNullOrWhiteSpace(relationshipId))
                 .Select(item => new
                 {
-                    Relationship = item.GetUsageName(),
+                    Relationship = item.GetName(),
                     ToEntity = item.Entity,
-                    ToInstance = BuildEntityInstanceAddress(item.Entity, row.RelationshipIds[item.GetUsageName()]),
+                    ToInstance = BuildEntityInstanceAddress(item.Entity, row.RelationshipIds[item.GetName()]),
                 })
                 .ToList();
     

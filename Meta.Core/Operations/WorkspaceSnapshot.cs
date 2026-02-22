@@ -75,7 +75,6 @@ public static class WorkspaceSnapshotCloner
                 {
                     Entity = relationship.Entity,
                     Name = relationship.Name,
-                    Column = relationship.Column,
                 });
             }
 

@@ -201,7 +201,7 @@ public sealed class ValidationService : IValidationService
 
         foreach (var relationship in entity.Relationships)
         {
-            var usageName = relationship.GetUsageName();
+            var usageName = relationship.GetName();
             if (string.IsNullOrWhiteSpace(usageName))
             {
                 continue;
@@ -252,53 +252,29 @@ public sealed class ValidationService : IValidationService
                 continue;
             }
 
-            var relationUsageNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var relationColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var relationNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var relationship in entity.Relationships)
             {
-                var usageName = relationship.GetUsageName();
-                var columnName = relationship.GetColumnName();
-                if (!IsValidName(usageName))
+                var relationshipName = relationship.GetName();
+                if (!IsValidName(relationshipName))
                 {
                     diagnostics.Issues.Add(new DiagnosticIssue
                     {
                         Code = "relationship.name.invalid",
-                        Message = $"Relationship name '{entity.Name}.{usageName}' is invalid.",
+                        Message = $"Relationship name '{entity.Name}.{relationshipName}' is invalid.",
                         Severity = IssueSeverity.Error,
-                        Location = $"model/entity/{entity.Name}/relationship/{usageName}",
+                        Location = $"model/entity/{entity.Name}/relationship/{relationshipName}",
                     });
                 }
 
-                if (!IsValidName(columnName))
-                {
-                    diagnostics.Issues.Add(new DiagnosticIssue
-                    {
-                        Code = "relationship.column.invalid",
-                        Message = $"Relationship column '{entity.Name}.{columnName}' is invalid.",
-                        Severity = IssueSeverity.Error,
-                        Location = $"model/entity/{entity.Name}/relationship/{usageName}/@column",
-                    });
-                }
-
-                if (!relationUsageNames.Add(usageName))
+                if (!relationNames.Add(relationshipName))
                 {
                     diagnostics.Issues.Add(new DiagnosticIssue
                     {
                         Code = "relationship.duplicate",
-                        Message = $"Relationship '{entity.Name}.{usageName}' is duplicated.",
+                        Message = $"Relationship '{entity.Name}.{relationshipName}' is duplicated.",
                         Severity = IssueSeverity.Error,
-                        Location = $"model/entity/{entity.Name}/relationship/{usageName}",
-                    });
-                }
-
-                if (!relationColumns.Add(columnName))
-                {
-                    diagnostics.Issues.Add(new DiagnosticIssue
-                    {
-                        Code = "relationship.column.duplicate",
-                        Message = $"Relationship column '{entity.Name}.{columnName}' is duplicated.",
-                        Severity = IssueSeverity.Error,
-                        Location = $"model/entity/{entity.Name}/relationship/{usageName}/@column",
+                        Location = $"model/entity/{entity.Name}/relationship/{relationshipName}",
                     });
                 }
 
@@ -537,17 +513,16 @@ public sealed class ValidationService : IValidationService
             {
                 foreach (var relationship in modelEntity.Relationships)
                 {
-                    var relationshipUsage = relationship.GetUsageName();
-                    var relationshipColumn = relationship.GetColumnName();
-                    if (!record.RelationshipIds.TryGetValue(relationshipUsage, out var relatedId) ||
+                    var relationshipName = relationship.GetName();
+                    if (!record.RelationshipIds.TryGetValue(relationshipName, out var relatedId) ||
                         string.IsNullOrWhiteSpace(relatedId))
                     {
                         diagnostics.Issues.Add(new DiagnosticIssue
                         {
                             Code = "instance.relationship.missing",
-                            Message = $"Entity '{entityName}' record '{record.Id}' is missing relationship '{relationshipColumn}'.",
+                            Message = $"Entity '{entityName}' record '{record.Id}' is missing relationship '{relationshipName}'.",
                             Severity = IssueSeverity.Error,
-                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipUsage}",
+                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipName}",
                         });
                         continue;
                     }
@@ -558,9 +533,9 @@ public sealed class ValidationService : IValidationService
                         {
                             Code = "instance.relationship.invalid",
                             Message =
-                                $"Entity '{entityName}' record '{record.Id}' has invalid relationship '{relationshipUsage}' id '{relatedId}'.",
+                                $"Entity '{entityName}' record '{record.Id}' has invalid relationship '{relationshipName}' id '{relatedId}'.",
                             Severity = IssueSeverity.Error,
-                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipUsage}/{relatedId}",
+                            Location = $"instance/{entityName}/{record.Id}/relationship/{relationshipName}/{relatedId}",
                         });
                         continue;
                     }

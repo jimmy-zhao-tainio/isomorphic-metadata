@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     async Task<int> InstanceRelationshipClearAsync(string[] commandArgs)
     {
@@ -47,7 +47,7 @@
                     $"Relationship '{fromEntityName}->{toEntityName}' does not exist.");
             }
 
-            var toRelationshipName = relationship.GetUsageName();
+            var toRelationshipName = relationship.GetName();
 
             return PrintFormattedError(
                 "E_OPERATION",

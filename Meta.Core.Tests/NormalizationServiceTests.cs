@@ -27,7 +27,7 @@ public sealed class NormalizationServiceTests
         Assert.True(patch.ReplaceExisting);
         Assert.True(patch.Values.ContainsKey("MeasureName"));
         Assert.False(patch.Values.ContainsKey("LegacyField"));
-        Assert.True(patch.RelationshipIds.ContainsKey("Cube"));
+        Assert.True(patch.RelationshipIds.ContainsKey("CubeId"));
         Assert.False(patch.RelationshipIds.ContainsKey("LegacyLink"));
     }
 
@@ -110,7 +110,7 @@ public sealed class NormalizationServiceTests
             },
             RelationshipIds =
             {
-                ["Cube"] = "10",
+                ["CubeId"] = "10",
                 ["LegacyLink"] = "xyz",
             },
         });

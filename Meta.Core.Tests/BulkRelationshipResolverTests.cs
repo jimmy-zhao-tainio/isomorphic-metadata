@@ -21,21 +21,21 @@ public sealed class BulkRelationshipResolverTests
                 {
                     Id = "1",
                     Values = { ["MeasureName"] = "Orders" },
-                    RelationshipIds = { ["Cube"] = "2" },
+                    RelationshipIds = { ["CubeId"] = "2" },
                 },
                 new RowPatch
                 {
                     Id = "2",
                     Values = { ["MeasureName"] = "Revenue" },
-                    RelationshipIds = { ["Cube"] = "id:1" },
+                    RelationshipIds = { ["CubeId"] = "id:1" },
                 },
             },
         };
 
         BulkRelationshipResolver.ResolveRelationshipIds(workspace, operation);
 
-        Assert.Equal("2", operation.RowPatches[0].RelationshipIds["Cube"]);
-        Assert.Equal("1", operation.RowPatches[1].RelationshipIds["Cube"]);
+        Assert.Equal("2", operation.RowPatches[0].RelationshipIds["CubeId"]);
+        Assert.Equal("1", operation.RowPatches[1].RelationshipIds["CubeId"]);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class BulkRelationshipResolverTests
                 new RowPatch
                 {
                     Id = "1",
-                    RelationshipIds = { ["Cube"] = legacyRowReference },
+                    RelationshipIds = { ["CubeId"] = legacyRowReference },
                 },
             },
         };

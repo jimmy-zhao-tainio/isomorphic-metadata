@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     async Task<int> ModelDropRelationshipAsync(string[] commandArgs)
     {
@@ -36,7 +36,7 @@
                     $"Relationship '{fromEntityName}->{toEntityName}' does not exist.");
             }
 
-            var relationshipName = relationship.GetUsageName();
+            var relationshipName = relationship.GetName();
             var targetEntityName = relationship.Entity;
 
             var blockers = workspace.Instance.GetOrCreateEntityRecords(fromEntityName)

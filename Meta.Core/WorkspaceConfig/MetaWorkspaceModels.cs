@@ -23,11 +23,11 @@ public static class MetaWorkspaceModels
         workspace.Relationships.Add(new RelationshipDefinition { Entity = "WorkspaceLayout" });
         workspace.Relationships.Add(new RelationshipDefinition { Entity = "Encoding" });
         workspace.Relationships.Add(new RelationshipDefinition { Entity = "Newlines" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "EntitiesOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "PropertiesOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "RelationshipsOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "RowsOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "AttributesOrder" });
+        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "EntitiesOrderId" });
+        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "PropertiesOrderId" });
+        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "RelationshipsOrderId" });
+        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "RowsOrderId" });
+        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Name = "AttributesOrderId" });
 
         var workspaceLayout = new EntityDefinition
         {

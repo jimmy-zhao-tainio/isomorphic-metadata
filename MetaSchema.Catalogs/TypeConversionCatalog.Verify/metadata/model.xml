@@ -52,10 +52,10 @@
       <Relationships>
         <Relationship entity="ConversionImplementation" />
         <Relationship entity="Setting" />
-        <Relationship entity="DataType" name="SourceDataType" />
-        <Relationship entity="TypeSystem" name="SourceTypeSystem" />
-        <Relationship entity="DataType" name="TargetDataType" />
-        <Relationship entity="TypeSystem" name="TargetTypeSystem" />
+        <Relationship entity="DataType" name="SourceDataTypeId" />
+        <Relationship entity="TypeSystem" name="SourceTypeSystemId" />
+        <Relationship entity="DataType" name="TargetDataTypeId" />
+        <Relationship entity="TypeSystem" name="TargetTypeSystemId" />
       </Relationships>
     </Entity>
     <Entity name="TypeMappingCondition">

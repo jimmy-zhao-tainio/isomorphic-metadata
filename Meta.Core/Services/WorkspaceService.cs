@@ -555,10 +555,8 @@ public sealed class WorkspaceService : IWorkspaceService
         var propertyByName = modelEntity.Properties
             .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
-        var relationshipByColumn = modelEntity.Relationships
-            .ToDictionary(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase);
-        var relationshipByUsage = modelEntity.Relationships
-            .ToDictionary(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase);
+        var relationshipByName = modelEntity.Relationships
+            .ToDictionary(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var attribute in rowElement.Attributes())
         {
@@ -568,15 +566,15 @@ public sealed class WorkspaceService : IWorkspaceService
                 continue;
             }
 
-            if (relationshipByColumn.TryGetValue(attributeName, out var relationship))
+            if (relationshipByName.TryGetValue(attributeName, out var relationship))
             {
                 if (!IsPositiveIntegerIdentity(attribute.Value))
                 {
                     throw new InvalidDataException(
-                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationship.GetColumnName()}' value '{attribute.Value}'.");
+                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationship.GetName()}' value '{attribute.Value}'.");
                 }
 
-                record.RelationshipIds[relationship.GetUsageName()] = attribute.Value;
+                record.RelationshipIds[relationship.GetName()] = attribute.Value;
                 continue;
             }
 
@@ -588,10 +586,10 @@ public sealed class WorkspaceService : IWorkspaceService
         foreach (var element in rowElement.Elements())
         {
             var elementName = element.Name.LocalName;
-            if (relationshipByUsage.TryGetValue(elementName, out var relationship))
+            if (relationshipByName.TryGetValue(elementName, out var relationship))
             {
                 throw new InvalidDataException(
-                    $"Entity '{entityName}' row '{record.Id}' has relationship element '{relationship.GetUsageName()}'. Relationships must be attributes.");
+                    $"Entity '{entityName}' row '{record.Id}' has relationship element '{relationship.GetName()}'. Relationships must be attributes.");
             }
 
             if (!propertyByName.TryGetValue(elementName, out var property))
@@ -611,12 +609,12 @@ public sealed class WorkspaceService : IWorkspaceService
 
         foreach (var relationship in modelEntity.Relationships)
         {
-            var relationshipUsage = relationship.GetUsageName();
-            if (!record.RelationshipIds.TryGetValue(relationshipUsage, out var relationshipId) ||
+            var relationshipName = relationship.GetName();
+            if (!record.RelationshipIds.TryGetValue(relationshipName, out var relationshipId) ||
                 string.IsNullOrWhiteSpace(relationshipId))
             {
                 throw new InvalidDataException(
-                    $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationship.GetColumnName()}'.");
+                    $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationship.GetName()}'.");
             }
         }
 
@@ -674,8 +672,8 @@ public sealed class WorkspaceService : IWorkspaceService
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var orderedRelationships = modelEntity.Relationships
-            .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var root = new XElement(rootName);
@@ -707,26 +705,25 @@ public sealed class WorkspaceService : IWorkspaceService
 
             foreach (var relationship in orderedRelationships)
             {
-                var relationshipName = relationship.GetUsageName();
-                var relationshipColumn = relationship.GetColumnName();
+                var relationshipName = relationship.GetName();
                 if (!record.RelationshipIds.TryGetValue(relationshipName, out var relationshipId) ||
                     string.IsNullOrWhiteSpace(relationshipId))
                 {
                     throw new InvalidOperationException(
-                        $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationshipColumn}'.");
+                        $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationshipName}'.");
                 }
 
                 if (!IsPositiveIntegerIdentity(relationshipId))
                 {
                     throw new InvalidOperationException(
-                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationshipColumn}' value '{relationshipId}'.");
+                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationshipName}' value '{relationshipId}'.");
                 }
 
-                recordElement.Add(new XAttribute(relationshipColumn, relationshipId));
+                recordElement.Add(new XAttribute(relationshipName, relationshipId));
             }
 
             var knownRelationshipNames = orderedRelationships
-                .Select(relationship => relationship.GetUsageName())
+                .Select(relationship => relationship.GetName())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var unknownRelationshipName in record.RelationshipIds.Keys
                          .Where(key => !knownRelationshipNames.Contains(key))
@@ -1153,11 +1150,16 @@ public sealed class WorkspaceService : IWorkspaceService
             {
                 foreach (var relationshipElement in relationshipsElement.Elements("Relationship"))
                 {
+                    if (relationshipElement.Attribute("column") != null)
+                    {
+                        throw new InvalidDataException(
+                            $"Entity '{entity.Name}' relationship to '{((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim()}' uses unsupported attribute 'column'. Use 'name' for serialized relationship attribute name.");
+                    }
+
                     entity.Relationships.Add(new RelationshipDefinition
                     {
                         Entity = ((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim(),
                         Name = ((string?)relationshipElement.Attribute("name") ?? string.Empty).Trim(),
-                        Column = ((string?)relationshipElement.Attribute("column") ?? string.Empty).Trim(),
                     });
                 }
             }
@@ -1241,22 +1243,16 @@ public sealed class WorkspaceService : IWorkspaceService
             {
                 var relationshipsElement = new XElement("Relationships");
                 foreach (var relationship in entity.Relationships
-                             .OrderBy(item => item.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+                             .OrderBy(item => item.GetName(), StringComparer.OrdinalIgnoreCase)
                              .ThenBy(item => item.Entity, StringComparer.OrdinalIgnoreCase))
                 {
                     var relationshipElement = new XElement("Relationship",
                         new XAttribute("entity", relationship.Entity ?? string.Empty));
-                    var usageName = relationship.GetUsageName();
-                    if (!string.Equals(usageName, relationship.Entity, StringComparison.Ordinal))
+                    var relationshipName = relationship.GetName();
+                    var defaultRelationshipName = (relationship.Entity ?? string.Empty) + "Id";
+                    if (!string.Equals(relationshipName, defaultRelationshipName, StringComparison.Ordinal))
                     {
-                        relationshipElement.Add(new XAttribute("name", usageName));
-                    }
-
-                    var columnName = relationship.GetColumnName();
-                    var defaultColumnName = usageName + "Id";
-                    if (!string.Equals(columnName, defaultColumnName, StringComparison.Ordinal))
-                    {
-                        relationshipElement.Add(new XAttribute("column", columnName));
+                        relationshipElement.Add(new XAttribute("name", relationshipName));
                     }
 
                     relationshipsElement.Add(relationshipElement);

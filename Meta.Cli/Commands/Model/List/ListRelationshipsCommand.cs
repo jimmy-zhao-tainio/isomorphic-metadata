@@ -23,13 +23,12 @@ internal sealed partial class CliRuntime
         }
     
         var refs = entity.Relationships
-            .OrderBy(relationship => relationship.GetUsageName(), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(relationship => relationship.GetName(), StringComparer.OrdinalIgnoreCase)
             .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
             .Select(relationship => new
             {
-                Name = relationship.GetUsageName(),
+                Name = relationship.GetName(),
                 Target = relationship.Entity,
-                Column = relationship.GetColumnName(),
             })
             .ToList();
     
@@ -48,12 +47,11 @@ internal sealed partial class CliRuntime
         presenter.WriteInfo($"Relationships: {entity.Name} ({refs.Count})");
         presenter.WriteInfo("Required: (n/a)");
         presenter.WriteTable(
-            new[] { "Name", "Target", "Column" },
+            new[] { "Name", "Target" },
             refs.Select(relationship => (IReadOnlyList<string>)new[]
             {
                 relationship.Name,
                 relationship.Target,
-                relationship.Column,
             }).ToList());
     
         return 0;

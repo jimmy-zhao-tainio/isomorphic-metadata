@@ -160,14 +160,13 @@ Relationships are declared as:
 
 `<Relationship entity="TargetEntity" />`
 
-To support multiple relationships to the same target, or to control the instance attribute / SQL column name, relationships may specify a usage name and/or explicit column name:
+To support multiple relationships to the same target, or to control the instance attribute / SQL column name, specify `name` directly as the serialized relationship name:
 
-`<Relationship entity="TargetEntity" name="UsageName" column="ColumnName" />`
+`<Relationship entity="TargetEntity" name="PoopId" />`
 
 Defaults are:
 
-If `name` is omitted, usage name defaults to the target entity name.  
-If `column` is omitted, the column/attribute defaults to `${name}Id`.
+If `name` is omitted, the relationship name defaults to `${TargetEntity}Id`.
 
 ### Instance XML
 
@@ -176,7 +175,7 @@ Under root, each entity uses a plural container element (for example `<Cubes>`, 
 Inside each container, each instance uses the singular entity name (for example `<Cube ...>`, `<Measure ...>`).
 
 Instance `Id` attribute is mandatory.  
-Declared relationships are required and stored as instance attributes named by the relationship column (defaults described above).  
+Declared relationships are required and stored as instance attributes named by the relationship name (defaults described above).  
 Scalar properties are child elements. Missing property element means unset; empty property element means explicit empty string.
 
 ## Core workflows with examples
