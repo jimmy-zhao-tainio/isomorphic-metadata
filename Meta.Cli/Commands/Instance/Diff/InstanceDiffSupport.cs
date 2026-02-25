@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Xml.Linq;
+using Meta.Core.Serialization;
+using Meta.Core.WorkspaceConfig;
 
 internal sealed partial class CliRuntime
 {
@@ -33,11 +35,11 @@ internal sealed partial class CliRuntime
     private const string EntityMapEntityName = "EntityMap";
     private const string PropertyMapEntityName = "PropertyMap";
 
-    private static readonly Lazy<ModelDefinition> InstanceDiffEqualModelTemplate =
+    private static readonly Lazy<GenericModel> InstanceDiffEqualModelTemplate =
         new(() => LoadModelTemplate(InstanceDiffEqualModelTemplateResourceName, InstanceDiffEqualModelName));
-    private static readonly Lazy<ModelDefinition> InstanceDiffAlignedModelTemplate =
+    private static readonly Lazy<GenericModel> InstanceDiffAlignedModelTemplate =
         new(() => LoadModelTemplate(InstanceDiffAlignedModelTemplateResourceName, InstanceDiffAlignedModelName));
-    private static readonly Lazy<ModelDefinition> InstanceDiffAlignmentModelTemplate =
+    private static readonly Lazy<GenericModel> InstanceDiffAlignmentModelTemplate =
         new(() => LoadModelTemplate(InstanceDiffAlignmentModelTemplateResourceName, InstanceDiffAlignmentModelName));
 
     private static readonly Lazy<string> InstanceDiffEqualModelSignature =
@@ -50,7 +52,7 @@ internal sealed partial class CliRuntime
     private sealed record EqualEntityCatalog(
         string EntityId,
         string EntityName,
-        EntityDefinition ModelEntity,
+        GenericEntity ModelEntity,
         IReadOnlyDictionary<string, string> PropertyIdByName,
         IReadOnlyList<string> OrderedPropertyNames);
 
@@ -253,16 +255,16 @@ internal sealed partial class CliRuntime
             EscapeCanonicalPart(propertyMapId));
     }
 
-    private Workspace CreateWorkspaceFromTemplate(ModelDefinition template, string workspaceRootPath)
+    private Workspace CreateWorkspaceFromTemplate(GenericModel template, string workspaceRootPath)
     {
         var model = CloneModelDefinition(template);
         return new Workspace
         {
             WorkspaceRootPath = workspaceRootPath,
             MetadataRootPath = Path.Combine(workspaceRootPath, "metadata"),
-            Manifest = WorkspaceManifest.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
             Model = model,
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = model.Name,
             },
@@ -270,7 +272,7 @@ internal sealed partial class CliRuntime
         };
     }
 
-    private static ModelDefinition LoadModelTemplate(string resourceName, string expectedModelName)
+    private static GenericModel LoadModelTemplate(string resourceName, string expectedModelName)
     {
         var assembly = typeof(CliRuntime).Assembly;
         using var stream = assembly.GetManifestResourceStream(resourceName);
@@ -286,101 +288,17 @@ internal sealed partial class CliRuntime
             throw new InvalidDataException($"Template '{resourceName}' root must be <Model>.");
         }
 
-        var model = new ModelDefinition
-        {
-            Name = ((string?)root.Attribute("name") ?? string.Empty).Trim(),
-        };
+        var model = ModelXmlCodec.Load(document);
         if (!string.Equals(model.Name, expectedModelName, StringComparison.Ordinal))
         {
             throw new InvalidDataException(
                 $"Template '{resourceName}' model name must be '{expectedModelName}', found '{model.Name}'.");
         }
 
-        var entitiesElement = root.Element("Entities")
-                             ?? throw new InvalidDataException($"Template '{resourceName}' must contain <Entities>.");
-        foreach (var entityElement in entitiesElement.Elements("Entity"))
-        {
-            if (entityElement.Attribute("displayKey") != null)
-            {
-                throw new InvalidDataException(
-                    $"Template '{resourceName}' entity '{(string?)entityElement.Attribute("name") ?? string.Empty}' uses unsupported attribute 'displayKey'.");
-            }
-
-            var entity = new EntityDefinition
-            {
-                Name = ((string?)entityElement.Attribute("name") ?? string.Empty).Trim(),
-                Plural = ((string?)entityElement.Attribute("plural") ?? string.Empty).Trim(),
-            };
-            var propertiesElement = entityElement.Element("Properties");
-            if (propertiesElement != null)
-            {
-                foreach (var propertyElement in propertiesElement.Elements("Property"))
-                {
-                    var propertyName = ((string?)propertyElement.Attribute("name") ?? string.Empty).Trim();
-                    if (string.Equals(propertyName, "Id", StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new InvalidDataException(
-                            $"Template '{resourceName}' entity '{entity.Name}' must not define explicit property 'Id'.");
-                    }
-
-                    if (propertyElement.Attribute("isNullable") != null)
-                    {
-                        throw new InvalidDataException(
-                            $"Template '{resourceName}' property '{entity.Name}.{propertyName}' uses unsupported attribute 'isNullable'. Use 'isRequired'.");
-                    }
-
-                    var dataType = ((string?)propertyElement.Attribute("dataType") ?? "string").Trim();
-                    var isRequiredText = ((string?)propertyElement.Attribute("isRequired") ?? "true").Trim();
-                    var isRequired = string.IsNullOrWhiteSpace(isRequiredText) ||
-                                     string.Equals(isRequiredText, "true", StringComparison.OrdinalIgnoreCase);
-                    if (!string.Equals(isRequiredText, "true", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(isRequiredText, "false", StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new InvalidDataException(
-                            $"Template '{resourceName}' property '{entity.Name}.{propertyName}' has invalid boolean value '{isRequiredText}' for 'isRequired'.");
-                    }
-
-                    entity.Properties.Add(new PropertyDefinition
-                    {
-                        Name = propertyName,
-                        DataType = string.IsNullOrWhiteSpace(dataType) ? "string" : dataType,
-                        IsNullable = !isRequired,
-                    });
-                }
-            }
-
-            var relationshipsElement = entityElement.Element("Relationships");
-            if (relationshipsElement != null)
-            {
-                foreach (var relationshipElement in relationshipsElement.Elements("Relationship"))
-                {
-                    if (relationshipElement.Attribute("name") != null)
-                    {
-                        throw new InvalidDataException(
-                            $"Template '{resourceName}' entity '{entity.Name}' uses unsupported relationship attribute 'name'. Use 'role'.");
-                    }
-
-                    if (relationshipElement.Attribute("column") != null)
-                    {
-                        throw new InvalidDataException(
-                            $"Template '{resourceName}' entity '{entity.Name}' uses unsupported relationship attribute 'column'. Use 'role'.");
-                    }
-
-                    entity.Relationships.Add(new RelationshipDefinition
-                    {
-                        Entity = ((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim(),
-                        Role = ((string?)relationshipElement.Attribute("role") ?? string.Empty).Trim(),
-                    });
-                }
-            }
-
-            model.Entities.Add(entity);
-        }
-
         return model;
     }
 
-    private static string ComputeModelContractSignature(ModelDefinition model)
+    private static string ComputeModelContractSignature(GenericModel model)
     {
         var lines = new List<string>
         {
@@ -418,7 +336,7 @@ internal sealed partial class CliRuntime
         return EncodeCanonicalPayload(string.Join("\n", lines));
     }
 
-    private static bool IsModelContract(ModelDefinition model, string expectedSignature)
+    private static bool IsModelContract(GenericModel model, string expectedSignature)
     {
         return string.Equals(
             ComputeModelContractSignature(model),
@@ -426,22 +344,22 @@ internal sealed partial class CliRuntime
             StringComparison.Ordinal);
     }
 
-    private static ModelDefinition CloneModelDefinition(ModelDefinition source)
+    private static GenericModel CloneModelDefinition(GenericModel source)
     {
-        var clone = new ModelDefinition
+        var clone = new GenericModel
         {
             Name = source.Name ?? string.Empty,
         };
         foreach (var entity in source.Entities)
         {
-            var entityClone = new EntityDefinition
+            var entityClone = new GenericEntity
             {
                 Name = entity.Name ?? string.Empty,
                 Plural = entity.Plural ?? string.Empty,
             };
             foreach (var property in entity.Properties)
             {
-                entityClone.Properties.Add(new PropertyDefinition
+                entityClone.Properties.Add(new GenericProperty
                 {
                     Name = property.Name ?? string.Empty,
                     DataType = property.DataType ?? string.Empty,
@@ -451,7 +369,7 @@ internal sealed partial class CliRuntime
 
             foreach (var relationship in entity.Relationships)
             {
-                entityClone.Relationships.Add(new RelationshipDefinition
+                entityClone.Relationships.Add(new GenericRelationship
                 {
                     Entity = relationship.Entity ?? string.Empty,
                     Role = relationship.Role ?? string.Empty,
@@ -464,7 +382,7 @@ internal sealed partial class CliRuntime
         return clone;
     }
 
-    private static InstanceRecord AddDiffRecord(
+    private static GenericRecord AddDiffRecord(
         Workspace workspace,
         string entityName,
         string id,
@@ -475,14 +393,14 @@ internal sealed partial class CliRuntime
         var propertyNames = modelEntity.Properties
             .Select(item => item.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var relationshipByAlias = new Dictionary<string, RelationshipDefinition>(StringComparer.OrdinalIgnoreCase);
+        var relationshipByAlias = new Dictionary<string, GenericRelationship>(StringComparer.OrdinalIgnoreCase);
         foreach (var relationship in modelEntity.Relationships)
         {
             relationshipByAlias[relationship.GetColumnName()] = relationship;
             relationshipByAlias[relationship.GetRoleOrDefault()] = relationship;
         }
 
-        var row = new InstanceRecord
+        var row = new GenericRecord
         {
             Id = id,
         };
@@ -521,7 +439,7 @@ internal sealed partial class CliRuntime
         return row;
     }
 
-    private static bool TryGetRecordFieldValue(InstanceRecord row, string key, out string value)
+    private static bool TryGetRecordFieldValue(GenericRecord row, string key, out string value)
     {
         if (row.Values.TryGetValue(key, out var propertyValue))
         {
@@ -567,14 +485,14 @@ internal sealed partial class CliRuntime
         return false;
     }
 
-    private static IReadOnlyDictionary<string, InstanceRecord> BuildRecordMap(Workspace workspace, string entityName)
+    private static IReadOnlyDictionary<string, GenericRecord> BuildRecordMap(Workspace workspace, string entityName)
     {
         if (!workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var rows))
         {
-            return new Dictionary<string, InstanceRecord>(StringComparer.OrdinalIgnoreCase);
+            return new Dictionary<string, GenericRecord>(StringComparer.OrdinalIgnoreCase);
         }
 
-        var map = new Dictionary<string, InstanceRecord>(StringComparer.OrdinalIgnoreCase);
+        var map = new Dictionary<string, GenericRecord>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
         {
             if (string.IsNullOrWhiteSpace(row.Id))
@@ -599,7 +517,7 @@ internal sealed partial class CliRuntime
         var metadataRoot = !string.IsNullOrWhiteSpace(workspace.MetadataRootPath)
             ? Path.GetFullPath(workspace.MetadataRootPath)
             : Path.Combine(workspaceRoot, "metadata");
-        var modelRelativePath = workspace.Manifest?.ModelFile ?? "metadata/model.xml";
+        var modelRelativePath = MetaWorkspaceModel.GetModelFile(workspace.WorkspaceConfig);
         var normalizedRelative = modelRelativePath.Replace('/', Path.DirectorySeparatorChar);
         var candidates = new[]
         {
@@ -648,7 +566,7 @@ internal sealed partial class CliRuntime
         return Path.Combine(parent, $"{rightName}.{suffix}");
     }
 
-    private static bool TryGetPropertyLikeValue(EntityDefinition entity, InstanceRecord row, string propertyName, out string value)
+    private static bool TryGetPropertyLikeValue(GenericEntity entity, GenericRecord row, string propertyName, out string value)
     {
         if (row.Values.TryGetValue(propertyName, out var propertyValue))
         {
@@ -687,7 +605,7 @@ internal sealed partial class CliRuntime
         return false;
     }
 
-    private static bool IsRelationshipProperty(EntityDefinition entity, string propertyName, out string relationshipUsageName)
+    private static bool IsRelationshipProperty(GenericEntity entity, string propertyName, out string relationshipUsageName)
     {
         relationshipUsageName = string.Empty;
         var relationship = entity.FindRelationshipByRole(propertyName) ??
@@ -702,7 +620,7 @@ internal sealed partial class CliRuntime
     }
 
     private (string ModelId, IReadOnlyDictionary<string, EqualEntityCatalog> CatalogByName) BuildEqualEntityCatalog(
-        ModelDefinition model,
+        GenericModel model,
         Workspace diffWorkspace,
         IdentityAllocator identityAllocator)
     {
@@ -1133,7 +1051,7 @@ internal sealed partial class CliRuntime
             entityCatalogByName[entityName] = new EqualEntityCatalog(
                 EntityId: entityId,
                 EntityName: entityName,
-                ModelEntity: new EntityDefinition { Name = entityName },
+                ModelEntity: new GenericEntity { Name = entityName },
                 PropertyIdByName: propertyIdByName,
                 OrderedPropertyNames: ordered);
         }
@@ -1232,7 +1150,7 @@ internal sealed partial class CliRuntime
         Workspace diffWorkspace,
         string rowEntityName,
         string entityIdPropertyName,
-        IReadOnlyDictionary<string, InstanceRecord> entityRowsById,
+        IReadOnlyDictionary<string, GenericRecord> entityRowsById,
         string expectedDiffId)
     {
         var rows = BuildRecordMap(diffWorkspace, rowEntityName);
@@ -1277,7 +1195,7 @@ internal sealed partial class CliRuntime
         string rowInstanceIdPropertyName,
         string propertyIdPropertyName,
         IReadOnlyDictionary<string, (string EntityId, string EntityInstanceIdentifier)> rowIdentityByRowInstanceId,
-        IReadOnlyDictionary<string, InstanceRecord> propertyRowsById)
+        IReadOnlyDictionary<string, GenericRecord> propertyRowsById)
     {
         var rows = BuildRecordMap(diffWorkspace, propertyEntityName);
         var propertySet = new HashSet<string>(StringComparer.Ordinal);
@@ -1400,7 +1318,7 @@ internal sealed partial class CliRuntime
         }
     }
 
-    private static string RequireValue(InstanceRecord row, string key, string entityName)
+    private static string RequireValue(GenericRecord row, string key, string entityName)
     {
         if (!TryGetRecordFieldValue(row, key, out var value) || string.IsNullOrWhiteSpace(value))
         {
@@ -1474,7 +1392,7 @@ internal sealed partial class CliRuntime
 
             foreach (var rowId in rightRowsForEntity)
             {
-                var row = new InstanceRecord
+                var row = new GenericRecord
                 {
                     Id = rowId,
                 };
@@ -2538,7 +2456,7 @@ internal sealed partial class CliRuntime
                 var row = rows.FirstOrDefault(item => string.Equals(item.Id, rowId, StringComparison.OrdinalIgnoreCase));
                 if (row == null)
                 {
-                    row = new InstanceRecord
+                    row = new GenericRecord
                     {
                         Id = rowId,
                     };
@@ -2594,3 +2512,7 @@ internal sealed partial class CliRuntime
         }
     }
 }
+
+
+
+

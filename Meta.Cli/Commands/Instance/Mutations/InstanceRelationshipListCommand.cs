@@ -22,7 +22,7 @@ internal sealed partial class CliRuntime
         try
         {
             var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
-            PrintContractCompatibilityWarning(workspace.Manifest);
+            PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             var fromEntity = RequireEntity(workspace, fromEntityName);
             var row = ResolveRowById(workspace, fromEntityName, fromId);
             var relationshipRows = fromEntity.Relationships
@@ -77,4 +77,5 @@ internal sealed partial class CliRuntime
         }
     }
 }
+
 

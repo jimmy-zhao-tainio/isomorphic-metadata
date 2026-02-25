@@ -11,7 +11,4 @@
   <ItemGroup>
     <Compile Include="SampleModel.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Generic\Metadata.Framework.Generic.csproj" />
-  </ItemGroup>
 </Project>

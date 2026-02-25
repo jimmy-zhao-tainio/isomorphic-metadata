@@ -122,11 +122,11 @@ public sealed class FullCycleRandomizedTests
         var modelName = "RandomModel_" + seed;
         var workspace = new Workspace
         {
-            Model = new ModelDefinition
+            Model = new GenericModel
             {
                 Name = modelName,
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = modelName,
             },
@@ -134,15 +134,15 @@ public sealed class FullCycleRandomizedTests
 
         var depthBucketCount = Math.Min(entityCount, random.Next(8, 20));
         var entitiesByDepth = Enumerable.Range(0, depthBucketCount)
-            .Select(_ => new List<EntityDefinition>())
+            .Select(_ => new List<GenericEntity>())
             .ToList();
         var entityDepths = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var orderedEntities = new List<EntityDefinition>(entityCount);
+        var orderedEntities = new List<GenericEntity>(entityCount);
 
         for (var index = 0; index < entityCount; index++)
         {
             var depth = index < depthBucketCount ? index : random.Next(0, depthBucketCount);
-            var entity = new EntityDefinition
+            var entity = new GenericEntity
             {
                 Name = $"Entity{index:D4}",
             };
@@ -151,7 +151,7 @@ public sealed class FullCycleRandomizedTests
             for (var propertyIndex = 1; propertyIndex <= additionalCount; propertyIndex++)
             {
                 var propertyName = $"P{propertyIndex:D2}";
-                entity.Properties.Add(new PropertyDefinition
+                entity.Properties.Add(new GenericProperty
                 {
                     Name = propertyName,
                     DataType = "string",
@@ -192,7 +192,7 @@ public sealed class FullCycleRandomizedTests
                     continue;
                 }
 
-                entity.Relationships.Add(new RelationshipDefinition
+                entity.Relationships.Add(new GenericRelationship
                 {
                     Entity = target.Name,
                 });
@@ -216,7 +216,7 @@ public sealed class FullCycleRandomizedTests
             for (var rowIndex = 1; rowIndex <= rowCount; rowIndex++)
             {
                 var id = rowIndex.ToString();
-                var record = new InstanceRecord
+                var record = new GenericRecord
                 {
                     Id = id,
                 };
@@ -295,3 +295,5 @@ public sealed class FullCycleRandomizedTests
         public int MaxPropertyCountPerEntity { get; set; }
     }
 }
+
+

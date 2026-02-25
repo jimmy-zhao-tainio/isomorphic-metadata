@@ -66,32 +66,32 @@ public sealed class NormalizationServiceTests
         {
             WorkspaceRootPath = "memory",
             MetadataRootPath = "memory/metadata",
-            Model = new ModelDefinition
+            Model = new GenericModel
             {
                 Name = "TestModel",
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = "TestModel",
             },
         };
 
-        var cube = new EntityDefinition
+        var cube = new GenericEntity
         {
             Name = "Cube",
         };
-        cube.Properties.Add(new PropertyDefinition { Name = "CubeName", DataType = "string", IsNullable = false });
+        cube.Properties.Add(new GenericProperty { Name = "CubeName", DataType = "string", IsNullable = false });
         workspace.Model.Entities.Add(cube);
 
-        var measure = new EntityDefinition
+        var measure = new GenericEntity
         {
             Name = "Measure",
         };
-        measure.Properties.Add(new PropertyDefinition { Name = "MeasureName", DataType = "string", IsNullable = false });
-        measure.Relationships.Add(new RelationshipDefinition { Entity = "Cube" });
+        measure.Properties.Add(new GenericProperty { Name = "MeasureName", DataType = "string", IsNullable = false });
+        measure.Relationships.Add(new GenericRelationship { Entity = "Cube" });
         workspace.Model.Entities.Add(measure);
 
-        workspace.Instance.GetOrCreateEntityRecords("Cube").Add(new InstanceRecord
+        workspace.Instance.GetOrCreateEntityRecords("Cube").Add(new GenericRecord
         {
             Id = "10",
             Values =
@@ -100,7 +100,7 @@ public sealed class NormalizationServiceTests
             },
         });
 
-        workspace.Instance.GetOrCreateEntityRecords("Measure").Add(new InstanceRecord
+        workspace.Instance.GetOrCreateEntityRecords("Measure").Add(new GenericRecord
         {
             Id = "1",
             Values =
@@ -127,3 +127,5 @@ public sealed class NormalizationServiceTests
         return workspace;
     }
 }
+
+

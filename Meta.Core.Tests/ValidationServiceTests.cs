@@ -40,22 +40,22 @@ public sealed class ValidationServiceTests
     {
         var workspace = new Workspace
         {
-            Model = new ModelDefinition
+            Model = new GenericModel
             {
                 Name = "MetadataModel",
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = "MetadataModel",
             },
         };
 
-        var cube = new EntityDefinition { Name = "Cube" };
+        var cube = new GenericEntity { Name = "Cube" };
         workspace.Model.Entities.Add(cube);
 
-        var measure = new EntityDefinition { Name = "Measure" };
-        measure.Properties.Add(new PropertyDefinition { Name = "CubeId", DataType = "string", IsNullable = false });
-        measure.Relationships.Add(new RelationshipDefinition { Entity = "Cube" });
+        var measure = new GenericEntity { Name = "Measure" };
+        measure.Properties.Add(new GenericProperty { Name = "CubeId", DataType = "string", IsNullable = false });
+        measure.Relationships.Add(new GenericRelationship { Entity = "Cube" });
         workspace.Model.Entities.Add(measure);
 
         var diagnostics = new ValidationService().Validate(workspace);
@@ -68,21 +68,21 @@ public sealed class ValidationServiceTests
     {
         var workspace = new Workspace
         {
-            Model = new ModelDefinition
+            Model = new GenericModel
             {
                 Name = "MetadataModel",
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = "MetadataModel",
             },
         };
 
-        var entityA = new EntityDefinition { Name = "EntityA" };
-        entityA.Relationships.Add(new RelationshipDefinition { Entity = "EntityB" });
+        var entityA = new GenericEntity { Name = "EntityA" };
+        entityA.Relationships.Add(new GenericRelationship { Entity = "EntityB" });
 
-        var entityB = new EntityDefinition { Name = "EntityB" };
-        entityB.Relationships.Add(new RelationshipDefinition { Entity = "EntityA" });
+        var entityB = new GenericEntity { Name = "EntityB" };
+        entityB.Relationships.Add(new GenericRelationship { Entity = "EntityA" });
 
         workspace.Model.Entities.Add(entityA);
         workspace.Model.Entities.Add(entityB);
@@ -100,7 +100,7 @@ public sealed class ValidationServiceTests
             modelName: "MetadataModel",
             entityName: "Cube",
             propertyName: "Purpose");
-        var record = new InstanceRecord { Id = "1" };
+        var record = new GenericRecord { Id = "1" };
         record.Values["Purpose"] = string.Empty;
         workspace.Instance.GetOrCreateEntityRecords("Cube").Add(record);
 
@@ -118,7 +118,7 @@ public sealed class ValidationServiceTests
             entityName: "Cube",
             propertyName: "Rank");
         workspace.Model.Entities[0].Properties[0].DataType = "int";
-        var record = new InstanceRecord { Id = "1" };
+        var record = new GenericRecord { Id = "1" };
         record.Values["Rank"] = string.Empty;
         workspace.Instance.GetOrCreateEntityRecords("Cube").Add(record);
 
@@ -134,21 +134,21 @@ public sealed class ValidationServiceTests
     {
         var workspace = new Workspace
         {
-            Model = new ModelDefinition
+            Model = new GenericModel
             {
                 Name = modelName,
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = modelName,
             },
         };
 
-        var entity = new EntityDefinition
+        var entity = new GenericEntity
         {
             Name = entityName,
         };
-        entity.Properties.Add(new PropertyDefinition
+        entity.Properties.Add(new GenericProperty
         {
             Name = propertyName,
             DataType = "string",
@@ -159,3 +159,5 @@ public sealed class ValidationServiceTests
         return workspace;
     }
 }
+
+

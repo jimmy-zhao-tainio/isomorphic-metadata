@@ -266,6 +266,44 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
+    public async Task GenerateCSharpHelp_IncludesToolingOption()
+    {
+        InvalidateCliAssemblyCache();
+        var result = await RunCliAsync("generate", "csharp", "--help");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("meta generate csharp", result.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--tooling", result.StdOut, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GenerateSql_RejectsToolingOption()
+    {
+        InvalidateCliAssemblyCache();
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var outputRoot = Path.Combine(Path.GetTempPath(), "metadata-generate-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var result = await RunCliAsync(
+                "generate",
+                "sql",
+                "--tooling",
+                "--out",
+                outputRoot,
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("--tooling is only supported for 'generate csharp'.", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(outputRoot);
+        }
+    }
+
+    [Fact]
     public async Task ArgumentError_IncludesUsageAndNext()
     {
         var result = await RunCliAsync("model", "add-entity");
@@ -750,6 +788,209 @@ public sealed class CliStrictModeTests
         finally
         {
             DeleteDirectorySafe(targetRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_RequiresWorkspaceOrNewWorkspace()
+    {
+        var csvPath = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"), "landing.csv");
+        Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Name,Status",
+            "A,Open",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing");
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("requires --workspace <path> or --new-workspace <path>", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(Path.GetDirectoryName(csvPath)!);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_NewWorkspace_CreatesEntityRowsAndInferredTypes()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Display Name,Active,Count,BigCount,Amount,CreatedAt,Status,Status",
+            "Alice,true,42,2147483648,10.50,2024-01-01T10:20:30Z,Open,Primary",
+            "Bob,false,7,922337203685477580,0.00,2024-02-02T00:00:00Z,Closed,Secondary",
+            ",,,,,,Open,",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order Items",
+                "--new-workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("imported csv", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+
+            var modelPath = Path.Combine(workspaceRoot, "metadata", "model.xml");
+            var model = XDocument.Load(modelPath);
+            var entity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order_Items", StringComparison.Ordinal));
+
+            var properties = entity
+                .Element("Properties")?
+                .Elements("Property")
+                .ToList() ?? new List<XElement>();
+
+            Assert.Contains(properties, property => string.Equals((string?)property.Attribute("name"), "Display_Name", StringComparison.Ordinal));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Active", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("dataType"), "bool", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Count", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("dataType"), "int", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "BigCount", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("dataType"), "long", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Amount", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("dataType"), "decimal", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "CreatedAt", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("dataType"), "datetime", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property => string.Equals((string?)property.Attribute("name"), "Status", StringComparison.Ordinal));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Status_2", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+
+            var rows = LoadEntityRows(workspaceRoot, "Order_Items");
+            Assert.Equal(3, rows.Count);
+            Assert.Equal("1", (string?)rows[0].Attribute("Id"));
+            Assert.Equal("2", (string?)rows[1].Attribute("Id"));
+            Assert.Equal("3", (string?)rows[2].Attribute("Id"));
+            Assert.Equal("Alice", rows[0].Element("Display_Name")?.Value);
+            Assert.Null(rows[2].Element("Display_Name"));
+            Assert.Equal("Open", rows[2].Element("Status")?.Value);
+            Assert.Null(rows[2].Element("Status_2"));
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_FailsWhenEntityAlreadyExists()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var csvPath = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"), "landing.csv");
+        Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Name,Status",
+            "A,Open",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Cube",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("already exists", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(Path.GetDirectoryName(csvPath)!);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_AddsNewEntityAndRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var csvPath = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"), "landing.csv");
+        Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Label,IsActive",
+            "Alpha,true",
+            "Beta,false",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("imported csv", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Entity: Landing", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "metadata", "model.xml");
+            var model = XDocument.Load(modelPath);
+            Assert.Contains(
+                model.Descendants("Entity"),
+                entity => string.Equals((string?)entity.Attribute("name"), "Landing", StringComparison.Ordinal));
+
+            var rows = LoadEntityRows(workspaceRoot, "Landing");
+            Assert.Equal(2, rows.Count);
+            Assert.Equal("Alpha", rows[0].Element("Label")?.Value);
+            Assert.Equal("true", rows[0].Element("IsActive")?.Value);
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(Path.GetDirectoryName(csvPath)!);
         }
     }
 
@@ -2667,6 +2908,17 @@ public sealed class CliStrictModeTests
         return (process.ExitCode, stdOut, stdErr, stdOut + Environment.NewLine + stdErr);
     }
 
+    private static void InvalidateCliAssemblyCache()
+    {
+        cliAssemblyPath = null;
+        var repoRoot = FindRepositoryRoot();
+        var candidate = Path.Combine(repoRoot, "Meta.Cli", "bin", "Debug", "net9.0", "meta.dll");
+        if (File.Exists(candidate))
+        {
+            File.Delete(candidate);
+        }
+    }
+
     private static async Task<string> EnsureCliAssemblyAsync(string repoRoot)
     {
         if (!string.IsNullOrWhiteSpace(cliAssemblyPath) && File.Exists(cliAssemblyPath))
@@ -2940,7 +3192,7 @@ public sealed class CliStrictModeTests
             var relationshipNames = entity.Relationships
                 .Select(item => item.GetColumnName())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var row = new InstanceRecord
+            var row = new GenericRecord
             {
                 Id = id,
             };
@@ -3046,5 +3298,6 @@ public sealed class CliStrictModeTests
         return diffPathMatch.Groups[1].Value.Trim();
     }
 }
+
 
 

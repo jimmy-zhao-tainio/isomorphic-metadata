@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Meta.Adapters;
 using Meta.Core.Domain;
+using Meta.Core.WorkspaceConfig;
 
 namespace Meta.Core.Tests;
 
@@ -69,7 +70,7 @@ public sealed class WorkspaceServiceTests
             var reloaded = await services.WorkspaceService.LoadAsync(tempRoot);
             var reloadedRows = reloaded.Instance.RecordsByEntity.Values.Sum(records => records.Count);
             Assert.Equal(expectedRows, reloadedRows);
-            Assert.Equal("1.0", reloaded.Manifest.ContractVersion);
+            Assert.Equal("1.0", MetaWorkspaceModel.GetContractVersion(reloaded.WorkspaceConfig));
         }
         finally
         {
@@ -97,22 +98,7 @@ public sealed class WorkspaceServiceTests
             var workspaceJsonPath = Path.Combine(metadataRoot, "workspace.json");
 
             Assert.True(File.Exists(workspaceXmlPath));
-            var legacyJson = JsonSerializer.Serialize(new WorkspaceManifest
-            {
-                ContractVersion = "1.0",
-                ModelFile = "metadata/model.xml",
-                InstanceDir = "metadata/instance",
-                Encoding = "utf-8-no-bom",
-                Newlines = "lf",
-                CanonicalSort = new CanonicalSortManifest
-                {
-                    Entities = "name-ordinal",
-                    Properties = "name-ordinal",
-                    Relationships = "name-ordinal",
-                    Rows = "id-ordinal",
-                    Attributes = "id-first-then-name-ordinal",
-                },
-            });
+            var legacyJson = "{\"contractVersion\":\"1.0\"}";
 
             File.Delete(workspaceXmlPath);
             await File.WriteAllTextAsync(workspaceJsonPath, legacyJson);
@@ -191,7 +177,7 @@ public sealed class WorkspaceServiceTests
             SplitEntityShard(tempRoot, "Cube", "Cube.part-a.xml", "Cube.part-b.xml");
 
             var splitLoaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
-            splitLoaded.Instance.GetOrCreateEntityRecords("Cube").Add(new InstanceRecord
+            splitLoaded.Instance.GetOrCreateEntityRecords("Cube").Add(new GenericRecord
             {
                 Id = "999",
                 SourceShardFileName = string.Empty,
@@ -306,7 +292,7 @@ public sealed class WorkspaceServiceTests
             manifest.Save(manifestPath);
 
             var loaded = await services.WorkspaceService.LoadAsync(tempRoot);
-            Assert.Equal("1.7", loaded.Manifest.ContractVersion);
+            Assert.Equal("1.7", MetaWorkspaceModel.GetContractVersion(loaded.WorkspaceConfig));
         }
         finally
         {
@@ -328,17 +314,17 @@ public sealed class WorkspaceServiceTests
             {
                 WorkspaceRootPath = tempRoot,
                 MetadataRootPath = Path.Combine(tempRoot, "metadata"),
-                Model = new Meta.Core.Domain.ModelDefinition
+                Model = new Meta.Core.Domain.GenericModel
                 {
                     Name = "MetadataModel",
                 },
-                Instance = new Meta.Core.Domain.InstanceStore
+                Instance = new Meta.Core.Domain.GenericInstance
                 {
                     ModelName = "MetadataModel",
                 },
             };
 
-            var invalidEntity = new Meta.Core.Domain.EntityDefinition
+            var invalidEntity = new Meta.Core.Domain.GenericEntity
             {
                 Name = "Bad Name",
             };
@@ -401,7 +387,7 @@ public sealed class WorkspaceServiceTests
         try
         {
             workspace.WorkspaceRootPath = tempRoot;
-            workspace.Manifest.InstanceDir = "../outside-instance";
+            MetaWorkspaceModel.SetInstanceDir(workspace.WorkspaceConfig, "../outside-instance");
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await services.WorkspaceService.SaveAsync(workspace));
@@ -427,30 +413,30 @@ public sealed class WorkspaceServiceTests
             {
                 WorkspaceRootPath = tempRoot,
                 MetadataRootPath = Path.Combine(tempRoot, "metadata"),
-                Model = new Meta.Core.Domain.ModelDefinition
+                Model = new Meta.Core.Domain.GenericModel
                 {
                     Name = "MetadataModel",
                 },
-                Instance = new Meta.Core.Domain.InstanceStore
+                Instance = new Meta.Core.Domain.GenericInstance
                 {
                     ModelName = "MetadataModel",
                 },
             };
 
-            var entityA = new Meta.Core.Domain.EntityDefinition
+            var entityA = new Meta.Core.Domain.GenericEntity
             {
                 Name = "EntityA",
             };
-            entityA.Relationships.Add(new Meta.Core.Domain.RelationshipDefinition
+            entityA.Relationships.Add(new Meta.Core.Domain.GenericRelationship
             {
                 Entity = "EntityB",
             });
 
-            var entityB = new Meta.Core.Domain.EntityDefinition
+            var entityB = new Meta.Core.Domain.GenericEntity
             {
                 Name = "EntityB",
             };
-            entityB.Relationships.Add(new Meta.Core.Domain.RelationshipDefinition
+            entityB.Relationships.Add(new Meta.Core.Domain.GenericRelationship
             {
                 Entity = "EntityA",
             });
@@ -458,13 +444,13 @@ public sealed class WorkspaceServiceTests
             workspace.Model.Entities.Add(entityA);
             workspace.Model.Entities.Add(entityB);
 
-            workspace.Instance.GetOrCreateEntityRecords("EntityA").Add(new Meta.Core.Domain.InstanceRecord
+            workspace.Instance.GetOrCreateEntityRecords("EntityA").Add(new Meta.Core.Domain.GenericRecord
             {
                 Id = "1",
             });
             workspace.Instance.GetOrCreateEntityRecords("EntityA")[0].RelationshipIds["EntityBId"] = "1";
 
-            workspace.Instance.GetOrCreateEntityRecords("EntityB").Add(new Meta.Core.Domain.InstanceRecord
+            workspace.Instance.GetOrCreateEntityRecords("EntityB").Add(new Meta.Core.Domain.GenericRecord
             {
                 Id = "1",
             });
@@ -719,7 +705,7 @@ public sealed class WorkspaceServiceTests
         try
         {
             var workspace = BuildWorkspaceWithRelationship(tempRoot);
-            var item = new InstanceRecord
+            var item = new GenericRecord
             {
                 Id = "1",
             };
@@ -865,23 +851,23 @@ public sealed class WorkspaceServiceTests
         {
             WorkspaceRootPath = workspaceRoot,
             MetadataRootPath = Path.Combine(workspaceRoot, "metadata"),
-            Manifest = WorkspaceManifest.CreateDefault(),
-            Model = new ModelDefinition
+            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            Model = new GenericModel
             {
                 Name = "RoundTripModel",
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = "RoundTripModel",
             },
             IsDirty = true,
         };
 
-        var item = new EntityDefinition
+        var item = new GenericEntity
         {
             Name = "Item",
         };
-        item.Properties.Add(new PropertyDefinition
+        item.Properties.Add(new GenericProperty
         {
             Name = "OptionalProp",
             DataType = "string",
@@ -889,7 +875,7 @@ public sealed class WorkspaceServiceTests
         });
         workspace.Model.Entities.Add(item);
 
-        var row = new InstanceRecord
+        var row = new GenericRecord
         {
             Id = "1",
         };
@@ -958,23 +944,23 @@ public sealed class WorkspaceServiceTests
         {
             WorkspaceRootPath = workspaceRoot,
             MetadataRootPath = Path.Combine(workspaceRoot, "metadata"),
-            Manifest = WorkspaceManifest.CreateDefault(),
-            Model = new ModelDefinition
+            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            Model = new GenericModel
             {
                 Name = "RoundTripModel",
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = "RoundTripModel",
             },
             IsDirty = true,
         };
 
-        var item = new EntityDefinition
+        var item = new GenericEntity
         {
             Name = "Item",
         };
-        item.Properties.Add(new PropertyDefinition
+        item.Properties.Add(new GenericProperty
         {
             Name = "OptionalProp",
             DataType = "string",
@@ -982,29 +968,29 @@ public sealed class WorkspaceServiceTests
         });
         workspace.Model.Entities.Add(item);
 
-        var parent = new EntityDefinition
+        var parent = new GenericEntity
         {
             Name = "Parent",
         };
         workspace.Model.Entities.Add(parent);
 
-        var child = new EntityDefinition
+        var child = new GenericEntity
         {
             Name = "Child",
         };
-        child.Relationships.Add(new RelationshipDefinition
+        child.Relationships.Add(new GenericRelationship
         {
             Entity = "Parent",
         });
         workspace.Model.Entities.Add(child);
 
-        var parentRow = new InstanceRecord
+        var parentRow = new GenericRecord
         {
             Id = "1",
         };
         workspace.Instance.GetOrCreateEntityRecords("Parent").Add(parentRow);
 
-        var childRow = new InstanceRecord
+        var childRow = new GenericRecord
         {
             Id = "1",
         };
@@ -1036,3 +1022,7 @@ public sealed class WorkspaceServiceTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+
+
+
+

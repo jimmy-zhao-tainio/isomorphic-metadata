@@ -50,5 +50,22 @@
         <Relationship entity="Workspace" />
       </Relationships>
     </Entity>
+    <Entity name="PropertyConcept" plural="PropertyConcepts">
+      <Properties>
+        <Property name="Name" />
+        <Property name="Description" isRequired="false" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="Workspace" />
+      </Relationships>
+    </Entity>
+    <Entity name="PropertyConceptLabel" plural="PropertyConceptLabels">
+      <Properties>
+        <Property name="Label" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="PropertyConcept" />
+      </Relationships>
+    </Entity>
   </Entities>
 </Model>

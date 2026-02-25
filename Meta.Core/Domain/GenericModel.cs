@@ -4,30 +4,30 @@ using System.Linq;
 
 namespace Meta.Core.Domain;
 
-public sealed class ModelDefinition
+public sealed class GenericModel
 {
     public string Name { get; set; } = string.Empty;
-    public List<EntityDefinition> Entities { get; } = new();
+    public List<GenericEntity> Entities { get; } = new();
 
-    public EntityDefinition? FindEntity(string entityName)
+    public GenericEntity? FindEntity(string entityName)
     {
         return Entities.Find(entity => string.Equals(entity.Name, entityName, StringComparison.OrdinalIgnoreCase));
     }
 }
 
-public sealed class EntityDefinition
+public sealed class GenericEntity
 {
     public string Name { get; set; } = string.Empty;
     public string Plural { get; set; } = string.Empty;
-    public List<PropertyDefinition> Properties { get; } = new();
-    public List<RelationshipDefinition> Relationships { get; } = new();
+    public List<GenericProperty> Properties { get; } = new();
+    public List<GenericRelationship> Relationships { get; } = new();
 
     public string GetPluralName()
     {
         return string.IsNullOrWhiteSpace(Plural) ? Name + "s" : Plural;
     }
 
-    public RelationshipDefinition? FindRelationshipByRole(string role)
+    public GenericRelationship? FindRelationshipByRole(string role)
     {
         if (string.IsNullOrWhiteSpace(role))
         {
@@ -38,7 +38,7 @@ public sealed class EntityDefinition
             string.Equals(relationship.GetRoleOrDefault(), role, StringComparison.OrdinalIgnoreCase));
     }
 
-    public RelationshipDefinition? FindRelationshipByColumnName(string columnName)
+    public GenericRelationship? FindRelationshipByColumnName(string columnName)
     {
         if (string.IsNullOrWhiteSpace(columnName))
         {
@@ -50,14 +50,14 @@ public sealed class EntityDefinition
     }
 }
 
-public sealed class PropertyDefinition
+public sealed class GenericProperty
 {
     public string Name { get; set; } = string.Empty;
     public string DataType { get; set; } = "string";
     public bool IsNullable { get; set; }
 }
 
-public sealed class RelationshipDefinition
+public sealed class GenericRelationship
 {
     public string Entity { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;

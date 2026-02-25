@@ -34,7 +34,7 @@ public sealed class GraphHub
 
 public static class GraphStatsService
 {
-    public static GraphStatsReport Compute(ModelDefinition model, int topN = 10, int cycleSampleLimit = 10)
+    public static GraphStatsReport Compute(GenericModel model, int topN = 10, int cycleSampleLimit = 10)
     {
         if (model == null)
         {
@@ -392,3 +392,4 @@ public static class GraphStatsService
         return source + "->" + target;
     }
 }
+

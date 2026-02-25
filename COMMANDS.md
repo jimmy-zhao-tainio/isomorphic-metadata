@@ -144,8 +144,11 @@ Modify:
 
 Generate:
 - `meta generate <sql|csharp|ssdt> --out <dir> [--workspace <path>]`
+  - `meta generate csharp --out <dir> [--workspace <path>] [--tooling]`
+  - `--tooling` emits optional `<ModelName>.Tooling.cs` helpers (C# mode only).
 - `meta import xml <modelXmlPath> <instanceXmlPath> --new-workspace <path>`
 - `meta import sql <connectionString> <schema> --new-workspace <path>`
+- `meta import csv <csvFile> --entity <EntityName> (--workspace <path> | --new-workspace <path>)`
 
 ## Diff/merge example
 

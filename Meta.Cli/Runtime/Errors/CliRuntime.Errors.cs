@@ -481,10 +481,18 @@ internal sealed partial class CliRuntime
             {
                 detailHints.Add("example: meta import sql \"Server=...;Database=...;...\" dbo --new-workspace .\\ImportedWorkspace");
             }
+            else if (string.Equals(importMode, "csv", StringComparison.OrdinalIgnoreCase))
+            {
+                detailHints.Add("example: meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace");
+            }
             else
             {
                 detailHints.Add("example: meta import xml .\\model.xml .\\instance.xml --new-workspace .\\ImportedWorkspace");
             }
+        }
+        else if (normalized.Contains("import csv requires --workspace", StringComparison.OrdinalIgnoreCase))
+        {
+            detailHints.Add("example: meta import csv .\\landing.csv --entity Landing --workspace .\\Samples\\CommandExamples");
         }
     
         var usage = BuildUsageHintForCurrentArgs();

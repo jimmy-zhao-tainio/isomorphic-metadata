@@ -78,6 +78,29 @@ public sealed class GenerationServiceTests
         }
     }
 
+    [Fact]
+    public async Task GenerateCSharp_WithTooling_EmitsToolingFile()
+    {
+        var services = new ServiceCollection();
+        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples"));
+        var output = Path.Combine(Path.GetTempPath(), "metadata-gen-tests", Guid.NewGuid().ToString("N"), "tooling");
+
+        try
+        {
+            var manifest = GenerationService.GenerateCSharp(workspace, output, includeTooling: true);
+            var toolingFile = workspace.Model.Name + ".Tooling.cs";
+            var toolingPath = Path.Combine(output, toolingFile);
+
+            Assert.True(File.Exists(toolingPath));
+            Assert.True(manifest.FileHashes.ContainsKey(toolingFile));
+            Assert.Contains($"public static class {workspace.Model.Name}Tooling", File.ReadAllText(toolingPath), StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(Path.GetDirectoryName(output)!);
+        }
+    }
+
     private static void DeleteDirectoryIfExists(string path)
     {
         if (Directory.Exists(path))

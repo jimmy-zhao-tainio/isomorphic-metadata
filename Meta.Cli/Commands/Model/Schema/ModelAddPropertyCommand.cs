@@ -61,7 +61,7 @@ internal sealed partial class CliRuntime
         {
             Type = WorkspaceOpTypes.AddProperty,
             EntityName = entityName,
-            Property = new PropertyDefinition
+            Property = new GenericProperty
             {
                 Name = propertyName,
                 DataType = "string",
@@ -90,3 +90,4 @@ internal sealed partial class CliRuntime
             .ConfigureAwait(false);
     }
 }
+

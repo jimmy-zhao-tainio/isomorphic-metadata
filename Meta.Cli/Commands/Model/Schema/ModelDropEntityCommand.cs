@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     async Task<int> ModelDropEntityAsync(string[] commandArgs)
     {
@@ -18,7 +18,7 @@
         try
         {
             var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
-            PrintContractCompatibilityWarning(workspace.Manifest);
+            PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             RequireEntity(workspace, entityName);
     
             var rows = workspace.Instance.GetOrCreateEntityRecords(entityName);
@@ -99,4 +99,5 @@
         }
     }
 }
+
 

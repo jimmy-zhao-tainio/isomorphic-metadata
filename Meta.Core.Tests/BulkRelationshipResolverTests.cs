@@ -68,33 +68,33 @@ public sealed class BulkRelationshipResolverTests
         {
             WorkspaceRootPath = "memory",
             MetadataRootPath = "memory/metadata",
-            Model = new ModelDefinition
+            Model = new GenericModel
             {
                 Name = "TestModel",
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = "TestModel",
             },
         };
 
-        var cube = new EntityDefinition
+        var cube = new GenericEntity
         {
             Name = "Cube",
         };
-        cube.Properties.Add(new PropertyDefinition { Name = "CubeName", DataType = "string", IsNullable = false });
+        cube.Properties.Add(new GenericProperty { Name = "CubeName", DataType = "string", IsNullable = false });
         workspace.Model.Entities.Add(cube);
 
-        var measure = new EntityDefinition
+        var measure = new GenericEntity
         {
             Name = "Measure",
         };
-        measure.Properties.Add(new PropertyDefinition { Name = "MeasureName", DataType = "string", IsNullable = false });
-        measure.Relationships.Add(new RelationshipDefinition { Entity = "Cube" });
+        measure.Properties.Add(new GenericProperty { Name = "MeasureName", DataType = "string", IsNullable = false });
+        measure.Relationships.Add(new GenericRelationship { Entity = "Cube" });
         workspace.Model.Entities.Add(measure);
 
         var cubeRows = workspace.Instance.GetOrCreateEntityRecords("Cube");
-        cubeRows.Add(new InstanceRecord
+        cubeRows.Add(new GenericRecord
         {
             Id = "1",
             Values =
@@ -102,7 +102,7 @@ public sealed class BulkRelationshipResolverTests
                 ["CubeName"] = "Sales",
             },
         });
-        cubeRows.Add(new InstanceRecord
+        cubeRows.Add(new GenericRecord
         {
             Id = "2",
             Values =
@@ -114,3 +114,5 @@ public sealed class BulkRelationshipResolverTests
         return workspace;
     }
 }
+
+

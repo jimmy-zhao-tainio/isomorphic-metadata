@@ -10,7 +10,9 @@ using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using Meta.Core.Domain;
+using Meta.Core.Serialization;
 using Meta.Core.WorkspaceConfig;
+using MetaWorkspaceGenerated = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace;
 
 namespace Meta.Core.Services;
 
@@ -41,9 +43,9 @@ public sealed class WorkspaceService : IWorkspaceService
         var paths = searchUpward
             ? DiscoverWorkspacePaths(absoluteInputPath)
             : ResolveWorkspacePathsFromRoot(absoluteInputPath);
-        var manifest = ReadManifest(paths.WorkspaceRootPath, paths.MetadataRootPath);
+        var workspaceConfig = ReadWorkspaceConfig(paths.WorkspaceRootPath, paths.MetadataRootPath);
 
-        var modelPath = ResolveModelPath(paths.WorkspaceRootPath, paths.MetadataRootPath, manifest);
+        var modelPath = ResolveModelPath(paths.WorkspaceRootPath, paths.MetadataRootPath, workspaceConfig);
         if (string.IsNullOrWhiteSpace(modelPath))
         {
             throw new FileNotFoundException(
@@ -51,13 +53,13 @@ public sealed class WorkspaceService : IWorkspaceService
         }
 
         var model = ReadModel(modelPath);
-        var instance = ReadInstance(paths.WorkspaceRootPath, paths.MetadataRootPath, manifest, model);
+        var instance = ReadInstance(paths.WorkspaceRootPath, paths.MetadataRootPath, workspaceConfig, model);
 
         var workspace = new Workspace
         {
             WorkspaceRootPath = paths.WorkspaceRootPath,
             MetadataRootPath = paths.MetadataRootPath,
-            Manifest = manifest,
+            WorkspaceConfig = workspaceConfig,
             Model = model,
             Instance = instance,
             IsDirty = false,
@@ -111,8 +113,9 @@ public sealed class WorkspaceService : IWorkspaceService
         }
 
         var workspaceRoot = Path.GetFullPath(workspace.WorkspaceRootPath);
-        var manifest = NormalizeManifest(workspace.Manifest);
         var metadataRootPath = Path.Combine(workspaceRoot, MetadataDirectoryName);
+        var workspaceConfigPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
+        var workspaceConfig = NormalizeWorkspaceConfig(workspace.WorkspaceConfig, workspaceConfigPath);
         using var writeLock = WorkspaceWriteLock.Acquire(workspaceRoot);
 
         if (!string.IsNullOrWhiteSpace(expectedFingerprint))
@@ -128,10 +131,10 @@ public sealed class WorkspaceService : IWorkspaceService
             }
         }
 
-        var modelPath = ResolvePathFromWorkspaceRoot(workspaceRoot, manifest.ModelFile);
-        var instanceDirectoryPath = ResolvePathFromWorkspaceRoot(workspaceRoot, manifest.InstanceDir);
-        EnsurePathUnderMetadataRoot(modelPath, metadataRootPath, nameof(manifest.ModelFile));
-        EnsurePathUnderMetadataRoot(instanceDirectoryPath, metadataRootPath, nameof(manifest.InstanceDir));
+        var modelPath = ResolvePathFromWorkspaceRoot(workspaceRoot, MetaWorkspaceModel.GetModelFile(workspaceConfig));
+        var instanceDirectoryPath = ResolvePathFromWorkspaceRoot(workspaceRoot, MetaWorkspaceModel.GetInstanceDir(workspaceConfig));
+        EnsurePathUnderMetadataRoot(modelPath, metadataRootPath, "ModelFilePath");
+        EnsurePathUnderMetadataRoot(instanceDirectoryPath, metadataRootPath, "InstanceDirPath");
 
         var stagingMetadataRootPath = Path.Combine(
             workspaceRoot,
@@ -147,7 +150,7 @@ public sealed class WorkspaceService : IWorkspaceService
         Directory.CreateDirectory(stagingMetadataRootPath);
         try
         {
-            WriteManifestToFile(manifest, Path.Combine(stagingMetadataRootPath, WorkspaceXmlFileName));
+            WriteWorkspaceConfigToFile(workspaceConfig, Path.Combine(stagingMetadataRootPath, WorkspaceXmlFileName));
 
             WriteXmlToFile(BuildModelDocument(workspace.Model), stagingModelPath, indented: true);
             WriteInstanceShards(workspace, stagingInstanceDirectoryPath);
@@ -163,7 +166,7 @@ public sealed class WorkspaceService : IWorkspaceService
 
         workspace.WorkspaceRootPath = workspaceRoot;
         workspace.MetadataRootPath = metadataRootPath;
-        workspace.Manifest = manifest;
+        workspace.WorkspaceConfig = workspaceConfig;
         workspace.IsDirty = false;
     }
 
@@ -194,10 +197,11 @@ public sealed class WorkspaceService : IWorkspaceService
         }
 
         using var sha256 = SHA256.Create();
-        var manifestCanonical = SerializeManifest(NormalizeManifest(workspace.Manifest));
+        var workspaceConfigCanonical = SerializeWorkspaceConfig(
+            NormalizeWorkspaceConfig(workspace.WorkspaceConfig, WorkspaceXmlFileName));
         var modelCanonical = SerializeXml(BuildModelDocument(workspace.Model), indented: false);
         var shardCanonicalPayload = BuildShardCanonicalPayload(workspace);
-        var payload = manifestCanonical + "\n---\n" + modelCanonical + "\n---\n" + shardCanonicalPayload;
+        var payload = workspaceConfigCanonical + "\n---\n" + modelCanonical + "\n---\n" + shardCanonicalPayload;
         var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(payload));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
@@ -274,14 +278,13 @@ public sealed class WorkspaceService : IWorkspaceService
         return Directory.Exists(metadataRootPath) ? metadataRootPath : workspaceRootPath;
     }
 
-    private static WorkspaceManifest ReadManifest(string workspaceRootPath, string metadataRootPath)
+    private static MetaWorkspaceGenerated ReadWorkspaceConfig(string workspaceRootPath, string metadataRootPath)
     {
         var workspaceXmlPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
         if (File.Exists(workspaceXmlPath))
         {
-            var snapshot = MetaWorkspaceModel.LoadFromWorkspaceXmlFile(workspaceXmlPath);
-            var manifestFromXml = MetaWorkspaceManifestAdapter.ToWorkspaceManifest(snapshot, workspaceXmlPath);
-            var normalizedFromXml = NormalizeManifest(manifestFromXml);
+            var generated = MetaWorkspaceGenerated.LoadFromXml(workspaceXmlPath);
+            var normalizedFromXml = NormalizeWorkspaceConfig(generated, workspaceXmlPath);
             ValidateContractVersion(normalizedFromXml, workspaceXmlPath);
             return normalizedFromXml;
         }
@@ -293,63 +296,21 @@ public sealed class WorkspaceService : IWorkspaceService
                 $"Workspace manifest '{workspaceXmlPath}' is required. Legacy '{workspaceJsonPath}' is not supported.");
         }
 
-        return WorkspaceManifest.CreateDefault();
+        return MetaWorkspaceModel.CreateDefault();
     }
 
-    private static WorkspaceManifest NormalizeManifest(WorkspaceManifest? manifest)
+    private static MetaWorkspaceGenerated NormalizeWorkspaceConfig(MetaWorkspaceGenerated? workspaceConfig, string sourcePath)
     {
-        var normalized = manifest ?? WorkspaceManifest.CreateDefault();
-        normalized.ContractVersion = string.IsNullOrWhiteSpace(normalized.ContractVersion)
-            ? "1.0"
-            : normalized.ContractVersion.Trim();
-        normalized.ModelFile = NormalizeRelativePath(normalized.ModelFile, "metadata/model.xml");
-        normalized.InstanceDir = NormalizeRelativePath(normalized.InstanceDir, "metadata/instance");
-        normalized.Encoding = string.IsNullOrWhiteSpace(normalized.Encoding)
-            ? "utf-8-no-bom"
-            : normalized.Encoding.Trim().ToLowerInvariant();
-        normalized.Newlines = string.IsNullOrWhiteSpace(normalized.Newlines)
-            ? "lf"
-            : normalized.Newlines.Trim().ToLowerInvariant();
-        normalized.CanonicalSort ??= new CanonicalSortManifest();
-        normalized.EntityStorages ??= new List<EntityStorageManifest>();
-        normalized.EntityStorages = normalized.EntityStorages
-            .Where(item => item != null && !string.IsNullOrWhiteSpace(item.EntityName))
-            .Select(item => new EntityStorageManifest
-            {
-                EntityName = item.EntityName.Trim(),
-                StorageKind = string.IsNullOrWhiteSpace(item.StorageKind) ? "Sharded" : item.StorageKind.Trim(),
-                DirectoryPath = NormalizeRelativePath(item.DirectoryPath, string.Empty),
-                FilePath = NormalizeRelativePath(item.FilePath, string.Empty),
-                Pattern = string.IsNullOrWhiteSpace(item.Pattern) ? string.Empty : item.Pattern.Trim(),
-            })
-            .OrderBy(item => item.EntityName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        return normalized;
+        return MetaWorkspaceModel.Normalize(workspaceConfig, sourcePath);
     }
 
-    private static string NormalizeRelativePath(string? value, string fallback)
+    private static void ValidateContractVersion(MetaWorkspaceGenerated workspaceConfig, string workspaceFilePath)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return fallback;
-        }
-
-        var normalized = value.Trim().Replace('\\', '/');
-        normalized = normalized.TrimStart('/');
-        while (normalized.Contains("//", StringComparison.Ordinal))
-        {
-            normalized = normalized.Replace("//", "/", StringComparison.Ordinal);
-        }
-
-        return string.IsNullOrWhiteSpace(normalized) ? fallback : normalized;
-    }
-
-    private static void ValidateContractVersion(WorkspaceManifest manifest, string workspaceFilePath)
-    {
-        if (!TryParseContractVersion(manifest.ContractVersion, out var major, out _))
+        var contractVersion = MetaWorkspaceModel.GetContractVersion(workspaceConfig);
+        if (!MetaWorkspaceModel.TryParseContractVersion(contractVersion, out var major, out _))
         {
             throw new InvalidDataException(
-                $"Workspace manifest '{workspaceFilePath}' has invalid contractVersion '{manifest.ContractVersion}'.");
+                $"Workspace manifest '{workspaceFilePath}' has invalid contractVersion '{contractVersion}'.");
         }
 
         if (major != SupportedContractMajorVersion)
@@ -359,44 +320,18 @@ public sealed class WorkspaceService : IWorkspaceService
         }
     }
 
-    private static bool TryParseContractVersion(string? value, out int major, out int minor)
+    private static void WriteWorkspaceConfigToFile(MetaWorkspaceGenerated workspaceConfig, string workspaceFilePath)
     {
-        major = 0;
-        minor = 0;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var parts = value.Trim().Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0 || parts.Length > 2)
-        {
-            return false;
-        }
-
-        if (!int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out major))
-        {
-            return false;
-        }
-
-        if (parts.Length == 2 &&
-            !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out minor))
-        {
-            return false;
-        }
-
-        return major >= 0 && minor >= 0;
-    }
-
-    private static void WriteManifestToFile(WorkspaceManifest manifest, string workspaceFilePath)
-    {
-        var document = MetaWorkspaceModel.BuildDocument(MetaWorkspaceManifestAdapter.ToMetaWorkspaceData(manifest));
+        var normalizedWorkspaceConfig = NormalizeWorkspaceConfig(workspaceConfig, workspaceFilePath);
+        var document = MetaWorkspaceModel.BuildDocument(normalizedWorkspaceConfig);
         WriteXmlToFile(document, workspaceFilePath, indented: true);
     }
 
-    private static string ResolveModelPath(string workspaceRootPath, string metadataRootPath, WorkspaceManifest manifest)
+    private static string ResolveModelPath(string workspaceRootPath, string metadataRootPath, MetaWorkspaceGenerated workspaceConfig)
     {
-        var manifestModelPath = ResolvePathFromWorkspaceRoot(workspaceRootPath, manifest.ModelFile);
+        var manifestModelPath = ResolvePathFromWorkspaceRoot(
+            workspaceRootPath,
+            MetaWorkspaceModel.GetModelFile(workspaceConfig));
         var candidatePaths = new[]
         {
             manifestModelPath,
@@ -407,13 +342,15 @@ public sealed class WorkspaceService : IWorkspaceService
         return FirstExistingPath(candidatePaths);
     }
 
-    private static InstanceStore ReadInstance(
+    private static GenericInstance ReadInstance(
         string workspaceRootPath,
         string metadataRootPath,
-        WorkspaceManifest manifest,
-        ModelDefinition model)
+        MetaWorkspaceGenerated workspaceConfig,
+        GenericModel model)
     {
-        var shardDirectoryPath = ResolvePathFromWorkspaceRoot(workspaceRootPath, manifest.InstanceDir);
+        var shardDirectoryPath = ResolvePathFromWorkspaceRoot(
+            workspaceRootPath,
+            MetaWorkspaceModel.GetInstanceDir(workspaceConfig));
         var hasShardDirectory = Directory.Exists(shardDirectoryPath);
         if (Directory.Exists(shardDirectoryPath))
         {
@@ -436,7 +373,7 @@ public sealed class WorkspaceService : IWorkspaceService
         {
             if (hasShardDirectory)
             {
-                return new InstanceStore
+                return new GenericInstance
                 {
                     ModelName = model.Name ?? string.Empty,
                 };
@@ -449,176 +386,18 @@ public sealed class WorkspaceService : IWorkspaceService
         return ReadInstanceMonolithic(monolithicPath, model);
     }
 
-    private static InstanceStore ReadInstanceMonolithic(
+    private static GenericInstance ReadInstanceMonolithic(
         string instancePath,
-        ModelDefinition model)
+        GenericModel model)
     {
-        var document = XDocument.Load(instancePath, LoadOptions.None);
-        var instance = new InstanceStore
-        {
-            ModelName = model.Name ?? string.Empty,
-        };
-        MergeInstanceDocument(instance, document, model, sourceShardFileName: string.Empty);
-        if (string.IsNullOrWhiteSpace(instance.ModelName))
-        {
-            instance.ModelName = model.Name ?? string.Empty;
-        }
-
-        return instance;
+        return InstanceXmlCodec.LoadFromPath(instancePath, model, sourceShardFileName: string.Empty);
     }
 
-    private static InstanceStore ReadInstanceShards(
+    private static GenericInstance ReadInstanceShards(
         IReadOnlyCollection<string> shardFiles,
-        ModelDefinition model)
+        GenericModel model)
     {
-        var instance = new InstanceStore
-        {
-            ModelName = model.Name ?? string.Empty,
-        };
-
-        foreach (var shardPath in shardFiles)
-        {
-            var document = XDocument.Load(shardPath, LoadOptions.None);
-            MergeInstanceDocument(
-                instance,
-                document,
-                model,
-                sourceShardFileName: Path.GetFileName(shardPath));
-        }
-
-        if (string.IsNullOrWhiteSpace(instance.ModelName))
-        {
-            instance.ModelName = model.Name ?? string.Empty;
-        }
-
-        return instance;
-    }
-
-    private static void MergeInstanceDocument(
-        InstanceStore instance,
-        XDocument document,
-        ModelDefinition model,
-        string sourceShardFileName)
-    {
-        var root = document.Root ?? throw new InvalidDataException("Instance XML has no root element.");
-        if (string.IsNullOrWhiteSpace(instance.ModelName))
-        {
-            instance.ModelName = root.Name.LocalName;
-        }
-
-        var entityByContainer = BuildEntityByContainerLookup(model);
-
-        foreach (var listElement in root.Elements())
-        {
-            var listName = listElement.Name.LocalName;
-            if (!entityByContainer.TryGetValue(listName, out var modelEntity))
-            {
-                throw new InvalidDataException(
-                    $"Instance XML list '{listName}' references unknown entity.");
-            }
-
-            var entityName = modelEntity.Name;
-
-            var records = instance.GetOrCreateEntityRecords(entityName);
-            foreach (var rowElement in listElement.Elements())
-            {
-                if (!string.Equals(rowElement.Name.LocalName, entityName, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidDataException(
-                        $"Instance XML list '{listName}' contains unexpected row element '{rowElement.Name.LocalName}'. Expected '{entityName}'.");
-                }
-
-                records.Add(ParseRecord(entityName, modelEntity, rowElement, sourceShardFileName));
-            }
-        }
-    }
-
-    private static InstanceRecord ParseRecord(
-        string entityName,
-        EntityDefinition modelEntity,
-        XElement rowElement,
-        string sourceShardFileName)
-    {
-        var id = (string?)rowElement.Attribute("Id");
-        if (!IsPositiveIntegerIdentity(id))
-        {
-            throw new InvalidDataException(
-                $"Entity '{entityName}' row is missing valid numeric Id.");
-        }
-
-        var record = new InstanceRecord
-        {
-            Id = id!,
-            SourceShardFileName = NormalizeShardFileName(sourceShardFileName, entityName),
-        };
-
-        var propertyByName = modelEntity.Properties
-            .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
-        var relationshipByName = modelEntity.Relationships
-            .ToDictionary(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase);
-
-        foreach (var attribute in rowElement.Attributes())
-        {
-            var attributeName = attribute.Name.LocalName;
-            if (string.Equals(attributeName, "Id", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (relationshipByName.TryGetValue(attributeName, out var relationship))
-            {
-                if (!IsPositiveIntegerIdentity(attribute.Value))
-                {
-                    throw new InvalidDataException(
-                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationship.GetColumnName()}' value '{attribute.Value}'.");
-                }
-
-                record.RelationshipIds[relationship.GetColumnName()] = attribute.Value;
-                continue;
-            }
-
-            throw new InvalidDataException(
-                $"Entity '{entityName}' row '{record.Id}' has unsupported attribute '{attributeName}'.");
-        }
-
-        var seenProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var element in rowElement.Elements())
-        {
-            var elementName = element.Name.LocalName;
-            if (relationshipByName.TryGetValue(elementName, out var relationship))
-            {
-                throw new InvalidDataException(
-                    $"Entity '{entityName}' row '{record.Id}' has relationship element '{relationship.GetColumnName()}'. Relationships must be attributes.");
-            }
-
-            if (!propertyByName.TryGetValue(elementName, out var property))
-            {
-                throw new InvalidDataException(
-                    $"Entity '{entityName}' row '{record.Id}' has unknown property element '{elementName}'.");
-            }
-
-            if (!seenProperties.Add(property.Name))
-            {
-                throw new InvalidDataException(
-                    $"Entity '{entityName}' row '{record.Id}' has duplicate property element '{property.Name}'.");
-            }
-
-            record.Values[property.Name] = element.Value;
-        }
-
-        foreach (var relationship in modelEntity.Relationships)
-        {
-            var relationshipName = relationship.GetColumnName();
-            if (!record.RelationshipIds.TryGetValue(relationshipName, out var relationshipId) ||
-                string.IsNullOrWhiteSpace(relationshipId))
-            {
-                throw new InvalidDataException(
-                    $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationship.GetColumnName()}'.");
-            }
-        }
-
-        return record;
+        return InstanceXmlCodec.LoadFromPaths(shardFiles, model);
     }
 
     private static void WriteInstanceShards(Workspace workspace, string instanceDirectoryPath)
@@ -654,99 +433,13 @@ public sealed class WorkspaceService : IWorkspaceService
         Workspace workspace,
         string rootName,
         string entityName,
-        IReadOnlyCollection<InstanceRecord>? recordsOverride = null)
+        IReadOnlyCollection<GenericRecord>? recordsOverride = null)
     {
-        var modelEntity = workspace.Model.Entities.FirstOrDefault(entity =>
-            string.Equals(entity.Name, entityName, StringComparison.OrdinalIgnoreCase));
-        if (modelEntity == null)
-        {
-            throw new InvalidOperationException($"Cannot write instance shard for unknown entity '{entityName}'.");
-        }
-
-        var propertyByName = modelEntity.Properties
-            .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
-        var orderedPropertyNames = modelEntity.Properties
-            .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
-            .Select(property => property.Name)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var orderedRelationships = modelEntity.Relationships
-            .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var root = new XElement(rootName);
-        var listElement = new XElement(modelEntity.GetPluralName());
-        root.Add(listElement);
-
         var records = recordsOverride ??
                       (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var entityRecords)
                           ? entityRecords
-                          : new List<InstanceRecord>());
-
-        foreach (var record in records.OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase))
-        {
-            if (!IsPositiveIntegerIdentity(record.Id))
-            {
-                throw new InvalidOperationException(
-                    $"Cannot write entity '{entityName}' row with invalid Id '{record.Id}'.");
-            }
-
-            var recordElement = new XElement(entityName, new XAttribute("Id", record.Id));
-
-            foreach (var unknownPropertyName in record.Values.Keys
-                         .Where(key => !propertyByName.ContainsKey(key))
-                         .OrderBy(key => key, StringComparer.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"Entity '{entityName}' row '{record.Id}' contains unknown property '{unknownPropertyName}'.");
-            }
-
-            foreach (var relationship in orderedRelationships)
-            {
-                var relationshipName = relationship.GetColumnName();
-                if (!record.RelationshipIds.TryGetValue(relationshipName, out var relationshipId) ||
-                    string.IsNullOrWhiteSpace(relationshipId))
-                {
-                    throw new InvalidOperationException(
-                        $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationshipName}'.");
-                }
-
-                if (!IsPositiveIntegerIdentity(relationshipId))
-                {
-                    throw new InvalidOperationException(
-                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationshipName}' value '{relationshipId}'.");
-                }
-
-                recordElement.Add(new XAttribute(relationshipName, relationshipId));
-            }
-
-            var knownRelationshipNames = orderedRelationships
-                .Select(relationship => relationship.GetColumnName())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var unknownRelationshipName in record.RelationshipIds.Keys
-                         .Where(key => !knownRelationshipNames.Contains(key))
-                         .OrderBy(key => key, StringComparer.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"Entity '{entityName}' row '{record.Id}' contains unknown relationship '{unknownRelationshipName}'.");
-            }
-
-            foreach (var propertyName in orderedPropertyNames)
-            {
-                if (!record.Values.TryGetValue(propertyName, out var value) || value == null)
-                {
-                    continue;
-                }
-
-                recordElement.Add(new XElement(propertyName, value));
-            }
-
-            listElement.Add(recordElement);
-        }
-
-        return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
+                          : new List<GenericRecord>());
+        return InstanceXmlCodec.BuildEntityDocument(workspace.Model, entityName, records, rootName);
     }
 
     private static string BuildShardCanonicalPayload(Workspace workspace)
@@ -805,7 +498,7 @@ public sealed class WorkspaceService : IWorkspaceService
     {
         var records = workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var entityRecords)
             ? entityRecords
-            : new List<InstanceRecord>();
+            : new List<GenericRecord>();
         var orderedRecords = records
             .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -823,7 +516,7 @@ public sealed class WorkspaceService : IWorkspaceService
         }
 
         var primaryShardFileName = assignedNames[0];
-        var recordsByShard = new Dictionary<string, List<InstanceRecord>>(StringComparer.OrdinalIgnoreCase);
+        var recordsByShard = new Dictionary<string, List<GenericRecord>>(StringComparer.OrdinalIgnoreCase);
         foreach (var record in orderedRecords)
         {
             var shardFileName = NormalizeLoadedShardFileName(record.SourceShardFileName, entityName);
@@ -834,7 +527,7 @@ public sealed class WorkspaceService : IWorkspaceService
 
             if (!recordsByShard.TryGetValue(shardFileName, out var shardRecords))
             {
-                shardRecords = new List<InstanceRecord>();
+                shardRecords = new List<GenericRecord>();
                 recordsByShard[shardFileName] = shardRecords;
             }
 
@@ -844,7 +537,7 @@ public sealed class WorkspaceService : IWorkspaceService
 
         if (recordsByShard.Count == 0)
         {
-            recordsByShard[defaultShardFileName] = new List<InstanceRecord>();
+            recordsByShard[defaultShardFileName] = new List<GenericRecord>();
         }
 
         return recordsByShard
@@ -913,7 +606,7 @@ public sealed class WorkspaceService : IWorkspaceService
 
     private sealed class InstanceShardWritePlan
     {
-        public InstanceShardWritePlan(string entityName, string shardFileName, List<InstanceRecord> records)
+        public InstanceShardWritePlan(string entityName, string shardFileName, List<GenericRecord> records)
         {
             EntityName = entityName;
             ShardFileName = shardFileName;
@@ -922,7 +615,7 @@ public sealed class WorkspaceService : IWorkspaceService
 
         public string EntityName { get; }
         public string ShardFileName { get; set; }
-        public List<InstanceRecord> Records { get; }
+        public List<GenericRecord> Records { get; }
     }
 
     private static IReadOnlyList<string> GetOrderedEntityNames(Workspace workspace)
@@ -1022,10 +715,11 @@ public sealed class WorkspaceService : IWorkspaceService
         }
     }
 
-    private static string SerializeManifest(WorkspaceManifest manifest)
+    private static string SerializeWorkspaceConfig(MetaWorkspaceGenerated workspaceConfig)
     {
         return SerializeXml(
-            MetaWorkspaceModel.BuildDocument(MetaWorkspaceManifestAdapter.ToMetaWorkspaceData(manifest)),
+            MetaWorkspaceModel.BuildDocument(
+                NormalizeWorkspaceConfig(workspaceConfig, WorkspaceXmlFileName)),
             indented: false);
     }
 
@@ -1082,218 +776,14 @@ public sealed class WorkspaceService : IWorkspaceService
         return candidatePaths.FirstOrDefault(File.Exists) ?? string.Empty;
     }
 
-    private static ModelDefinition ReadModel(string modelPath)
+    private static GenericModel ReadModel(string modelPath)
     {
-        var document = XDocument.Load(modelPath, LoadOptions.None);
-        var root = document.Root ?? throw new InvalidDataException("Model XML has no root element.");
-        if (!string.Equals(root.Name.LocalName, "Model", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidDataException("Model XML root must be <Model>.");
-        }
-
-        var model = new ModelDefinition
-        {
-            Name = (string?)root.Attribute("name") ?? string.Empty,
-        };
-
-        var entitiesElement = root.Element("Entities");
-        if (entitiesElement == null)
-        {
-            return model;
-        }
-
-        foreach (var entityElement in entitiesElement.Elements("Entity"))
-        {
-            var displayKeyAttribute = entityElement.Attribute("displayKey");
-            if (displayKeyAttribute != null)
-            {
-                throw new InvalidDataException(
-                    $"Model entity '{(string?)entityElement.Attribute("name") ?? string.Empty}' uses unsupported attribute 'displayKey'.");
-            }
-
-            var entity = new EntityDefinition
-            {
-                Name = (string?)entityElement.Attribute("name") ?? string.Empty,
-                Plural = ((string?)entityElement.Attribute("plural") ?? string.Empty).Trim(),
-            };
-
-            var propertiesElement = entityElement.Element("Properties");
-            if (propertiesElement != null)
-            {
-                foreach (var propertyElement in propertiesElement.Elements("Property"))
-                {
-                    var propertyName = ((string?)propertyElement.Attribute("name") ?? string.Empty).Trim();
-                    if (string.Equals(propertyName, "Id", StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new InvalidDataException(
-                            $"Entity '{entity.Name}' must not define explicit property 'Id'. It is implicit.");
-                    }
-
-                    if (propertyElement.Attribute("isNullable") != null)
-                    {
-                        throw new InvalidDataException(
-                            $"Property '{entity.Name}.{propertyName}' uses unsupported attribute 'isNullable'. Use 'isRequired'.");
-                    }
-
-                    var property = new PropertyDefinition
-                    {
-                        Name = propertyName,
-                        DataType = ParseDataType((string?)propertyElement.Attribute("dataType")),
-                        IsNullable = !ParseRequired((string?)propertyElement.Attribute("isRequired")),
-                    };
-                    entity.Properties.Add(property);
-                }
-            }
-
-            var relationshipsElement = entityElement.Element("Relationships");
-            if (relationshipsElement != null)
-            {
-                foreach (var relationshipElement in relationshipsElement.Elements("Relationship"))
-                {
-                    if (relationshipElement.Attribute("name") != null)
-                    {
-                        throw new InvalidDataException(
-                            $"Entity '{entity.Name}' relationship to '{((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim()}' uses unsupported attribute 'name'. Use 'role'.");
-                    }
-
-                    if (relationshipElement.Attribute("column") != null)
-                    {
-                        throw new InvalidDataException(
-                            $"Entity '{entity.Name}' relationship to '{((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim()}' uses unsupported attribute 'column'. Use 'role'.");
-                    }
-
-                    entity.Relationships.Add(new RelationshipDefinition
-                    {
-                        Entity = ((string?)relationshipElement.Attribute("entity") ?? string.Empty).Trim(),
-                        Role = ((string?)relationshipElement.Attribute("role") ?? string.Empty).Trim(),
-                    });
-                }
-            }
-
-            model.Entities.Add(entity);
-        }
-
-        return model;
+        return ModelXmlCodec.LoadFromPath(modelPath);
     }
 
-    private static string ParseDataType(string? dataTypeValue)
+    private static XDocument BuildModelDocument(GenericModel model)
     {
-        if (string.IsNullOrWhiteSpace(dataTypeValue))
-        {
-            return "string";
-        }
-
-        var trimmed = dataTypeValue.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? "string" : trimmed;
-    }
-
-    private static bool ParseRequired(string? isRequiredValue)
-    {
-        if (string.IsNullOrWhiteSpace(isRequiredValue))
-        {
-            return true;
-        }
-
-        if (bool.TryParse(isRequiredValue, out var parsed))
-        {
-            return parsed;
-        }
-
-        throw new InvalidDataException($"Invalid boolean value '{isRequiredValue}' for attribute 'isRequired'.");
-    }
-
-    private static XDocument BuildModelDocument(ModelDefinition model)
-    {
-        var root = new XElement("Model", new XAttribute("name", model.Name ?? string.Empty));
-        var entitiesElement = new XElement("Entities");
-        root.Add(entitiesElement);
-
-        foreach (var entity in model.Entities.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
-        {
-            var entityElement = new XElement("Entity", new XAttribute("name", entity.Name ?? string.Empty));
-            var defaultPlural = (entity.Name ?? string.Empty) + "s";
-            if (!string.IsNullOrWhiteSpace(entity.Plural) &&
-                !string.Equals(entity.Plural, defaultPlural, StringComparison.Ordinal))
-            {
-                entityElement.Add(new XAttribute("plural", entity.Plural));
-            }
-
-            var nonIdProperties = OrderProperties(entity.Properties)
-                .Where(item => !string.Equals(item.Name, "Id", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (nonIdProperties.Count > 0)
-            {
-                var propertiesElement = new XElement("Properties");
-                foreach (var property in nonIdProperties)
-                {
-                    var propertyElement = new XElement("Property",
-                        new XAttribute("name", property.Name ?? string.Empty));
-                    var dataType = string.IsNullOrWhiteSpace(property.DataType) ? "string" : property.DataType;
-                    if (!string.Equals(dataType, "string", StringComparison.OrdinalIgnoreCase))
-                    {
-                        propertyElement.Add(new XAttribute("dataType", dataType));
-                    }
-
-                    if (property.IsNullable)
-                    {
-                        propertyElement.Add(new XAttribute("isRequired", "false"));
-                    }
-
-                    propertiesElement.Add(propertyElement);
-                }
-
-                entityElement.Add(propertiesElement);
-            }
-
-            if (entity.Relationships.Count > 0)
-            {
-                var relationshipsElement = new XElement("Relationships");
-                foreach (var relationship in entity.Relationships
-                             .OrderBy(item => item.GetColumnName(), StringComparer.OrdinalIgnoreCase)
-                             .ThenBy(item => item.Entity, StringComparer.OrdinalIgnoreCase))
-                {
-                    var relationshipElement = new XElement("Relationship",
-                        new XAttribute("entity", relationship.Entity ?? string.Empty));
-                    var defaultRole = relationship.Entity ?? string.Empty;
-                    var role = relationship.GetRoleOrDefault();
-                    if (!string.Equals(role, defaultRole, StringComparison.Ordinal))
-                    {
-                        relationshipElement.Add(new XAttribute("role", role));
-                    }
-
-                    relationshipsElement.Add(relationshipElement);
-                }
-
-                entityElement.Add(relationshipsElement);
-            }
-
-            entitiesElement.Add(entityElement);
-        }
-
-        return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
-    }
-
-    private static IEnumerable<PropertyDefinition> OrderProperties(IReadOnlyCollection<PropertyDefinition> properties)
-    {
-        return properties
-            .OrderBy(item => string.Equals(item.Name, "Id", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static Dictionary<string, EntityDefinition> BuildEntityByContainerLookup(ModelDefinition model)
-    {
-        var lookup = new Dictionary<string, EntityDefinition>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entity in model.Entities.Where(item => !string.IsNullOrWhiteSpace(item.Name)))
-        {
-            var containerName = entity.GetPluralName();
-            if (!lookup.TryAdd(containerName, entity))
-            {
-                throw new InvalidDataException(
-                    $"Model has duplicate instance container name '{containerName}' for multiple entities.");
-            }
-        }
-
-        return lookup;
+        return ModelXmlCodec.BuildDocument(model);
     }
 
     private static void WriteXmlToFile(XDocument document, string path, bool indented)
@@ -1380,3 +870,6 @@ public sealed class WorkspaceService : IWorkspaceService
         public string MetadataRootPath { get; }
     }
 }
+
+
+

@@ -27,6 +27,7 @@ public interface IImportService
 {
     Task<Workspace> ImportXmlAsync(string modelPath, string instancePath, CancellationToken cancellationToken = default);
     Task<Workspace> ImportSqlAsync(string connectionString, string schema, CancellationToken cancellationToken = default);
+    Task<Workspace> ImportCsvAsync(string csvPath, string entityName, CancellationToken cancellationToken = default);
 }
 
 public interface IExportService

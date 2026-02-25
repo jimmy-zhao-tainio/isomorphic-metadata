@@ -4,12 +4,14 @@ using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Meta.Core.Domain;
 using Meta.Core.Services;
+using Meta.Core.WorkspaceConfig;
 
 namespace Meta.Adapters;
 
@@ -58,9 +60,9 @@ public sealed class ImportService : IImportService
         {
             WorkspaceRootPath = Path.Combine(Path.GetTempPath(), "metadata-studio-import", Guid.NewGuid().ToString("N")),
             MetadataRootPath = string.Empty,
-            Manifest = WorkspaceManifest.CreateDefault(),
-            Model = new ModelDefinition(),
-            Instance = new InstanceStore(),
+            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            Model = new GenericModel(),
+            Instance = new GenericInstance(),
             IsDirty = true,
         };
 
@@ -71,7 +73,7 @@ public sealed class ImportService : IImportService
         ValidateIdentifier(workspace.Model.Name, "Database name");
         workspace.Instance.ModelName = workspace.Model.Name;
 
-        var entityLookup = new Dictionary<string, EntityDefinition>(StringComparer.OrdinalIgnoreCase);
+        var entityLookup = new Dictionary<string, GenericEntity>(StringComparer.OrdinalIgnoreCase);
         foreach (var tableName in await LoadTableNamesAsync(connection, effectiveSchema, cancellationToken).ConfigureAwait(false))
         {
             ValidateIdentifier(tableName, "Table name");
@@ -80,7 +82,7 @@ public sealed class ImportService : IImportService
                 throw new InvalidOperationException($"Duplicate table name '{tableName}' in schema '{effectiveSchema}'.");
             }
 
-            var entity = new EntityDefinition
+            var entity = new GenericEntity
             {
                 Name = tableName,
             };
@@ -127,7 +129,7 @@ public sealed class ImportService : IImportService
                     $"Table '{sourceEntity.Name}' has duplicate relationship role '{role}'.");
             }
 
-            sourceEntity.Relationships.Add(new RelationshipDefinition
+            sourceEntity.Relationships.Add(new GenericRelationship
             {
                 Entity = targetEntity.Name,
                 Role = string.Equals(role, targetEntity.Name, StringComparison.OrdinalIgnoreCase)
@@ -141,6 +143,123 @@ public sealed class ImportService : IImportService
             NormalizeRelationshipProperties(entity);
             var rows = await LoadRowsAsync(connection, effectiveSchema, entity, cancellationToken).ConfigureAwait(false);
             workspace.Instance.RecordsByEntity[entity.Name] = rows;
+        }
+
+        return workspace;
+    }
+
+    public async Task<Workspace> ImportCsvAsync(string csvPath, string entityName, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.IsNullOrWhiteSpace(csvPath))
+        {
+            throw new ArgumentException("CSV file path is required.", nameof(csvPath));
+        }
+
+        if (string.IsNullOrWhiteSpace(entityName))
+        {
+            throw new ArgumentException("Entity name is required.", nameof(entityName));
+        }
+
+        var fullCsvPath = Path.GetFullPath(csvPath);
+        if (!File.Exists(fullCsvPath))
+        {
+            throw new FileNotFoundException($"CSV file '{fullCsvPath}' was not found.", fullCsvPath);
+        }
+
+        var csvText = await File.ReadAllTextAsync(fullCsvPath, cancellationToken).ConfigureAwait(false);
+        var parsedRows = ParseCsvRows(csvText);
+        if (parsedRows.Count == 0)
+        {
+            throw new InvalidOperationException("CSV file must include a header row.");
+        }
+
+        var header = parsedRows[0];
+        if (header.Count == 0)
+        {
+            throw new InvalidOperationException("CSV header row is empty.");
+        }
+
+        var entityIdentifier = NormalizeIdentifier(entityName, fallback: "Entity");
+        var modelName = NormalizeIdentifier(entityIdentifier + "Model", fallback: "ImportedModel");
+        var columnPlans = BuildCsvColumnPlans(header);
+
+        var dataRows = new List<IReadOnlyList<string>>();
+        for (var index = 1; index < parsedRows.Count; index++)
+        {
+            var row = parsedRows[index];
+            if (row.Count > header.Count)
+            {
+                throw new InvalidOperationException(
+                    $"CSV row {index + 1} has {row.Count.ToString(CultureInfo.InvariantCulture)} values but header has {header.Count.ToString(CultureInfo.InvariantCulture)} columns.");
+            }
+
+            if (IsCsvRowCompletelyEmpty(row))
+            {
+                continue;
+            }
+
+            dataRows.Add(row);
+        }
+
+        var workspace = new Workspace
+        {
+            WorkspaceRootPath = Path.Combine(Path.GetTempPath(), "metadata-studio-import", Guid.NewGuid().ToString("N")),
+            MetadataRootPath = string.Empty,
+            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            Model = new GenericModel
+            {
+                Name = modelName,
+            },
+            Instance = new GenericInstance
+            {
+                ModelName = modelName,
+            },
+            IsDirty = true,
+        };
+
+        var entity = new GenericEntity
+        {
+            Name = entityIdentifier,
+        };
+        workspace.Model.Entities.Add(entity);
+
+        foreach (var plan in columnPlans)
+        {
+            var values = dataRows.Select(row => GetCsvCellValue(row, plan.ColumnIndex)).ToList();
+            var hasEmpty = values.Any(value => string.IsNullOrWhiteSpace(value));
+            var inferredDataType = InferCsvDataType(values);
+
+            entity.Properties.Add(new GenericProperty
+            {
+                Name = plan.PropertyName,
+                DataType = inferredDataType,
+                IsNullable = hasEmpty,
+            });
+        }
+
+        var records = workspace.Instance.GetOrCreateEntityRecords(entity.Name);
+        for (var rowIndex = 0; rowIndex < dataRows.Count; rowIndex++)
+        {
+            var dataRow = dataRows[rowIndex];
+            var record = new GenericRecord
+            {
+                Id = (rowIndex + 1).ToString(CultureInfo.InvariantCulture),
+            };
+
+            foreach (var plan in columnPlans)
+            {
+                var cellValue = GetCsvCellValue(dataRow, plan.ColumnIndex);
+                if (string.IsNullOrWhiteSpace(cellValue))
+                {
+                    continue;
+                }
+
+                record.Values[plan.PropertyName] = cellValue;
+            }
+
+            records.Add(record);
         }
 
         return workspace;
@@ -200,9 +319,9 @@ public sealed class ImportService : IImportService
         return columns;
     }
 
-    private static void ApplyEntityColumns(EntityDefinition entity, IReadOnlyCollection<ColumnRow> columns)
+    private static void ApplyEntityColumns(GenericEntity entity, IReadOnlyCollection<ColumnRow> columns)
     {
-        var properties = new List<PropertyDefinition>();
+        var properties = new List<GenericProperty>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var column in columns)
         {
@@ -217,7 +336,7 @@ public sealed class ImportService : IImportService
                 continue;
             }
 
-            properties.Add(new PropertyDefinition
+            properties.Add(new GenericProperty
             {
                 Name = column.Name,
                 DataType = "string",
@@ -306,7 +425,7 @@ public sealed class ImportService : IImportService
         return normalized;
     }
 
-    private static void NormalizeRelationshipProperties(EntityDefinition entity)
+    private static void NormalizeRelationshipProperties(GenericEntity entity)
     {
         if (entity.Relationships.Count == 0 || entity.Properties.Count == 0)
         {
@@ -322,13 +441,13 @@ public sealed class ImportService : IImportService
             relationshipColumns.Contains(property.Name));
     }
 
-    private static async Task<List<InstanceRecord>> LoadRowsAsync(
+    private static async Task<List<GenericRecord>> LoadRowsAsync(
         SqlConnection connection,
         string schema,
-        EntityDefinition entity,
+        GenericEntity entity,
         CancellationToken cancellationToken)
     {
-        var rows = new List<InstanceRecord>();
+        var rows = new List<GenericRecord>();
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var tableName = EscapeSqlIdentifier(entity.Name);
         var schemaName = EscapeSqlIdentifier(schema);
@@ -371,7 +490,7 @@ public sealed class ImportService : IImportService
                 throw new InvalidOperationException($"Table '{schema}.{entity.Name}' contains duplicate Id '{id}'.");
             }
 
-            var record = new InstanceRecord
+            var record = new GenericRecord
             {
                 Id = id,
             };
@@ -490,6 +609,256 @@ public sealed class ImportService : IImportService
         return hasNonZeroDigit;
     }
 
+    private static List<CsvColumnPlan> BuildCsvColumnPlans(IReadOnlyList<string> headerRow)
+    {
+        var usedPropertyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var plans = new List<CsvColumnPlan>();
+        for (var index = 0; index < headerRow.Count; index++)
+        {
+            var rawHeader = index < headerRow.Count ? headerRow[index] : string.Empty;
+            var fallback = "Column" + (index + 1).ToString(CultureInfo.InvariantCulture);
+            var normalized = NormalizeIdentifier(rawHeader, fallback);
+            if (string.Equals(normalized, "Id", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = "IdValue";
+            }
+
+            var unique = MakeUniqueIdentifier(normalized, usedPropertyNames);
+            plans.Add(new CsvColumnPlan(index, unique));
+        }
+
+        return plans;
+    }
+
+    private static List<List<string>> ParseCsvRows(string csvText)
+    {
+        var rows = new List<List<string>>();
+        var currentRow = new List<string>();
+        var currentCell = new StringBuilder();
+        var inQuotes = false;
+
+        for (var index = 0; index < csvText.Length; index++)
+        {
+            var ch = csvText[index];
+            if (ch == '"')
+            {
+                if (inQuotes && index + 1 < csvText.Length && csvText[index + 1] == '"')
+                {
+                    currentCell.Append('"');
+                    index++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+
+                continue;
+            }
+
+            if (!inQuotes && ch == ',')
+            {
+                AppendCsvCell(currentRow, currentCell);
+                continue;
+            }
+
+            if (!inQuotes && (ch == '\r' || ch == '\n'))
+            {
+                AppendCsvCell(currentRow, currentCell);
+                if (!IsCsvRowCompletelyEmpty(currentRow))
+                {
+                    rows.Add(currentRow);
+                }
+
+                currentRow = new List<string>();
+                if (ch == '\r' && index + 1 < csvText.Length && csvText[index + 1] == '\n')
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            currentCell.Append(ch);
+        }
+
+        if (inQuotes)
+        {
+            throw new InvalidOperationException("CSV contains an unclosed quoted field.");
+        }
+
+        AppendCsvCell(currentRow, currentCell);
+        if (!IsCsvRowCompletelyEmpty(currentRow) || rows.Count == 0)
+        {
+            rows.Add(currentRow);
+        }
+
+        return rows;
+    }
+
+    private static void AppendCsvCell(ICollection<string> row, StringBuilder currentCell)
+    {
+        var value = currentCell
+            .ToString()
+            .Trim()
+            .TrimStart('\uFEFF');
+        row.Add(value);
+        currentCell.Clear();
+    }
+
+    private static string GetCsvCellValue(IReadOnlyList<string> row, int columnIndex)
+    {
+        if (columnIndex < 0 || columnIndex >= row.Count)
+        {
+            return string.Empty;
+        }
+
+        return row[columnIndex];
+    }
+
+    private static bool IsCsvRowCompletelyEmpty(IReadOnlyCollection<string> row)
+    {
+        return row.Count == 0 || row.All(cell => string.IsNullOrWhiteSpace(cell));
+    }
+
+    private static string InferCsvDataType(IReadOnlyCollection<string> values)
+    {
+        var nonEmptyValues = values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToList();
+
+        if (nonEmptyValues.Count == 0)
+        {
+            return "string";
+        }
+
+        if (nonEmptyValues.All(value => bool.TryParse(value, out _)))
+        {
+            return "bool";
+        }
+
+        if (nonEmptyValues.All(value => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)))
+        {
+            return "int";
+        }
+
+        if (nonEmptyValues.All(value => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)))
+        {
+            return "long";
+        }
+
+        if (nonEmptyValues.All(value => decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _)))
+        {
+            return "decimal";
+        }
+
+        if (nonEmptyValues.All(value => DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.RoundtripKind, out _)))
+        {
+            return "datetime";
+        }
+
+        return "string";
+    }
+
+    private static string NormalizeIdentifier(string value, string fallback)
+    {
+        var input = (value ?? string.Empty).Trim().TrimStart('\uFEFF');
+        if (input.Length == 0)
+        {
+            input = fallback;
+        }
+
+        var builder = new StringBuilder(input.Length);
+        for (var i = 0; i < input.Length; i++)
+        {
+            var ch = input[i];
+            builder.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');
+        }
+
+        var normalized = builder.ToString().Trim('_');
+        if (normalized.Length == 0)
+        {
+            normalized = fallback;
+        }
+
+        if (!char.IsLetter(normalized[0]) && normalized[0] != '_')
+        {
+            normalized = "_" + normalized;
+        }
+
+        normalized = CollapseUnderscores(normalized);
+        if (normalized.Length > MaxIdentifierLength)
+        {
+            normalized = normalized[..MaxIdentifierLength];
+        }
+
+        if (!IdentifierPattern.IsMatch(normalized))
+        {
+            normalized = "_" + normalized.TrimStart('_');
+            if (normalized.Length > MaxIdentifierLength)
+            {
+                normalized = normalized[..MaxIdentifierLength];
+            }
+        }
+
+        ValidateIdentifier(normalized, "Identifier");
+        return normalized;
+    }
+
+    private static string CollapseUnderscores(string value)
+    {
+        if (!value.Contains('_', StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        var previousWasUnderscore = false;
+        foreach (var ch in value)
+        {
+            if (ch == '_')
+            {
+                if (previousWasUnderscore)
+                {
+                    continue;
+                }
+
+                previousWasUnderscore = true;
+                builder.Append(ch);
+                continue;
+            }
+
+            previousWasUnderscore = false;
+            builder.Append(ch);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string MakeUniqueIdentifier(string normalizedBase, ISet<string> usedNames)
+    {
+        if (usedNames.Add(normalizedBase))
+        {
+            return normalizedBase;
+        }
+
+        var suffix = 2;
+        while (true)
+        {
+            var suffixText = "_" + suffix.ToString(CultureInfo.InvariantCulture);
+            var maxBaseLength = MaxIdentifierLength - suffixText.Length;
+            var baseName = normalizedBase.Length <= maxBaseLength
+                ? normalizedBase
+                : normalizedBase[..maxBaseLength];
+            var candidate = baseName + suffixText;
+            if (usedNames.Add(candidate))
+            {
+                return candidate;
+            }
+
+            suffix++;
+        }
+    }
+
     private sealed class ColumnRow
     {
         public string Name { get; set; } = string.Empty;
@@ -505,4 +874,18 @@ public sealed class ImportService : IImportService
         public string TargetColumn { get; set; } = string.Empty;
         public int ConstraintColumnId { get; set; }
     }
+
+    private sealed class CsvColumnPlan
+    {
+        public CsvColumnPlan(int columnIndex, string propertyName)
+        {
+            ColumnIndex = columnIndex;
+            PropertyName = propertyName;
+        }
+
+        public int ColumnIndex { get; }
+        public string PropertyName { get; }
+    }
 }
+
+

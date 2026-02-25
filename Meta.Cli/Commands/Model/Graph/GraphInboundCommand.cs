@@ -17,7 +17,7 @@ internal sealed partial class CliRuntime
         try
         {
             var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
-            PrintContractCompatibilityWarning(workspace.Manifest);
+            PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             RequireEntity(workspace, targetEntityName);
     
             var inboundAll = workspace.Model.Entities
@@ -69,3 +69,4 @@ internal sealed partial class CliRuntime
         }
     }
 }
+

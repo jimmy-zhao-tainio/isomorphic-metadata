@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     async Task<int> InsertAsync(string[] commandArgs)
     {
@@ -50,7 +50,7 @@
         try
         {
             var workspace = await LoadWorkspaceForCommandAsync(parseResult.WorkspacePath).ConfigureAwait(false);
-            PrintContractCompatibilityWarning(workspace.Manifest);
+            PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             var entity = RequireEntity(workspace, entityName);
             var resolvedId = parseResult.AutoId
                 ? GenerateNextAutoId(workspace, entityName)
@@ -105,4 +105,5 @@
         return next.ToString();
     }
 }
+
 

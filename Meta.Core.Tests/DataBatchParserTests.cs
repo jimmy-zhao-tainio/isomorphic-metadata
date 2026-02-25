@@ -49,20 +49,20 @@ public sealed class DataBatchParserTests
         Assert.Equal(["1", "2", "3"], operation.Ids.ToArray());
     }
 
-    private static EntityDefinition BuildMeasureEntity()
+    private static GenericEntity BuildMeasureEntity()
     {
-        var entity = new EntityDefinition
+        var entity = new GenericEntity
         {
             Name = "Measure",
         };
 
-        entity.Properties.Add(new PropertyDefinition
+        entity.Properties.Add(new GenericProperty
         {
             Name = "MeasureName",
             DataType = "string",
             IsNullable = false,
         });
-        entity.Relationships.Add(new RelationshipDefinition
+        entity.Relationships.Add(new GenericRelationship
         {
             Entity = "Cube",
         });
@@ -70,3 +70,4 @@ public sealed class DataBatchParserTests
         return entity;
     }
 }
+

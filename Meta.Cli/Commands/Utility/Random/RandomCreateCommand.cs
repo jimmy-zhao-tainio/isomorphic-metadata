@@ -1,3 +1,5 @@
+using Meta.Core.WorkspaceConfig;
+
 internal sealed partial class CliRuntime
 {
     async Task<int> RandomCreateAsync(string[] commandArgs)
@@ -364,11 +366,11 @@ internal sealed partial class CliRuntime
             : modelName.Trim();
         var workspace = new Workspace
         {
-            Model = new ModelDefinition
+            Model = new GenericModel
             {
                 Name = resolvedModelName,
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = resolvedModelName,
             },
@@ -376,11 +378,11 @@ internal sealed partial class CliRuntime
     
         var depthBucketCount = Math.Min(entityCount, random.Next(8, 20));
         var entityDepths = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var entities = new List<EntityDefinition>(entityCount);
+        var entities = new List<GenericEntity>(entityCount);
         for (var index = 0; index < entityCount; index++)
         {
             var depth = index < depthBucketCount ? index : random.Next(0, depthBucketCount);
-            var entity = new EntityDefinition
+            var entity = new GenericEntity
             {
                 Name = $"Entity{index:D4}",
             };
@@ -388,7 +390,7 @@ internal sealed partial class CliRuntime
             var propertyCount = random.Next(minAdditionalProperties, maxAdditionalProperties + 1);
             for (var propertyIndex = 1; propertyIndex <= propertyCount; propertyIndex++)
             {
-                entity.Properties.Add(new PropertyDefinition
+                entity.Properties.Add(new GenericProperty
                 {
                     Name = $"P{propertyIndex:D2}",
                     DataType = "string",
@@ -426,7 +428,7 @@ internal sealed partial class CliRuntime
                     continue;
                 }
     
-                entity.Relationships.Add(new RelationshipDefinition
+                entity.Relationships.Add(new GenericRelationship
                 {
                     Entity = target.Name,
                 });
@@ -448,7 +450,7 @@ internal sealed partial class CliRuntime
             for (var rowIndex = 1; rowIndex <= rowCount; rowIndex++)
             {
                 var id = rowIndex.ToString(CultureInfo.InvariantCulture);
-                var record = new InstanceRecord
+                var record = new GenericRecord
                 {
                     Id = id,
                 };
@@ -515,7 +517,7 @@ internal sealed partial class CliRuntime
             "Contract",
             new[]
             {
-                ("Version", workspace.Manifest.ContractVersion),
+                ("Version", MetaWorkspaceModel.GetContractVersion(workspace.WorkspaceConfig)),
                 ("WorkspaceFingerprint", hash),
             });
     }
@@ -524,7 +526,10 @@ internal sealed partial class CliRuntime
     {
         var modelPath = ResolveFirstExistingPath(new[]
         {
-            ResolveManifestPathFromWorkspaceRoot(workspace, workspace.Manifest.ModelFile, "metadata/model.xml"),
+            ResolveManifestPathFromWorkspaceRoot(
+                workspace,
+                MetaWorkspaceModel.GetModelFile(workspace.WorkspaceConfig),
+                "metadata/model.xml"),
             Path.Combine(workspace.MetadataRootPath, "model.xml"),
             Path.Combine(workspace.WorkspaceRootPath, "model.xml"),
         });
@@ -532,7 +537,10 @@ internal sealed partial class CliRuntime
         var modelBytes = GetFileSize(modelPath);
     
         var instanceBytes = 0L;
-        var shardDirectory = ResolveManifestPathFromWorkspaceRoot(workspace, workspace.Manifest.InstanceDir, "metadata/instance");
+        var shardDirectory = ResolveManifestPathFromWorkspaceRoot(
+            workspace,
+            MetaWorkspaceModel.GetInstanceDir(workspace.WorkspaceConfig),
+            "metadata/instance");
         if (Directory.Exists(shardDirectory))
         {
             var shardFiles = Directory.GetFiles(shardDirectory, "*.xml");
@@ -619,9 +627,10 @@ internal sealed partial class CliRuntime
         return (bytes / Gb).ToString("0.##", CultureInfo.InvariantCulture) + " GB";
     }
     
-    void PrintContractCompatibilityWarning(WorkspaceManifest manifest)
+    void PrintContractCompatibilityWarning(Meta.Core.WorkspaceConfig.Generated.MetaWorkspace workspaceConfig)
     {
-        if (!TryParseContractVersion(manifest.ContractVersion, out var major, out var minor))
+        var contractVersion = MetaWorkspaceModel.GetContractVersion(workspaceConfig);
+        if (!MetaWorkspaceModel.TryParseContractVersion(contractVersion, out var major, out var minor))
         {
             return;
         }
@@ -629,7 +638,7 @@ internal sealed partial class CliRuntime
         if (major == SupportedContractMajorVersion && minor > SupportedContractMinorVersion)
         {
             presenter.WriteWarning(
-                $"workspace contractVersion '{manifest.ContractVersion}' is newer than tool baseline '{SupportedContractMajorVersion}.{SupportedContractMinorVersion}'.");
+                $"workspace contractVersion '{contractVersion}' is newer than tool baseline '{SupportedContractMajorVersion}.{SupportedContractMinorVersion}'.");
         }
     }
     
@@ -705,35 +714,7 @@ internal sealed partial class CliRuntime
                Directory.Exists(Path.Combine(metadataRootPath, "tasks"));
     }
     
-    bool TryParseContractVersion(string? value, out int major, out int minor)
-    {
-        major = 0;
-        minor = 0;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-    
-        var parts = value.Trim().Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0 || parts.Length > 2)
-        {
-            return false;
-        }
-    
-        if (!int.TryParse(parts[0], out major))
-        {
-            return false;
-        }
-    
-        if (parts.Length == 2 && !int.TryParse(parts[1], out minor))
-        {
-            return false;
-        }
-    
-        return major >= 0 && minor >= 0;
-    }
-    
-    void PrintSelectedRecord(string entityName, InstanceRecord record)
+    void PrintSelectedRecord(string entityName, GenericRecord record)
     {
         presenter.WriteInfo($"Instance: {BuildEntityInstanceAddress(entityName, record.Id)}");
         var rows = new List<IReadOnlyList<string>>();
@@ -753,7 +734,7 @@ internal sealed partial class CliRuntime
         presenter.WriteTable(new[] { "Field", "Value" }, rows);
     }
     
-    void PrintQueryResult(Workspace workspace, string entityName, string whereExpression, IReadOnlyList<InstanceRecord> rows, int top)
+    void PrintQueryResult(Workspace workspace, string entityName, string whereExpression, IReadOnlyList<GenericRecord> rows, int top)
     {
         presenter.WriteInfo($"Query: {entityName}");
         presenter.WriteInfo($"Filter: {whereExpression}");
@@ -807,7 +788,7 @@ internal sealed partial class CliRuntime
             }));
     }
     
-    IReadOnlyList<InstanceRecord> QueryRows(Workspace workspace, string entityName, IReadOnlyList<(string Mode, string Field, string Value)> filters)
+    IReadOnlyList<GenericRecord> QueryRows(Workspace workspace, string entityName, IReadOnlyList<(string Mode, string Field, string Value)> filters)
     {
         if (workspace == null)
         {
@@ -815,7 +796,7 @@ internal sealed partial class CliRuntime
         }
     
         var entity = RequireEntity(workspace, entityName);
-        IEnumerable<InstanceRecord> rows = workspace.Instance.GetOrCreateEntityRecords(entityName);
+        IEnumerable<GenericRecord> rows = workspace.Instance.GetOrCreateEntityRecords(entityName);
         if (filters is { Count: > 0 })
         {
             foreach (var filter in filters)
@@ -830,7 +811,7 @@ internal sealed partial class CliRuntime
             .ToList();
     }
     
-    string ResolveQueryField(EntityDefinition entity, string fieldName)
+    string ResolveQueryField(GenericEntity entity, string fieldName)
     {
         if (string.Equals(fieldName, "Id", StringComparison.OrdinalIgnoreCase))
         {
@@ -856,7 +837,7 @@ internal sealed partial class CliRuntime
         throw new InvalidOperationException($"Field '{fieldName}' does not exist on entity '{entity.Name}'.");
     }
     
-    bool QueryFilterMatches(InstanceRecord row, string resolvedField, (string Mode, string Field, string Value) filter)
+    bool QueryFilterMatches(GenericRecord row, string resolvedField, (string Mode, string Field, string Value) filter)
     {
         var fieldValue = GetQueryFieldValue(row, resolvedField);
         if (string.Equals(filter.Mode, "contains", StringComparison.OrdinalIgnoreCase))
@@ -867,7 +848,7 @@ internal sealed partial class CliRuntime
         return string.Equals(fieldValue, filter.Value ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
     
-    string GetQueryFieldValue(InstanceRecord row, string fieldName)
+    string GetQueryFieldValue(GenericRecord row, string fieldName)
     {
         if (string.Equals(fieldName, "Id", StringComparison.OrdinalIgnoreCase))
         {
@@ -952,7 +933,7 @@ internal sealed partial class CliRuntime
         return columns;
     }
     
-    IReadOnlyList<(string Key, string Value)> BuildRowPreviewDetails(EntityDefinition entity, RowPatch rowPatch)
+    IReadOnlyList<(string Key, string Value)> BuildRowPreviewDetails(GenericEntity entity, RowPatch rowPatch)
     {
         var details = new List<(string Key, string Value)>();
         var previewProperty = entity.Properties
@@ -990,7 +971,7 @@ internal sealed partial class CliRuntime
         };
     }
     
-    EntityDefinition RequireEntity(Workspace workspace, string entityName)
+    GenericEntity RequireEntity(Workspace workspace, string entityName)
     {
         var entity = workspace.Model.FindEntity(entityName);
         if (entity == null)
@@ -1001,7 +982,7 @@ internal sealed partial class CliRuntime
         return entity;
     }
     
-    InstanceRecord? TryFindRowById(Workspace workspace, string entityName, string id)
+    GenericRecord? TryFindRowById(Workspace workspace, string entityName, string id)
     {
         if (workspace == null)
         {
@@ -1022,7 +1003,7 @@ internal sealed partial class CliRuntime
         return rows.FirstOrDefault(row => string.Equals(row.Id, id, StringComparison.OrdinalIgnoreCase));
     }
     
-    InstanceRecord ResolveRowById(Workspace workspace, string entityName, string id)
+    GenericRecord ResolveRowById(Workspace workspace, string entityName, string id)
     {
         var row = TryFindRowById(workspace, entityName, id);
         if (row == null)
@@ -1034,7 +1015,7 @@ internal sealed partial class CliRuntime
     }
     
     RowPatch BuildRowPatchForUpdate(
-        EntityDefinition entity,
+        GenericEntity entity,
         string id,
         IReadOnlyDictionary<string, string> setValues)
     {
@@ -1080,7 +1061,7 @@ internal sealed partial class CliRuntime
     
     RowPatch BuildRowPatchForCreate(
         Workspace workspace,
-        EntityDefinition entity,
+        GenericEntity entity,
         IReadOnlyDictionary<string, string> setValues,
         string? explicitId)
     {
@@ -1143,14 +1124,14 @@ internal sealed partial class CliRuntime
         return setValues.Keys.Any(key => string.Equals(key, "Id", StringComparison.OrdinalIgnoreCase));
     }
     
-    string ResolveRelationshipName(EntityDefinition entity, string candidateToEntityName)
+    string ResolveRelationshipName(GenericEntity entity, string candidateToEntityName)
     {
         return ResolveRelationshipDefinition(entity, candidateToEntityName, out _)
             ?.GetColumnName() ?? string.Empty;
     }
 
-    RelationshipDefinition? ResolveRelationshipDefinition(
-        EntityDefinition entity,
+    GenericRelationship? ResolveRelationshipDefinition(
+        GenericEntity entity,
         string candidateToEntityName,
         out bool isAmbiguous)
     {
@@ -1193,7 +1174,7 @@ internal sealed partial class CliRuntime
         return null;
     }
     
-    string TryGetDisplayValue(EntityDefinition entity, InstanceRecord row)
+    string TryGetDisplayValue(GenericEntity entity, GenericRecord row)
     {
         var previewProperty = entity.Properties
             .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
@@ -1209,7 +1190,7 @@ internal sealed partial class CliRuntime
         return row.Values.TryGetValue(previewProperty, out var value) ? value : string.Empty;
     }
     
-    int CountRelationshipUsages(InstanceRecord row, string relationshipUsageName)
+    int CountRelationshipUsages(GenericRecord row, string relationshipUsageName)
     {
         return row.RelationshipIds.Count(item =>
             string.Equals(item.Key, relationshipUsageName, StringComparison.OrdinalIgnoreCase) &&
@@ -1217,7 +1198,7 @@ internal sealed partial class CliRuntime
     }
     
     RowPatch BuildRelationshipUsageRewritePatch(
-        InstanceRecord sourceRow,
+        GenericRecord sourceRow,
         string relationshipUsageName,
         string? targetId)
     {
@@ -1247,7 +1228,7 @@ internal sealed partial class CliRuntime
     
     WorkspaceOp BuildUpsertOperationFromRows(
         Workspace workspace,
-        EntityDefinition entity,
+        GenericEntity entity,
         IReadOnlyList<Dictionary<string, string>> rows,
         IReadOnlyList<string> keyFields,
         bool autoEnsure,
@@ -1369,7 +1350,7 @@ internal sealed partial class CliRuntime
     
     string ResolveIdByKeys(
         Workspace workspace,
-        EntityDefinition entity,
+        GenericEntity entity,
         IReadOnlyList<string> keyFields,
         IReadOnlyDictionary<string, string> row,
         bool autoEnsure,
@@ -1429,7 +1410,7 @@ internal sealed partial class CliRuntime
         return createdId;
     }
     
-    string GetRecordFieldValue(InstanceRecord record, string field)
+    string GetRecordFieldValue(GenericRecord record, string field)
     {
         if (string.Equals(field, "Id", StringComparison.OrdinalIgnoreCase))
         {
@@ -1613,7 +1594,7 @@ internal sealed partial class CliRuntime
     }
 
     void EnsureCreatePatchIncludesRequiredRelationships(
-        EntityDefinition entity,
+        GenericEntity entity,
         RowPatch patch,
         string operationName,
         int? rowNumber)
@@ -1638,7 +1619,7 @@ internal sealed partial class CliRuntime
         }
     }
 
-    Dictionary<string, string> BuildRelationshipAliasMap(EntityDefinition entity)
+    Dictionary<string, string> BuildRelationshipAliasMap(GenericEntity entity)
     {
         var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var relationship in entity.Relationships)
@@ -1691,5 +1672,9 @@ internal sealed partial class CliRuntime
         return candidate.ToString();
     }
 }
+
+
+
+
 
 

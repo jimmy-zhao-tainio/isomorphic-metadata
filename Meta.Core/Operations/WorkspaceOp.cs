@@ -25,7 +25,7 @@ public sealed class WorkspaceOp
     public string Type { get; set; } = string.Empty;
     public string EntityName { get; set; } = string.Empty;
     public string NewEntityName { get; set; } = string.Empty;
-    public PropertyDefinition? Property { get; set; }
+    public GenericProperty? Property { get; set; }
     public string PropertyName { get; set; } = string.Empty;
     public string NewPropertyName { get; set; } = string.Empty;
     public string? PropertyDefaultValue { get; set; }
@@ -46,3 +46,4 @@ public sealed class RowPatch
     public Dictionary<string, string> Values { get; set; } = new();
     public Dictionary<string, string> RelationshipIds { get; set; } = new();
 }
+

@@ -14,9 +14,9 @@ internal sealed partial class CliRuntime
         var leftWorkspace = await services.WorkspaceService.LoadAsync(leftPath, searchUpward: false).ConfigureAwait(false);
         var rightWorkspace = await services.WorkspaceService.LoadAsync(rightPath, searchUpward: false).ConfigureAwait(false);
         var alignmentWorkspace = await services.WorkspaceService.LoadAsync(alignmentPath, searchUpward: false).ConfigureAwait(false);
-        PrintContractCompatibilityWarning(leftWorkspace.Manifest);
-        PrintContractCompatibilityWarning(rightWorkspace.Manifest);
-        PrintContractCompatibilityWarning(alignmentWorkspace.Manifest);
+        PrintContractCompatibilityWarning(leftWorkspace.WorkspaceConfig);
+        PrintContractCompatibilityWarning(rightWorkspace.WorkspaceConfig);
+        PrintContractCompatibilityWarning(alignmentWorkspace.WorkspaceConfig);
 
         var rightDiagnostics = services.ValidationService.Validate(rightWorkspace);
         if (rightDiagnostics.HasErrors || (globalStrict && rightDiagnostics.WarningCount > 0))
@@ -102,3 +102,4 @@ internal sealed partial class CliRuntime
         return diff.HasDifferences ? 1 : 0;
     }
 }
+

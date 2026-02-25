@@ -581,11 +581,13 @@ internal static class HelpTopics
                     {
                         ("--out <dir>", "Output directory."),
                         ("--workspace <path>", "Override workspace root."),
+                        ("--tooling", "C# only. Emit optional tooling helpers in <Model>.Tooling.cs."),
                     },
                     examples: new[]
                     {
                         "meta generate sql --out .\\out\\sql",
                         "meta generate csharp --out .\\out\\csharp",
+                        "meta generate csharp --out .\\out\\csharp --tooling",
                         "meta generate ssdt --out .\\out\\ssdt",
                     },
                     next: "meta generate sql --help");
@@ -609,13 +611,18 @@ internal static class HelpTopics
                 document = BuildTopicDocument(
                     title: "Command: generate csharp",
                     summary: "Generate C# model and entity classes.",
-                    usage: "meta generate csharp --out <dir> [--workspace <path>]",
+                    usage: "meta generate csharp --out <dir> [--workspace <path>] [--tooling]",
                     options: new[]
                     {
                         ("--out <dir>", "Output directory."),
                         ("--workspace <path>", "Override workspace root."),
+                        ("--tooling", "Emit optional tooling helpers in <Model>.Tooling.cs."),
                     },
-                    examples: new[] { "meta generate csharp --out .\\out\\csharp" },
+                    examples: new[]
+                    {
+                        "meta generate csharp --out .\\out\\csharp",
+                        "meta generate csharp --out .\\out\\csharp --tooling",
+                    },
                     next: "meta generate ssdt --help");
                 return true;
 
@@ -636,13 +643,18 @@ internal static class HelpTopics
             case "import":
                 document = BuildTopicDocument(
                     title: "Command: import",
-                    summary: "Create a NEW workspace from XML or SQL source.",
-                    usage: "meta import <xml|sql> ...",
-                    options: new[] { ("--new-workspace <path>", "Required. Target directory must be empty.") },
+                    summary: "Import from XML/SQL into a new workspace, or import CSV into new/existing workspace.",
+                    usage: "meta import <xml|sql|csv> ...",
+                    options: new[]
+                    {
+                        ("--new-workspace <path>", "Required for xml/sql; optional for csv (mutually exclusive with --workspace)."),
+                        ("--workspace <path>", "Use existing workspace for csv import."),
+                    },
                     examples: new[]
                     {
                         "meta import xml .\\model.xml .\\instance.xml --new-workspace .\\ImportedWorkspace",
                         "meta import sql \"Server=...;Database=...;...\" dbo --new-workspace .\\ImportedWorkspace",
+                        "meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace",
                     },
                     next: "meta import xml --help");
                 return true;
@@ -665,6 +677,25 @@ internal static class HelpTopics
                     options: new[] { ("--new-workspace <path>", "Required. Target directory must be empty.") },
                     examples: new[] { "meta import sql \"Server=...;Database=...;...\" dbo --new-workspace .\\ImportedWorkspace" },
                     next: "meta status --workspace <path>");
+                return true;
+
+            case "import csv":
+                document = BuildTopicDocument(
+                    title: "Command: import csv",
+                    summary: "Import one CSV file as one entity + rows.",
+                    usage: "meta import csv <csvFile> --entity <EntityName> (--workspace <path> | --new-workspace <path>)",
+                    options: new[]
+                    {
+                        ("--entity <EntityName>", "Required. Entity name to create (sanitized deterministically)."),
+                        ("--workspace <path>", "Target existing workspace."),
+                        ("--new-workspace <path>", "Target new workspace directory (must be empty)."),
+                    },
+                    examples: new[]
+                    {
+                        "meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace",
+                        "meta import csv .\\landing.csv --entity Landing --workspace .\\Samples\\CommandExamples",
+                    },
+                    next: "meta check --workspace <path>");
                 return true;
 
             default:

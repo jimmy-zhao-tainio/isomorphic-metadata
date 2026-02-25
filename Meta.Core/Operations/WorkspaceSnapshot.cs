@@ -7,8 +7,8 @@ namespace Meta.Core.Operations;
 
 public sealed class WorkspaceSnapshot
 {
-    public ModelDefinition Model { get; set; } = new();
-    public InstanceStore Instance { get; set; } = new();
+    public GenericModel Model { get; set; } = new();
+    public GenericInstance Instance { get; set; } = new();
 }
 
 public static class WorkspaceSnapshotCloner
@@ -44,16 +44,16 @@ public static class WorkspaceSnapshotCloner
         workspace.IsDirty = true;
     }
 
-    public static ModelDefinition CloneModel(ModelDefinition source)
+    public static GenericModel CloneModel(GenericModel source)
     {
-        var clone = new ModelDefinition
+        var clone = new GenericModel
         {
             Name = source.Name,
         };
 
         foreach (var entity in source.Entities)
         {
-            var entityClone = new EntityDefinition
+            var entityClone = new GenericEntity
             {
                 Name = entity.Name,
                 Plural = entity.Plural,
@@ -61,7 +61,7 @@ public static class WorkspaceSnapshotCloner
 
             foreach (var property in entity.Properties)
             {
-                entityClone.Properties.Add(new PropertyDefinition
+                entityClone.Properties.Add(new GenericProperty
                 {
                     Name = property.Name,
                     DataType = property.DataType,
@@ -71,7 +71,7 @@ public static class WorkspaceSnapshotCloner
 
             foreach (var relationship in entity.Relationships)
             {
-                entityClone.Relationships.Add(new RelationshipDefinition
+                entityClone.Relationships.Add(new GenericRelationship
                 {
                     Entity = relationship.Entity,
                     Role = relationship.Role,
@@ -84,9 +84,9 @@ public static class WorkspaceSnapshotCloner
         return clone;
     }
 
-    public static InstanceStore CloneInstance(InstanceStore source)
+    public static GenericInstance CloneInstance(GenericInstance source)
     {
-        var clone = new InstanceStore
+        var clone = new GenericInstance
         {
             ModelName = source.ModelName,
         };
@@ -96,7 +96,7 @@ public static class WorkspaceSnapshotCloner
             var targetList = clone.GetOrCreateEntityRecords(kvp.Key);
             foreach (var record in kvp.Value)
             {
-                var recordClone = new InstanceRecord
+                var recordClone = new GenericRecord
                 {
                     Id = record.Id,
                     SourceShardFileName = record.SourceShardFileName,
@@ -119,7 +119,7 @@ public static class WorkspaceSnapshotCloner
         return clone;
     }
 
-    public static RowPatch ToRowPatch(InstanceRecord record)
+    public static RowPatch ToRowPatch(GenericRecord record)
     {
         return new RowPatch
         {
@@ -130,3 +130,5 @@ public static class WorkspaceSnapshotCloner
         };
     }
 }
+
+

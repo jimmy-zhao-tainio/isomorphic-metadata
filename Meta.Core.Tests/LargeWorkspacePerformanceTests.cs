@@ -151,7 +151,7 @@ public sealed class LargeWorkspacePerformanceTests
         for (var i = 1; i <= rowCount; i++)
         {
             var id = i.ToString();
-            var record = new InstanceRecord
+            var record = new GenericRecord
             {
                 Id = id,
             };
@@ -216,3 +216,4 @@ public sealed class LargeWorkspacePerformanceTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+

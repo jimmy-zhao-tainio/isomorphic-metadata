@@ -1,10 +1,11 @@
 using Meta.Core.Domain;
+using Meta.Core.WorkspaceConfig;
 
 namespace MetaSchema.Core;
 
 public static class MetaSchemaWorkspaceFactory
 {
-    public static Workspace CreateEmptyWorkspace(string workspaceRootPath, ModelDefinition model)
+    public static Workspace CreateEmptyWorkspace(string workspaceRootPath, GenericModel model)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceRootPath);
         ArgumentNullException.ThrowIfNull(model);
@@ -16,9 +17,9 @@ public static class MetaSchemaWorkspaceFactory
         {
             WorkspaceRootPath = rootPath,
             MetadataRootPath = metadataRootPath,
-            Manifest = WorkspaceManifest.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
             Model = model,
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = model.Name,
             },
@@ -26,3 +27,4 @@ public static class MetaSchemaWorkspaceFactory
         };
     }
 }
+

@@ -31,12 +31,12 @@ internal sealed partial class CliRuntime
         {
             WorkspaceRootPath = workspaceRoot,
             MetadataRootPath = metadataRoot,
-            Manifest = WorkspaceManifest.CreateDefault(),
-            Model = new ModelDefinition
+            WorkspaceConfig = Meta.Core.WorkspaceConfig.MetaWorkspaceModel.CreateDefault(),
+            Model = new GenericModel
             {
                 Name = "MetadataModel",
             },
-            Instance = new InstanceStore
+            Instance = new GenericInstance
             {
                 ModelName = "MetadataModel",
             },
@@ -58,3 +58,4 @@ internal sealed partial class CliRuntime
         return 0;
     }
 }
+

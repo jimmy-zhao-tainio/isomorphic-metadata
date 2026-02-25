@@ -79,7 +79,7 @@ internal sealed partial class CliRuntime
                 ? args[1].Trim().ToLowerInvariant() switch
                 {
                     "sql" => "meta generate sql --out <dir> [--workspace <path>]",
-                    "csharp" => "meta generate csharp --out <dir> [--workspace <path>]",
+                    "csharp" => "meta generate csharp --out <dir> [--workspace <path>] [--tooling]",
                     "ssdt" => "meta generate ssdt --out <dir> [--workspace <path>]",
                     _ => "meta generate <sql|csharp|ssdt> --out <dir> [--workspace <path>]",
                 }
@@ -89,9 +89,10 @@ internal sealed partial class CliRuntime
                 {
                     "xml" => "meta import xml <modelXmlPath> <instanceXmlPath> --new-workspace <path>",
                     "sql" => "meta import sql <connectionString> <schema> --new-workspace <path>",
-                    _ => "meta import <xml|sql> ...",
+                    "csv" => "meta import csv <csvFile> --entity <EntityName> (--workspace <path> | --new-workspace <path>)",
+                    _ => "meta import <xml|sql|csv> ...",
                 }
-                : "meta import <xml|sql> ...",
+                : "meta import <xml|sql|csv> ...",
             _ => string.Empty,
         };
     }

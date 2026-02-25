@@ -12,8 +12,8 @@ internal sealed partial class CliRuntime
 
         var targetWorkspace = await services.WorkspaceService.LoadAsync(targetPath, searchUpward: false).ConfigureAwait(false);
         var diffWorkspace = await services.WorkspaceService.LoadAsync(diffWorkspacePath, searchUpward: false).ConfigureAwait(false);
-        PrintContractCompatibilityWarning(targetWorkspace.Manifest);
-        PrintContractCompatibilityWarning(diffWorkspace.Manifest);
+        PrintContractCompatibilityWarning(targetWorkspace.WorkspaceConfig);
+        PrintContractCompatibilityWarning(diffWorkspace.WorkspaceConfig);
 
         AlignedDiffData diffData;
         try
@@ -95,3 +95,4 @@ internal sealed partial class CliRuntime
         }
     }
 }
+

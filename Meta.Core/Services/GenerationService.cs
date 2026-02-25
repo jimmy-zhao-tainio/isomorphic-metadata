@@ -31,7 +31,10 @@ public static class GenerationService
         return BuildManifest(outputRoot);
     }
 
-    public static GenerationManifest GenerateCSharp(Workspace workspace, string outputDirectory)
+    public static GenerationManifest GenerateCSharp(
+        Workspace workspace,
+        string outputDirectory,
+        bool includeTooling = false)
     {
         if (workspace == null)
         {
@@ -46,6 +49,18 @@ public static class GenerationService
         {
             modelFileName,
         };
+
+        if (includeTooling)
+        {
+            var toolingFileName = modelTypeName + ".Tooling.cs";
+            if (!emittedFiles.Add(toolingFileName))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot generate C# tooling output because file name collides on '{toolingFileName}'.");
+            }
+
+            WriteText(Path.Combine(outputRoot, toolingFileName), BuildCSharpTooling(modelTypeName));
+        }
 
         foreach (var entity in workspace.Model.Entities
                      .Where(item => !string.IsNullOrWhiteSpace(item.Name))
@@ -62,6 +77,58 @@ public static class GenerationService
         }
 
         return BuildManifest(outputRoot);
+    }
+
+    private static string BuildCSharpTooling(string modelTypeName)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("using System.Threading;");
+        builder.AppendLine("using System.Threading.Tasks;");
+        builder.AppendLine("using Meta.Adapters;");
+        builder.AppendLine("using Meta.Core.Domain;");
+        builder.AppendLine("using Meta.Core.Services;");
+        builder.AppendLine();
+        builder.AppendLine("namespace GeneratedMetadata");
+        builder.AppendLine("{");
+        builder.AppendLine($"    public static class {modelTypeName}Tooling");
+        builder.AppendLine("    {");
+        builder.AppendLine("        public static Task<Workspace> LoadWorkspaceAsync(");
+        builder.AppendLine("            string workspacePath,");
+        builder.AppendLine("            bool searchUpward = true,");
+        builder.AppendLine("            CancellationToken cancellationToken = default)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            var services = new ServiceCollection();");
+        builder.AppendLine("            return services.WorkspaceService.LoadAsync(workspacePath, searchUpward, cancellationToken);");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        public static Task SaveWorkspaceAsync(");
+        builder.AppendLine("            Workspace workspace,");
+        builder.AppendLine("            CancellationToken cancellationToken = default)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            var services = new ServiceCollection();");
+        builder.AppendLine("            return services.WorkspaceService.SaveAsync(workspace, cancellationToken);");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        public static Task<Workspace> ImportXmlAsync(");
+        builder.AppendLine("            string modelPath,");
+        builder.AppendLine("            string instancePath,");
+        builder.AppendLine("            CancellationToken cancellationToken = default)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            var services = new ServiceCollection();");
+        builder.AppendLine("            return services.ImportService.ImportXmlAsync(modelPath, instancePath, cancellationToken);");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        public static Task<Workspace> ImportSqlAsync(");
+        builder.AppendLine("            string connectionString,");
+        builder.AppendLine("            string schema = \"dbo\",");
+        builder.AppendLine("            CancellationToken cancellationToken = default)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            var services = new ServiceCollection();");
+        builder.AppendLine("            return services.ImportService.ImportSqlAsync(connectionString, schema, cancellationToken);");
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        return NormalizeNewlines(builder.ToString());
     }
 
     public static GenerationManifest GenerateSsdt(Workspace workspace, string outputDirectory)
@@ -310,7 +377,7 @@ public static class GenerationService
         return NormalizeNewlines(builder.ToString());
     }
 
-    private static string BuildCSharpEntity(EntityDefinition entity)
+    private static string BuildCSharpEntity(GenericEntity entity)
     {
         var builder = new StringBuilder();
         builder.AppendLine("namespace GeneratedMetadata");
@@ -373,12 +440,12 @@ public static class GenerationService
         return NormalizeNewlines(xml);
     }
 
-    private static IReadOnlyList<EntityDefinition> GetEntitiesTopologically(ModelDefinition model)
+    private static IReadOnlyList<GenericEntity> GetEntitiesTopologically(GenericModel model)
     {
         var lookup = model.Entities
             .Where(entity => !string.IsNullOrWhiteSpace(entity.Name))
             .ToDictionary(entity => entity.Name, StringComparer.OrdinalIgnoreCase);
-        var result = new List<EntityDefinition>();
+        var result = new List<GenericEntity>();
         var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ordered = lookup.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
@@ -470,3 +537,5 @@ public static class GenerationService
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }
+
+

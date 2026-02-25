@@ -9,7 +9,7 @@ public sealed class GraphStatsServiceTests
     [Fact]
     public void Compute_DagGraph_ReturnsExpectedMetrics()
     {
-        var model = new ModelDefinition
+        var model = new GenericModel
         {
             Name = "GraphModel",
         };
@@ -43,7 +43,7 @@ public sealed class GraphStatsServiceTests
     [Fact]
     public void Compute_CycleAndDataQualityIssues_AreReported()
     {
-        var model = new ModelDefinition
+        var model = new GenericModel
         {
             Name = "GraphModel",
         };
@@ -68,16 +68,16 @@ public sealed class GraphStatsServiceTests
         Assert.Contains("B", stats.CycleSamples[0], StringComparison.OrdinalIgnoreCase);
     }
 
-    private static EntityDefinition Entity(string name, params string[] relationships)
+    private static GenericEntity Entity(string name, params string[] relationships)
     {
-        var entity = new EntityDefinition
+        var entity = new GenericEntity
         {
             Name = name,
         };
 
         foreach (var relationship in relationships)
         {
-            entity.Relationships.Add(new RelationshipDefinition
+            entity.Relationships.Add(new GenericRelationship
             {
                 Entity = relationship,
             });
@@ -86,3 +86,5 @@ public sealed class GraphStatsServiceTests
         return entity;
     }
 }
+
+

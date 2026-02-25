@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     string BuildEntityInstanceAddress(string entityName, string id)
     {
@@ -37,7 +37,7 @@
             RegexOptions.CultureInvariant);
     }
 
-    bool TryGetRelationshipId(InstanceRecord record, string relationshipEntity, out string relationshipId)
+    bool TryGetRelationshipId(GenericRecord record, string relationshipEntity, out string relationshipId)
     {
         if (record.RelationshipIds.TryGetValue(relationshipEntity, out var directValue) &&
             !string.IsNullOrWhiteSpace(directValue))
@@ -60,4 +60,5 @@
         return false;
     }
 }
+
 

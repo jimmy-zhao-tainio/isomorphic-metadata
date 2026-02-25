@@ -149,11 +149,11 @@ internal sealed partial class CliRuntime
         }
     }
 
-    IReadOnlyList<InstanceRecord> GetEntityRows(Workspace? workspace, string entityName)
+    IReadOnlyList<GenericRecord> GetEntityRows(Workspace? workspace, string entityName)
     {
         if (workspace == null || string.IsNullOrWhiteSpace(entityName))
         {
-            return Array.Empty<InstanceRecord>();
+            return Array.Empty<GenericRecord>();
         }
     
         if (workspace.Instance.RecordsByEntity.TryGetValue(entityName, out var directRows))
@@ -163,6 +163,7 @@ internal sealed partial class CliRuntime
     
         var candidate = workspace.Instance.RecordsByEntity
             .FirstOrDefault(pair => string.Equals(pair.Key, entityName, StringComparison.OrdinalIgnoreCase));
-        return candidate.Value == null ? Array.Empty<InstanceRecord>() : candidate.Value;
+        return candidate.Value == null ? Array.Empty<GenericRecord>() : candidate.Value;
     }
 }
+

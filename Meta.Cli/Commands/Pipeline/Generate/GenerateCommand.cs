@@ -18,11 +18,16 @@ internal sealed partial class CliRuntime
         {
             return PrintArgumentError("Error: generate requires --out <dir>.");
         }
+
+        if (options.IncludeTooling && !string.Equals(mode, "csharp", StringComparison.OrdinalIgnoreCase))
+        {
+            return PrintArgumentError("Error: --tooling is only supported for 'generate csharp'.");
+        }
     
         try
         {
             var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
-            PrintContractCompatibilityWarning(workspace.Manifest);
+            PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             var diagnostics = services.ValidationService.Validate(workspace);
             workspace.Diagnostics = diagnostics;
             if (diagnostics.HasErrors || (globalStrict && diagnostics.WarningCount > 0))
@@ -50,16 +55,24 @@ internal sealed partial class CliRuntime
     
                     return 0;
                 case "csharp":
-                    manifest = GenerationService.GenerateCSharp(workspace, options.OutputDirectory);
+                    manifest = GenerationService.GenerateCSharp(workspace, options.OutputDirectory, includeTooling: options.IncludeTooling);
                     if (globalJson)
                     {
-                        WriteJson(new { command = "generate", mode = "csharp", files = manifest.FileHashes.Count, hash = manifest.CombinedHash });
+                        WriteJson(new
+                        {
+                            command = "generate",
+                            mode = "csharp",
+                            tooling = options.IncludeTooling,
+                            files = manifest.FileHashes.Count,
+                            hash = manifest.CombinedHash,
+                        });
                     }
                     else
                     {
                         presenter.WriteOk(
                             "generated csharp",
                             ("Out", Path.GetFullPath(options.OutputDirectory)),
+                            ("Tooling", options.IncludeTooling ? "yes" : "no"),
                             ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
                             ("Hash", manifest.CombinedHash));
                     }
@@ -91,3 +104,4 @@ internal sealed partial class CliRuntime
         }
     }
 }
+

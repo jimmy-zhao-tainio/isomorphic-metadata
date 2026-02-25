@@ -9,7 +9,6 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Generic\Metadata.Framework.Generic.csproj" />
     <ProjectReference Include="..\Samples\SampleModel.csproj" />
   </ItemGroup>
   <ItemGroup>

@@ -222,7 +222,7 @@ public static class TypeConversionCatalogSeed
             IReadOnlyDictionary<string, string>? relationships = null)
         {
             var id = NextId(entityName);
-            var row = new InstanceRecord
+            var row = new GenericRecord
             {
                 Id = id,
             };
@@ -291,3 +291,4 @@ public static class TypeConversionCatalogSeed
         }
     }
 }
+

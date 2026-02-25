@@ -32,7 +32,7 @@ public sealed class ExportService : IExportService
         {
             WorkspaceRootPath = outputDirectory,
             MetadataRootPath = string.Empty,
-            Manifest = workspace.Manifest,
+            WorkspaceConfig = workspace.WorkspaceConfig,
             Model = workspace.Model,
             Instance = workspace.Instance,
             Diagnostics = workspace.Diagnostics,
@@ -135,3 +135,4 @@ public sealed class ExportService : IExportService
         return Path.GetFullPath(outputPath);
     }
 }
+

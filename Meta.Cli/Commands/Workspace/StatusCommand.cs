@@ -10,7 +10,7 @@ internal sealed partial class CliRuntime
     
         var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
         var dataSizes = CalculateWorkspaceDataSizes(workspace);
-        PrintContractCompatibilityWarning(workspace.Manifest);
+        PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
         if (globalJson)
         {
             WriteJson(new
@@ -37,3 +37,4 @@ internal sealed partial class CliRuntime
         return 0;
     }
 }
+

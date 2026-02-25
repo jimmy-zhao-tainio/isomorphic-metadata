@@ -10,11 +10,11 @@ public sealed class InstanceWindowProviderTests
     public void GetWindow_ReturnsOrderedPage()
     {
         var provider = new InstanceWindowProvider();
-        var instance = new InstanceStore();
+        var instance = new GenericInstance();
         var rows = instance.GetOrCreateEntityRecords("Thing");
-        rows.Add(new InstanceRecord { Id = "3" });
-        rows.Add(new InstanceRecord { Id = "1" });
-        rows.Add(new InstanceRecord { Id = "2" });
+        rows.Add(new GenericRecord { Id = "3" });
+        rows.Add(new GenericRecord { Id = "1" });
+        rows.Add(new GenericRecord { Id = "2" });
 
         var page = provider.GetWindow(instance, "Thing", offset: 1, pageSize: 2);
 
@@ -28,11 +28,11 @@ public sealed class InstanceWindowProviderTests
     public void GetWindow_ClampsOffsetPastEnd()
     {
         var provider = new InstanceWindowProvider();
-        var instance = new InstanceStore();
+        var instance = new GenericInstance();
         var rows = instance.GetOrCreateEntityRecords("Thing");
-        rows.Add(new InstanceRecord { Id = "1" });
-        rows.Add(new InstanceRecord { Id = "2" });
-        rows.Add(new InstanceRecord { Id = "3" });
+        rows.Add(new GenericRecord { Id = "1" });
+        rows.Add(new GenericRecord { Id = "2" });
+        rows.Add(new GenericRecord { Id = "3" });
 
         var page = provider.GetWindow(instance, "Thing", offset: 999, pageSize: 2);
 
@@ -41,3 +41,5 @@ public sealed class InstanceWindowProviderTests
         Assert.Equal(["2", "3"], page.Rows.Select(row => row.Id).ToArray());
     }
 }
+
+

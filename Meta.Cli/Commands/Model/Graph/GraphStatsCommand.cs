@@ -11,7 +11,7 @@ internal sealed partial class CliRuntime
         try
         {
             var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
-            PrintContractCompatibilityWarning(workspace.Manifest);
+            PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             var stats = GraphStatsService.Compute(workspace.Model, options.TopN, options.CycleSampleLimit);
     
             if (globalJson)
@@ -56,3 +56,4 @@ internal sealed partial class CliRuntime
         }
     }
 }
+

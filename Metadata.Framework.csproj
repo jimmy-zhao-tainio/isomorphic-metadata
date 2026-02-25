@@ -11,7 +11,6 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Generic\**" />
     <Compile Remove="Generated\**" />
     <Compile Remove="Samples\**" />
     <Compile Remove="Samples.Console\**" />
@@ -30,8 +29,5 @@
     <None Update="Samples\SampleInstance.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="Generic\Metadata.Framework.Generic.csproj" />
   </ItemGroup>
 </Project>

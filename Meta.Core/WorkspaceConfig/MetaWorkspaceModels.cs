@@ -10,7 +10,7 @@ public static class MetaWorkspaceModels
     public const string DefaultWorkspaceName = "Workspace";
     private const string ModelResourceName = "Meta.Core.WorkspaceConfig.Models.MetaWorkspace.model.xml";
 
-    public static ModelDefinition CreateModel()
+    public static GenericModel CreateModel()
     {
         var assembly = typeof(MetaWorkspaceModels).Assembly;
         using var stream = assembly.GetManifestResourceStream(ModelResourceName)
@@ -27,3 +27,4 @@ public static class MetaWorkspaceModels
         return model;
     }
 }
+

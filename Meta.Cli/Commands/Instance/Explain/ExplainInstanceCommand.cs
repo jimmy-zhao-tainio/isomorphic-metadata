@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     async Task<int> ViewInstanceAsync(string[] commandArgs)
     {
@@ -20,7 +20,7 @@
         }
     
         var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
-        PrintContractCompatibilityWarning(workspace.Manifest);
+        PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
         RequireEntity(workspace, entityName);
         var row = ResolveRowById(workspace, entityName, id);
     
@@ -41,4 +41,5 @@
         return 0;
     }
 }
+
 

@@ -70,7 +70,7 @@ public static class WorkspaceOperationApplier
     {
         var entityName = RequireValue(operation.EntityName, nameof(operation.EntityName));
         EnsureEntityDoesNotExist(workspace.Model, entityName);
-        var entity = new EntityDefinition
+        var entity = new GenericEntity
         {
             Name = entityName,
         };
@@ -196,7 +196,7 @@ public static class WorkspaceOperationApplier
                 $"Property '{entity.Name}.{operation.Property.Name}' requires --default-value because entity '{entity.Name}' has existing rows.");
         }
 
-        entity.Properties.Add(new PropertyDefinition
+        entity.Properties.Add(new GenericProperty
         {
             Name = operation.Property.Name,
             DataType = operation.Property.DataType,
@@ -314,7 +314,7 @@ public static class WorkspaceOperationApplier
             }
         }
 
-        var newRelationship = new RelationshipDefinition
+        var newRelationship = new GenericRelationship
         {
             Entity = relatedEntity,
             Role = relationshipRole,
@@ -408,7 +408,7 @@ public static class WorkspaceOperationApplier
                 string.Equals(record.Id, patch.Id, StringComparison.OrdinalIgnoreCase));
             if (existing == null)
             {
-                existing = new InstanceRecord
+                existing = new GenericRecord
                 {
                     Id = patch.Id,
                 };
@@ -459,7 +459,7 @@ public static class WorkspaceOperationApplier
         records.RemoveAll(record => ids.Contains(record.Id));
     }
 
-    private static EntityDefinition RequireEntity(ModelDefinition model, string entityName)
+    private static GenericEntity RequireEntity(GenericModel model, string entityName)
     {
         var entity = model.Entities.FirstOrDefault(item =>
             string.Equals(item.Name, entityName, StringComparison.OrdinalIgnoreCase));
@@ -471,7 +471,7 @@ public static class WorkspaceOperationApplier
         return entity;
     }
 
-    private static PropertyDefinition RequireProperty(EntityDefinition entity, string propertyName)
+    private static GenericProperty RequireProperty(GenericEntity entity, string propertyName)
     {
         var property = entity.Properties.FirstOrDefault(item =>
             string.Equals(item.Name, propertyName, StringComparison.OrdinalIgnoreCase));
@@ -483,7 +483,7 @@ public static class WorkspaceOperationApplier
         return property;
     }
 
-    private static void EnsureEntityDoesNotExist(ModelDefinition model, string entityName)
+    private static void EnsureEntityDoesNotExist(GenericModel model, string entityName)
     {
         if (model.Entities.Any(entity =>
                 string.Equals(entity.Name, entityName, StringComparison.OrdinalIgnoreCase)))
@@ -502,7 +502,7 @@ public static class WorkspaceOperationApplier
         return value.Trim();
     }
 
-    private static RelationshipDefinition ResolveRelationship(EntityDefinition entity, string selector)
+    private static GenericRelationship ResolveRelationship(GenericEntity entity, string selector)
     {
         var normalizedSelector = selector.Trim();
         var byRole = entity.Relationships
@@ -551,3 +551,5 @@ public static class WorkspaceOperationApplier
             $"Relationship '{entity.Name}.{selector}' does not exist.");
     }
 }
+
+

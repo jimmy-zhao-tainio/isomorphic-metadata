@@ -45,7 +45,7 @@ public sealed class ValidationService : IValidationService
     }
 
     private static void ValidateModel(
-        ModelDefinition model,
+        GenericModel model,
         WorkspaceDiagnostics diagnostics,
         HashSet<string>? filter = null)
     {
@@ -147,7 +147,7 @@ public sealed class ValidationService : IValidationService
         ValidateCycles(model, diagnostics, filter);
     }
 
-    private static void ValidateEntityProperties(EntityDefinition entity, WorkspaceDiagnostics diagnostics)
+    private static void ValidateEntityProperties(GenericEntity entity, WorkspaceDiagnostics diagnostics)
     {
         var propertyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var property in entity.Properties)
@@ -186,7 +186,7 @@ public sealed class ValidationService : IValidationService
         }
     }
 
-    private static void ValidateEntityMemberNameCollisions(EntityDefinition entity, WorkspaceDiagnostics diagnostics)
+    private static void ValidateEntityMemberNameCollisions(GenericEntity entity, WorkspaceDiagnostics diagnostics)
     {
         var memberNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var property in entity.Properties)
@@ -221,7 +221,7 @@ public sealed class ValidationService : IValidationService
         }
     }
 
-    private static void ValidateEntityIdProperty(EntityDefinition entity, WorkspaceDiagnostics diagnostics)
+    private static void ValidateEntityIdProperty(GenericEntity entity, WorkspaceDiagnostics diagnostics)
     {
         var explicitId = entity.Properties.FirstOrDefault(property =>
             string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase));
@@ -240,7 +240,7 @@ public sealed class ValidationService : IValidationService
     }
 
     private static void ValidateRelationships(
-        ModelDefinition model,
+        GenericModel model,
         WorkspaceDiagnostics diagnostics,
         HashSet<string>? filter = null)
     {
@@ -292,7 +292,7 @@ public sealed class ValidationService : IValidationService
         }
     }
 
-    private static void ValidateCycles(ModelDefinition model, WorkspaceDiagnostics diagnostics, HashSet<string>? filter)
+    private static void ValidateCycles(GenericModel model, WorkspaceDiagnostics diagnostics, HashSet<string>? filter)
     {
         var graph = model.Entities.ToDictionary(
             entity => entity.Name,
@@ -361,8 +361,8 @@ public sealed class ValidationService : IValidationService
     }
 
     private static void ValidateInstance(
-        ModelDefinition model,
-        InstanceStore instance,
+        GenericModel model,
+        GenericInstance instance,
         WorkspaceDiagnostics diagnostics,
         HashSet<string>? filter = null)
     {
@@ -611,3 +611,5 @@ public sealed class ValidationService : IValidationService
     }
 
 }
+
+

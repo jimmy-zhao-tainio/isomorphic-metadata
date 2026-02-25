@@ -1,12 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
-using Metadata.Framework.Generic;
 
 namespace GeneratedModel
 {
@@ -104,14 +104,8 @@ namespace GeneratedModel
                 throw new DirectoryNotFoundException($"Workspace path was not found: {fullWorkspacePath}");
             }
 
-            var modelPath = ResolveModelPath(fullWorkspacePath);
-            var modelResult = new Reader().Read(modelPath);
-            EnsureNoErrors(modelResult.Errors, "model XML load");
-
-            var instanceResult = new InstanceReader().ReadWorkspace(fullWorkspacePath, modelResult.Model);
-            EnsureNoErrors(instanceResult.Errors, "instance XML load");
-
-            var data = BuildData(instanceResult.ModelInstance);
+            var instance = ReadXmlWorkspaceInstance(fullWorkspacePath);
+            var data = BuildData(instance);
             return new EnterpriseBIPlatformInstance(data);
         }
 
@@ -132,10 +126,7 @@ namespace GeneratedModel
                 schemaName = "dbo";
             }
 
-            var modelResult = new Reader().ReadFromDatabase(connection.ConnectionString, schemaName);
-            EnsureNoErrors(modelResult.Errors, "SQL model load");
-
-            var instance = new DatabaseInstanceReader().Read(connection.ConnectionString, modelResult.Model, schemaName);
+            var instance = ReadSqlInstance(connection, schemaName);
             var data = BuildData(instance);
             return new EnterpriseBIPlatformInstance(data);
         }
@@ -384,6 +375,389 @@ namespace GeneratedModel
                 systemTypes);
             ResolveNavigations(data);
             return data;
+        }
+
+        private static readonly string[] EntityNames =
+        {
+            "Cube",
+            "Dimension",
+            "Fact",
+            "Measure",
+            "System",
+            "SystemCube",
+            "SystemDimension",
+            "SystemFact",
+            "SystemType",
+        };
+
+        private static readonly Dictionary<string, string[]> PropertyNamesByEntity =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Cube"] = new[] { "CubeName", "Purpose", "RefreshMode" },
+                ["Dimension"] = new[] { "DimensionName", "IsConformed", "HierarchyCount" },
+                ["Fact"] = new[] { "FactName", "Grain", "MeasureCount", "BusinessArea" },
+                ["Measure"] = new[] { "MeasureName", "MDX" },
+                ["System"] = new[] { "SystemName", "Version", "DeploymentDate" },
+                ["SystemCube"] = new[] { "ProcessingMode" },
+                ["SystemDimension"] = new[] { "ConformanceLevel" },
+                ["SystemFact"] = new[] { "LoadPattern" },
+                ["SystemType"] = new[] { "TypeName", "Description" },
+            };
+
+        private static readonly Dictionary<string, string[]> RelationshipTargetsByEntity =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Cube"] = Array.Empty<string>(),
+                ["Dimension"] = Array.Empty<string>(),
+                ["Fact"] = Array.Empty<string>(),
+                ["Measure"] = new[] { "Cube" },
+                ["System"] = new[] { "SystemType" },
+                ["SystemCube"] = new[] { "Cube", "System" },
+                ["SystemDimension"] = new[] { "Dimension", "System" },
+                ["SystemFact"] = new[] { "Fact", "System" },
+                ["SystemType"] = Array.Empty<string>(),
+            };
+
+        private static ModelInstance ReadXmlWorkspaceInstance(string workspacePath)
+        {
+            var instance = CreateEmptyInstance();
+            var entitiesByName = BuildEntityInstanceLookup(instance);
+            var instanceDirectory = Path.Combine(workspacePath, "metadata", "instance");
+            var shardFiles = Directory.Exists(instanceDirectory)
+                ? Directory.GetFiles(instanceDirectory, "*.xml")
+                    .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : Array.Empty<string>();
+
+            if (shardFiles.Length > 0)
+            {
+                foreach (var shardPath in shardFiles)
+                {
+                    var document = XDocument.Load(shardPath, LoadOptions.None);
+                    ParseInstanceDocument(document, entitiesByName, sourceName: Path.GetFileName(shardPath));
+                }
+
+                return instance;
+            }
+
+            var monolithicPath = ResolveInstancePath(workspacePath);
+            if (string.IsNullOrWhiteSpace(monolithicPath))
+            {
+                throw new FileNotFoundException($"Could not find instance XML under workspace '{workspacePath}'.");
+            }
+
+            var monolithicDocument = XDocument.Load(monolithicPath, LoadOptions.None);
+            ParseInstanceDocument(monolithicDocument, entitiesByName, sourceName: Path.GetFileName(monolithicPath));
+            return instance;
+        }
+
+        private static ModelInstance ReadSqlInstance(DbConnection connection, string schemaName)
+        {
+            if (connection == null)
+            {
+                throw new ArgumentNullException(nameof(connection));
+            }
+
+            var instance = CreateEmptyInstance();
+            var entitiesByName = BuildEntityInstanceLookup(instance);
+            var shouldClose = false;
+            if (connection.State != ConnectionState.Open)
+            {
+                connection.Open();
+                shouldClose = true;
+            }
+
+            try
+            {
+                foreach (var entityName in EntityNames)
+                {
+                    ReadSqlEntityRows(connection, schemaName, entityName, entitiesByName[entityName]);
+                }
+            }
+            finally
+            {
+                if (shouldClose)
+                {
+                    connection.Close();
+                }
+            }
+
+            return instance;
+        }
+
+        private static void ReadSqlEntityRows(
+            DbConnection connection,
+            string schemaName,
+            string entityName,
+            EntityInstance entityInstance)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    $"SELECT * FROM [{EscapeSqlIdentifier(schemaName)}].[{EscapeSqlIdentifier(entityName)}] ORDER BY [Id]";
+                using (var reader = command.ExecuteReader())
+                {
+                    var columnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (var i = 0; i < reader.FieldCount; i++)
+                    {
+                        columnNames.Add(reader.GetName(i));
+                    }
+
+                    if (!columnNames.Contains("Id"))
+                    {
+                        throw new InvalidOperationException($"Table '{schemaName}.{entityName}' does not include required column 'Id'.");
+                    }
+
+                    var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (reader.Read())
+                    {
+                        var idObject = reader["Id"];
+                        if (idObject == DBNull.Value)
+                        {
+                            throw new InvalidOperationException($"Table '{schemaName}.{entityName}' contains null Id values.");
+                        }
+
+                        var idText = Convert.ToString(idObject);
+                        var rowId = ParseRequiredId(entityName, idText);
+                        if (!seenIds.Add(rowId.ToString()))
+                        {
+                            throw new InvalidOperationException($"Table '{schemaName}.{entityName}' contains duplicate Id '{idText}'.");
+                        }
+
+                        var record = new RecordInstance
+                        {
+                            Id = rowId.ToString(),
+                        };
+
+                        foreach (var propertyName in PropertyNamesByEntity[entityName])
+                        {
+                            if (!columnNames.Contains(propertyName))
+                            {
+                                continue;
+                            }
+
+                            var value = reader[propertyName];
+                            if (value == DBNull.Value)
+                            {
+                                continue;
+                            }
+
+                            record.Properties.Add(new PropertyValue
+                            {
+                                Property = new PropertyRef { Name = propertyName },
+                                Value = Convert.ToString(value),
+                            });
+                        }
+
+                        foreach (var relationshipTarget in RelationshipTargetsByEntity[entityName])
+                        {
+                            var columnName = relationshipTarget + "Id";
+                            if (!columnNames.Contains(columnName))
+                            {
+                                throw new InvalidOperationException(
+                                    $"Table '{schemaName}.{entityName}' is missing required relationship column '{columnName}'.");
+                            }
+
+                            var relationshipValue = reader[columnName];
+                            if (relationshipValue == DBNull.Value)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Table '{schemaName}.{entityName}' has null relationship value for '{columnName}' on row '{rowId}'.");
+                            }
+
+                            var relationshipIdText = Convert.ToString(relationshipValue);
+                            var relatedId = ParseRequiredId(entityName, relationshipIdText);
+                            record.Relationships.Add(new RelationshipValue
+                            {
+                                Entity = new EntityRef { Name = relationshipTarget },
+                                Value = relatedId.ToString(),
+                            });
+                        }
+
+                        entityInstance.Records.Add(record);
+                    }
+                }
+            }
+        }
+
+        private static string EscapeSqlIdentifier(string value)
+        {
+            return value.Replace("]", "]]");
+        }
+
+        private static string ResolveInstancePath(string workspacePath)
+        {
+            var candidates = new[]
+            {
+                Path.Combine(workspacePath, "metadata", "instance.xml"),
+                Path.Combine(workspacePath, "instance.xml"),
+            };
+
+            return candidates.FirstOrDefault(File.Exists);
+        }
+
+        private static void ParseInstanceDocument(
+            XDocument document,
+            IDictionary<string, EntityInstance> entitiesByName,
+            string sourceName)
+        {
+            var root = document.Root ?? throw new InvalidOperationException($"Instance XML '{sourceName}' has no root element.");
+            if (!string.Equals(root.Name.LocalName, "EnterpriseBIPlatform", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Instance XML '{sourceName}' root must be 'EnterpriseBIPlatform', found '{root.Name.LocalName}'.");
+            }
+
+            foreach (var container in root.Elements())
+            {
+                var entityName = ResolveEntityNameFromContainer(container.Name.LocalName);
+                if (string.IsNullOrWhiteSpace(entityName))
+                {
+                    throw new InvalidOperationException(
+                        $"Instance XML '{sourceName}' contains unknown container '{container.Name.LocalName}'.");
+                }
+
+                var entityRecords = entitiesByName[entityName].Records;
+                foreach (var rowElement in container.Elements())
+                {
+                    if (!string.Equals(rowElement.Name.LocalName, entityName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"Container '{container.Name.LocalName}' in '{sourceName}' contains row '{rowElement.Name.LocalName}', expected '{entityName}'.");
+                    }
+
+                    var record = ParseRecordElement(entityName, rowElement, sourceName);
+                    if (entityRecords.Any(existing => string.Equals(existing.Id, record.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        throw new InvalidOperationException(
+                            $"Instance XML '{sourceName}' has duplicate Id '{record.Id}' for entity '{entityName}'.");
+                    }
+
+                    entityRecords.Add(record);
+                }
+            }
+        }
+
+        private static string ResolveEntityNameFromContainer(string containerName)
+        {
+            return EntityNames.FirstOrDefault(entityName =>
+                string.Equals(GetPluralName(entityName), containerName, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+        }
+
+        private static string GetPluralName(string entityName)
+        {
+            return entityName + "s";
+        }
+
+        private static RecordInstance ParseRecordElement(string entityName, XElement rowElement, string sourceName)
+        {
+            var idText = (string)rowElement.Attribute("Id");
+            var rowId = ParseRequiredId(entityName, idText);
+            var record = new RecordInstance
+            {
+                Id = rowId.ToString(),
+            };
+
+            var relationshipTargets = RelationshipTargetsByEntity[entityName];
+            var relationshipColumns = relationshipTargets.ToDictionary(
+                target => target + "Id",
+                target => target,
+                StringComparer.OrdinalIgnoreCase);
+            var seenRelationshipColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var attribute in rowElement.Attributes())
+            {
+                if (string.Equals(attribute.Name.LocalName, "Id", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var attributeName = attribute.Name.LocalName;
+                if (!relationshipColumns.TryGetValue(attributeName, out var targetEntity))
+                {
+                    throw new InvalidOperationException(
+                        $"Entity '{entityName}' row '{rowId}' in '{sourceName}' has unsupported attribute '{attributeName}'.");
+                }
+
+                if (!seenRelationshipColumns.Add(attributeName))
+                {
+                    throw new InvalidOperationException(
+                        $"Entity '{entityName}' row '{rowId}' in '{sourceName}' has duplicate relationship attribute '{attributeName}'.");
+                }
+
+                var relatedId = ParseRequiredId(entityName, attribute.Value);
+                record.Relationships.Add(new RelationshipValue
+                {
+                    Entity = new EntityRef { Name = targetEntity },
+                    Value = relatedId.ToString(),
+                });
+            }
+
+            foreach (var expectedRelationship in relationshipTargets)
+            {
+                if (!record.Relationships.Any(relationship =>
+                        string.Equals(relationship.Entity.Name, expectedRelationship, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException(
+                        $"Entity '{entityName}' row '{rowId}' in '{sourceName}' is missing required relationship '{expectedRelationship}Id'.");
+                }
+            }
+
+            var allowedProperties = new HashSet<string>(PropertyNamesByEntity[entityName], StringComparer.OrdinalIgnoreCase);
+            var seenProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var childElement in rowElement.Elements())
+            {
+                var propertyName = childElement.Name.LocalName;
+                if (relationshipColumns.ContainsKey(propertyName))
+                {
+                    throw new InvalidOperationException(
+                        $"Entity '{entityName}' row '{rowId}' in '{sourceName}' contains relationship element '{propertyName}'. Relationships must be attributes.");
+                }
+
+                if (!allowedProperties.Contains(propertyName))
+                {
+                    throw new InvalidOperationException(
+                        $"Entity '{entityName}' row '{rowId}' in '{sourceName}' has unknown property '{propertyName}'.");
+                }
+
+                if (!seenProperties.Add(propertyName))
+                {
+                    throw new InvalidOperationException(
+                        $"Entity '{entityName}' row '{rowId}' in '{sourceName}' has duplicate property '{propertyName}'.");
+                }
+
+                record.Properties.Add(new PropertyValue
+                {
+                    Property = new PropertyRef { Name = propertyName },
+                    Value = childElement.Value,
+                });
+            }
+
+            return record;
+        }
+
+        private static ModelInstance CreateEmptyInstance()
+        {
+            var instance = new ModelInstance();
+            foreach (var entityName in EntityNames)
+            {
+                instance.Entities.Add(new EntityInstance
+                {
+                    Entity = new EntityRef
+                    {
+                        Name = entityName,
+                    },
+                });
+            }
+
+            return instance;
+        }
+
+        private static Dictionary<string, EntityInstance> BuildEntityInstanceLookup(ModelInstance instance)
+        {
+            return instance.Entities.ToDictionary(
+                entity => entity.Entity.Name,
+                entity => entity,
+                StringComparer.OrdinalIgnoreCase);
         }
 
         private static EnterpriseBIPlatformData BuildData(ModelInstance instance)
@@ -706,32 +1080,44 @@ namespace GeneratedModel
             return relationshipId;
         }
 
-        private static void EnsureNoErrors(IList<string> errors, string context)
+        private sealed class ModelInstance
         {
-            if (errors == null || errors.Count == 0)
-            {
-                return;
-            }
-
-            var message = string.Join(Environment.NewLine, errors.Select(error => " - " + error));
-            throw new InvalidOperationException($"{context} failed:{Environment.NewLine}{message}");
+            public List<EntityInstance> Entities { get; } = new List<EntityInstance>();
         }
 
-        private static string ResolveModelPath(string workspacePath)
+        private sealed class EntityInstance
         {
-            var candidates = new[]
-            {
-                Path.Combine(workspacePath, "metadata", "model.xml"),
-                Path.Combine(workspacePath, "model.xml"),
-            };
+            public EntityRef Entity { get; set; } = new EntityRef();
+            public List<RecordInstance> Records { get; } = new List<RecordInstance>();
+        }
 
-            var match = candidates.FirstOrDefault(File.Exists);
-            if (string.IsNullOrWhiteSpace(match))
-            {
-                throw new FileNotFoundException($"Could not find model XML under workspace '{workspacePath}'.");
-            }
+        private sealed class RecordInstance
+        {
+            public string Id { get; set; } = string.Empty;
+            public List<PropertyValue> Properties { get; } = new List<PropertyValue>();
+            public List<RelationshipValue> Relationships { get; } = new List<RelationshipValue>();
+        }
 
-            return Path.GetFullPath(match);
+        private sealed class PropertyValue
+        {
+            public PropertyRef Property { get; set; } = new PropertyRef();
+            public string Value { get; set; } = string.Empty;
+        }
+
+        private sealed class RelationshipValue
+        {
+            public EntityRef Entity { get; set; } = new EntityRef();
+            public string Value { get; set; } = string.Empty;
+        }
+
+        private sealed class EntityRef
+        {
+            public string Name { get; set; } = string.Empty;
+        }
+
+        private sealed class PropertyRef
+        {
+            public string Name { get; set; } = string.Empty;
         }
 
     }

@@ -9,7 +9,7 @@ internal sealed partial class CliRuntime
         }
     
         var workspace = await LoadWorkspaceForCommandAsync(options.WorkspacePath).ConfigureAwait(false);
-        PrintContractCompatibilityWarning(workspace.Manifest);
+        PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
     
         var diagnostics = services.ValidationService.Validate(workspace);
     
@@ -60,3 +60,4 @@ internal sealed partial class CliRuntime
         return 0;
     }
 }
+

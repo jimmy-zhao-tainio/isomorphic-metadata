@@ -47,16 +47,16 @@ public sealed class OperationServiceTests
         {
             WorkspaceRootPath = "memory",
             MetadataRootPath = "memory/metadata",
-            Model = new ModelDefinition { Name = "TestModel" },
-            Instance = new InstanceStore { ModelName = "TestModel" },
+            Model = new GenericModel { Name = "TestModel" },
+            Instance = new GenericInstance { ModelName = "TestModel" },
         };
 
-        var entity = new EntityDefinition { Name = "Thing" };
-        entity.Properties.Add(new PropertyDefinition { Name = "Name", DataType = "string", IsNullable = false });
+        var entity = new GenericEntity { Name = "Thing" };
+        entity.Properties.Add(new GenericProperty { Name = "Name", DataType = "string", IsNullable = false });
         workspace.Model.Entities.Add(entity);
 
         var records = workspace.Instance.GetOrCreateEntityRecords("Thing");
-        records.Add(new InstanceRecord
+        records.Add(new GenericRecord
         {
             Id = "1",
             Values =
@@ -68,3 +68,5 @@ public sealed class OperationServiceTests
         return workspace;
     }
 }
+
+

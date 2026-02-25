@@ -9,7 +9,7 @@ namespace Meta.Core.Services;
 
 public static class DataBatchParser
 {
-    public static WorkspaceOp ParseBulkUpsert(string entityName, EntityDefinition entity, string input)
+    public static WorkspaceOp ParseBulkUpsert(string entityName, GenericEntity entity, string input)
     {
         if (string.IsNullOrWhiteSpace(entityName))
         {
@@ -301,3 +301,4 @@ public static class DataBatchParser
 
     private readonly record struct ColumnKind(ColumnType Type, string Name);
 }
+

@@ -69,7 +69,7 @@ public static class NormalizationService
             .ToList();
     }
 
-    private static List<RowPatch> BuildEntityRowPatches(Workspace workspace, EntityDefinition entity, bool dropUnknown)
+    private static List<RowPatch> BuildEntityRowPatches(Workspace workspace, GenericEntity entity, bool dropUnknown)
     {
         if (!workspace.Instance.RecordsByEntity.TryGetValue(entity.Name, out var records))
         {
@@ -133,7 +133,7 @@ public static class NormalizationService
             .ToList();
     }
 
-    private static string NormalizeId(InstanceRecord record)
+    private static string NormalizeId(GenericRecord record)
     {
         var id = record.Id?.Trim() ?? string.Empty;
         if (!IsPositiveIntegerIdentity(id))
@@ -145,7 +145,7 @@ public static class NormalizationService
     }
 
     private static Dictionary<string, string> NormalizeValues(
-        InstanceRecord record,
+        GenericRecord record,
         IReadOnlySet<string> propertyNames,
         bool dropUnknown)
     {
@@ -175,7 +175,7 @@ public static class NormalizationService
     }
 
     private static Dictionary<string, string> NormalizeRelationships(
-        InstanceRecord record,
+        GenericRecord record,
         IReadOnlySet<string> relationshipNames,
         bool dropUnknown)
     {
@@ -273,3 +273,4 @@ public static class NormalizationService
         return true;
     }
 }
+

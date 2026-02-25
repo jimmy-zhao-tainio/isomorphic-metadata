@@ -9,7 +9,7 @@ public sealed class InstanceWindowProvider
 {
     private readonly Dictionary<string, EntityWindowCache> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public EntityWindowResult GetWindow(InstanceStore instance, string entityName, int offset, int pageSize)
+    public EntityWindowResult GetWindow(GenericInstance instance, string entityName, int offset, int pageSize)
     {
         if (instance == null)
         {
@@ -57,7 +57,7 @@ public sealed class InstanceWindowProvider
         _cache.Clear();
     }
 
-    private IReadOnlyList<InstanceRecord> GetOrderedRecords(string entityName, List<InstanceRecord> records)
+    private IReadOnlyList<GenericRecord> GetOrderedRecords(string entityName, List<GenericRecord> records)
     {
         if (_cache.TryGetValue(entityName, out var existing))
         {
@@ -76,16 +76,16 @@ public sealed class InstanceWindowProvider
 
     private sealed class EntityWindowCache
     {
-        public EntityWindowCache(List<InstanceRecord> source, int count, IReadOnlyList<InstanceRecord> ordered)
+        public EntityWindowCache(List<GenericRecord> source, int count, IReadOnlyList<GenericRecord> ordered)
         {
             Source = source;
             Count = count;
             Ordered = ordered;
         }
 
-        public List<InstanceRecord> Source { get; }
+        public List<GenericRecord> Source { get; }
         public int Count { get; }
-        public IReadOnlyList<InstanceRecord> Ordered { get; }
+        public IReadOnlyList<GenericRecord> Ordered { get; }
     }
 }
 
@@ -96,7 +96,7 @@ public sealed class EntityWindowResult
         int totalCount,
         int offset,
         int pageSize,
-        IReadOnlyList<InstanceRecord> rows)
+        IReadOnlyList<GenericRecord> rows)
     {
         EntityName = entityName;
         TotalCount = totalCount;
@@ -109,5 +109,7 @@ public sealed class EntityWindowResult
     public int TotalCount { get; }
     public int Offset { get; }
     public int PageSize { get; }
-    public IReadOnlyList<InstanceRecord> Rows { get; }
+    public IReadOnlyList<GenericRecord> Rows { get; }
 }
+
+

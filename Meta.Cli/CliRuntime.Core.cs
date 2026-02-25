@@ -1,4 +1,4 @@
-﻿internal sealed partial class CliRuntime
+internal sealed partial class CliRuntime
 {
     private readonly ServiceCollection services = new();
     private readonly ConsolePresenter presenter = new();
@@ -125,7 +125,7 @@
         try
         {
             var workspace = await LoadWorkspaceForCommandAsync(workspacePath).ConfigureAwait(false);
-            PrintContractCompatibilityWarning(workspace.Manifest);
+            PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             return await ExecuteOperationsAgainstLoadedWorkspaceAsync(
                     workspace,
                     new[] { operation },
@@ -339,8 +339,97 @@
         {
             return (false, newWorkspacePath, "Error: import requires --new-workspace <path>.");
         }
-    
+
         return (true, newWorkspacePath, string.Empty);
+    }
+
+    (bool Ok, string EntityName, bool UseNewWorkspace, string WorkspacePath, string NewWorkspacePath, string ErrorMessage)
+        ParseImportCsvOptions(string[] commandArgs, int startIndex)
+    {
+        var entityName = string.Empty;
+        var workspacePath = DefaultWorkspacePath();
+        var workspaceSelected = !string.IsNullOrWhiteSpace(globalWorkspacePath);
+        var newWorkspacePath = string.Empty;
+
+        for (var i = startIndex; i < commandArgs.Length; i++)
+        {
+            var arg = commandArgs[i];
+            if (string.Equals(arg, "--entity", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --entity requires a value.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(entityName))
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --entity can only be provided once.");
+                }
+
+                entityName = commandArgs[++i].Trim();
+                if (string.IsNullOrWhiteSpace(entityName))
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --entity requires a non-empty value.");
+                }
+
+                continue;
+            }
+
+            if (string.Equals(arg, "--workspace", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --workspace requires a path.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(newWorkspacePath))
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath,
+                        "Error: use either --workspace <path> or --new-workspace <path>, not both.");
+                }
+
+                workspacePath = commandArgs[++i];
+                workspaceSelected = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--new-workspace", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --new-workspace requires a path.");
+                }
+
+                if (workspaceSelected)
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath,
+                        "Error: use either --workspace <path> or --new-workspace <path>, not both.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(newWorkspacePath))
+                {
+                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --new-workspace can only be provided once.");
+                }
+
+                newWorkspacePath = commandArgs[++i];
+                continue;
+            }
+
+            return (false, entityName, false, workspacePath, newWorkspacePath, $"Error: unknown option '{arg}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(entityName))
+        {
+            return (false, entityName, false, workspacePath, newWorkspacePath, "Error: import csv requires --entity <EntityName>.");
+        }
+
+        if (!workspaceSelected && string.IsNullOrWhiteSpace(newWorkspacePath))
+        {
+            return (false, entityName, false, workspacePath, newWorkspacePath,
+                "Error: import csv requires --workspace <path> or --new-workspace <path>.");
+        }
+
+        return (true, entityName, !string.IsNullOrWhiteSpace(newWorkspacePath), workspacePath, newWorkspacePath, string.Empty);
     }
     
     
@@ -525,11 +614,12 @@
         return (true, workspacePath, filters, top, string.Empty);
     }
     
-    (bool Ok, string WorkspacePath, string OutputDirectory, string ErrorMessage)
+    (bool Ok, string WorkspacePath, string OutputDirectory, bool IncludeTooling, string ErrorMessage)
         ParseGenerateOptions(string[] commandArgs, int startIndex)
     {
         var workspacePath = DefaultWorkspacePath();
         var outputDirectory = string.Empty;
+        var includeTooling = false;
     
         for (var i = startIndex; i < commandArgs.Length; i++)
         {
@@ -538,7 +628,7 @@
             {
                 if (i + 1 >= commandArgs.Length)
                 {
-                    return (false, workspacePath, outputDirectory, "Error: --workspace requires a path.");
+                    return (false, workspacePath, outputDirectory, includeTooling, "Error: --workspace requires a path.");
                 }
     
                 workspacePath = commandArgs[++i];
@@ -549,17 +639,23 @@
             {
                 if (i + 1 >= commandArgs.Length)
                 {
-                    return (false, workspacePath, outputDirectory, "Error: --out requires a directory path.");
+                    return (false, workspacePath, outputDirectory, includeTooling, "Error: --out requires a directory path.");
                 }
     
                 outputDirectory = commandArgs[++i];
                 continue;
             }
+
+            if (string.Equals(arg, "--tooling", StringComparison.OrdinalIgnoreCase))
+            {
+                includeTooling = true;
+                continue;
+            }
     
-            return (false, workspacePath, outputDirectory, $"Error: unknown option '{arg}'.");
+            return (false, workspacePath, outputDirectory, includeTooling, $"Error: unknown option '{arg}'.");
         }
     
-        return (true, workspacePath, outputDirectory, string.Empty);
+        return (true, workspacePath, outputDirectory, includeTooling, string.Empty);
     }
     
     (bool Ok, string ToEntity, string ToId, string WorkspacePath, string ErrorMessage)
@@ -919,7 +1015,7 @@
         Register("query", "Instance", "Search instances with equals/contains filters.", QueryAsync);
         Register("bulk-insert", "Instance", "Insert many instances from tsv/csv/jsonl input (supports --auto-id).", BulkInsertAsync);
 
-        Register("import", "Pipeline", "Import into a NEW workspace.", ImportAsync);
+        Register("import", "Pipeline", "Import xml/sql into NEW workspace or csv into NEW/existing workspace.", ImportAsync);
         Register("generate", "Pipeline", "Generate artifacts from the workspace.", GenerateAsync);
     
         return registry;
@@ -942,4 +1038,5 @@
         int TotalRelationships,
         int TotalRows);
 }
+
 

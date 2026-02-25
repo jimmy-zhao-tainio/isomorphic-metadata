@@ -11,17 +11,17 @@ public static class MetaSchemaModels
     private const string SchemaCatalogModelResourceName = "MetaSchema.Core.Models.SchemaCatalog.model.xml";
     private const string TypeConversionCatalogModelResourceName = "MetaSchema.Core.Models.TypeConversionCatalog.model.xml";
 
-    public static ModelDefinition CreateSchemaCatalogModel()
+    public static GenericModel CreateSchemaCatalogModel()
     {
         return LoadModel(SchemaCatalogModelResourceName, SchemaCatalogModelName);
     }
 
-    public static ModelDefinition CreateTypeConversionCatalogModel()
+    public static GenericModel CreateTypeConversionCatalogModel()
     {
         return LoadModel(TypeConversionCatalogModelResourceName, TypeConversionCatalogModelName);
     }
 
-    private static ModelDefinition LoadModel(string resourceName, string expectedModelName)
+    private static GenericModel LoadModel(string resourceName, string expectedModelName)
     {
         var assembly = typeof(MetaSchemaModels).Assembly;
         using var stream = assembly.GetManifestResourceStream(resourceName)
@@ -38,3 +38,4 @@ public static class MetaSchemaModels
         return model;
     }
 }
+

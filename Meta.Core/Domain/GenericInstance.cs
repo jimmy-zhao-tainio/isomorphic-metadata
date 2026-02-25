@@ -3,17 +3,17 @@ using System.Collections.Generic;
 
 namespace Meta.Core.Domain;
 
-public sealed class InstanceStore
+public sealed class GenericInstance
 {
     public string ModelName { get; set; } = string.Empty;
-    public Dictionary<string, List<InstanceRecord>> RecordsByEntity { get; } =
+    public Dictionary<string, List<GenericRecord>> RecordsByEntity { get; } =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public List<InstanceRecord> GetOrCreateEntityRecords(string entityName)
+    public List<GenericRecord> GetOrCreateEntityRecords(string entityName)
     {
         if (!RecordsByEntity.TryGetValue(entityName, out var records))
         {
-            records = new List<InstanceRecord>();
+            records = new List<GenericRecord>();
             RecordsByEntity[entityName] = records;
         }
 
@@ -21,10 +21,11 @@ public sealed class InstanceStore
     }
 }
 
-public sealed class InstanceRecord
+public sealed class GenericRecord
 {
     public string Id { get; set; } = string.Empty;
     public string SourceShardFileName { get; set; } = string.Empty;
     public Dictionary<string, string> Values { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> RelationshipIds { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
+
