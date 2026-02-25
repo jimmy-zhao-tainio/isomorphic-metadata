@@ -1,5 +1,5 @@
 using Meta.Core.Domain;
-using Meta.Core.WorkspaceConfig;
+using MetaWorkspaceConfig = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace;
 
 namespace MetaSchema.Core;
 
@@ -17,7 +17,7 @@ public static class MetaSchemaWorkspaceFactory
         {
             WorkspaceRootPath = rootPath,
             MetadataRootPath = metadataRootPath,
-            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceConfig.CreateDefault(),
             Model = model,
             Instance = new GenericInstance
             {
@@ -27,4 +27,7 @@ public static class MetaSchemaWorkspaceFactory
         };
     }
 }
+
+
+
 

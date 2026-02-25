@@ -1,4 +1,4 @@
-using Meta.Core.WorkspaceConfig;
+using MetaWorkspaceConfig = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace;
 
 internal sealed partial class CliRuntime
 {
@@ -517,7 +517,7 @@ internal sealed partial class CliRuntime
             "Contract",
             new[]
             {
-                ("Version", MetaWorkspaceModel.GetContractVersion(workspace.WorkspaceConfig)),
+                ("Version", MetaWorkspaceConfig.GetContractVersion(workspace.WorkspaceConfig)),
                 ("WorkspaceFingerprint", hash),
             });
     }
@@ -526,9 +526,9 @@ internal sealed partial class CliRuntime
     {
         var modelPath = ResolveFirstExistingPath(new[]
         {
-            ResolveManifestPathFromWorkspaceRoot(
+            ResolveWorkspaceConfigPathFromWorkspaceRoot(
                 workspace,
-                MetaWorkspaceModel.GetModelFile(workspace.WorkspaceConfig),
+                MetaWorkspaceConfig.GetModelFile(workspace.WorkspaceConfig),
                 "metadata/model.xml"),
             Path.Combine(workspace.MetadataRootPath, "model.xml"),
             Path.Combine(workspace.WorkspaceRootPath, "model.xml"),
@@ -537,9 +537,9 @@ internal sealed partial class CliRuntime
         var modelBytes = GetFileSize(modelPath);
     
         var instanceBytes = 0L;
-        var shardDirectory = ResolveManifestPathFromWorkspaceRoot(
+        var shardDirectory = ResolveWorkspaceConfigPathFromWorkspaceRoot(
             workspace,
-            MetaWorkspaceModel.GetInstanceDir(workspace.WorkspaceConfig),
+            MetaWorkspaceConfig.GetInstanceDir(workspace.WorkspaceConfig),
             "metadata/instance");
         if (Directory.Exists(shardDirectory))
         {
@@ -563,9 +563,9 @@ internal sealed partial class CliRuntime
         return (modelBytes, instanceBytes);
     }
     
-    string ResolveManifestPathFromWorkspaceRoot(Workspace workspace, string? manifestPath, string fallbackRelativePath)
+    string ResolveWorkspaceConfigPathFromWorkspaceRoot(Workspace workspace, string? configuredPath, string fallbackRelativePath)
     {
-        var value = string.IsNullOrWhiteSpace(manifestPath) ? fallbackRelativePath : manifestPath.Trim();
+        var value = string.IsNullOrWhiteSpace(configuredPath) ? fallbackRelativePath : configuredPath.Trim();
         var normalized = value.Replace('/', Path.DirectorySeparatorChar);
         return Path.IsPathRooted(normalized)
             ? Path.GetFullPath(normalized)
@@ -629,8 +629,8 @@ internal sealed partial class CliRuntime
     
     void PrintContractCompatibilityWarning(Meta.Core.WorkspaceConfig.Generated.MetaWorkspace workspaceConfig)
     {
-        var contractVersion = MetaWorkspaceModel.GetContractVersion(workspaceConfig);
-        if (!MetaWorkspaceModel.TryParseContractVersion(contractVersion, out var major, out var minor))
+        var contractVersion = MetaWorkspaceConfig.GetContractVersion(workspaceConfig);
+        if (!MetaWorkspaceConfig.TryParseContractVersion(contractVersion, out var major, out var minor))
         {
             return;
         }
@@ -1672,6 +1672,9 @@ internal sealed partial class CliRuntime
         return candidate.ToString();
     }
 }
+
+
+
 
 
 

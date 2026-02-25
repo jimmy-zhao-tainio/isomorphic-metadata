@@ -21,6 +21,7 @@
     <Compile Remove="MetaSchema.Core\**" />
     <Compile Remove="MetaSchema.Extractors.SqlServer\**" />
     <Compile Remove="MetaSchema.Cli\**" />
+    <Compile Remove="Sanctioned.Generated\**" />
   </ItemGroup>
   <ItemGroup>
     <None Update="Samples\SampleModel.xml">

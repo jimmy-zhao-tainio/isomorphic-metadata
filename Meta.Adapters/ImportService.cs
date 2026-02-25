@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Meta.Core.Domain;
 using Meta.Core.Services;
-using Meta.Core.WorkspaceConfig;
+using MetaWorkspaceConfig = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace;
 
 namespace Meta.Adapters;
 
@@ -60,7 +60,7 @@ public sealed class ImportService : IImportService
         {
             WorkspaceRootPath = Path.Combine(Path.GetTempPath(), "metadata-studio-import", Guid.NewGuid().ToString("N")),
             MetadataRootPath = string.Empty,
-            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceConfig.CreateDefault(),
             Model = new GenericModel(),
             Instance = new GenericInstance(),
             IsDirty = true,
@@ -207,7 +207,7 @@ public sealed class ImportService : IImportService
         {
             WorkspaceRootPath = Path.Combine(Path.GetTempPath(), "metadata-studio-import", Guid.NewGuid().ToString("N")),
             MetadataRootPath = string.Empty,
-            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceConfig.CreateDefault(),
             Model = new GenericModel
             {
                 Name = modelName,
@@ -887,5 +887,8 @@ public sealed class ImportService : IImportService
         public string PropertyName { get; }
     }
 }
+
+
+
 
 

@@ -31,7 +31,7 @@ internal sealed partial class CliRuntime
         {
             WorkspaceRootPath = workspaceRoot,
             MetadataRootPath = metadataRoot,
-            WorkspaceConfig = Meta.Core.WorkspaceConfig.MetaWorkspaceModel.CreateDefault(),
+            WorkspaceConfig = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace.CreateDefault(),
             Model = new GenericModel
             {
                 Name = "MetadataModel",
@@ -58,4 +58,6 @@ internal sealed partial class CliRuntime
         return 0;
     }
 }
+
+
 

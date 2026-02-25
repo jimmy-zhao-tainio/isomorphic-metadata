@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Xml.Linq;
 using Meta.Core.Serialization;
-using Meta.Core.WorkspaceConfig;
+using MetaWorkspaceConfig = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace;
 
 internal sealed partial class CliRuntime
 {
@@ -262,7 +262,7 @@ internal sealed partial class CliRuntime
         {
             WorkspaceRootPath = workspaceRootPath,
             MetadataRootPath = Path.Combine(workspaceRootPath, "metadata"),
-            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceConfig.CreateDefault(),
             Model = model,
             Instance = new GenericInstance
             {
@@ -517,7 +517,7 @@ internal sealed partial class CliRuntime
         var metadataRoot = !string.IsNullOrWhiteSpace(workspace.MetadataRootPath)
             ? Path.GetFullPath(workspace.MetadataRootPath)
             : Path.Combine(workspaceRoot, "metadata");
-        var modelRelativePath = MetaWorkspaceModel.GetModelFile(workspace.WorkspaceConfig);
+        var modelRelativePath = MetaWorkspaceConfig.GetModelFile(workspace.WorkspaceConfig);
         var normalizedRelative = modelRelativePath.Replace('/', Path.DirectorySeparatorChar);
         var candidates = new[]
         {
@@ -2512,6 +2512,9 @@ internal sealed partial class CliRuntime
         }
     }
 }
+
+
+
 
 
 

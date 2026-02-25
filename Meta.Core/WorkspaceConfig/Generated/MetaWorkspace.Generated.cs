@@ -11,10 +11,6 @@ public sealed partial class MetaWorkspace
     public List<Workspace> Workspace { get; set; } = new();
     public List<WorkspaceLayout> WorkspaceLayout { get; set; } = new();
 
-    public static MetaWorkspace LoadFromXml(string workspaceXmlPath)
-    {
-        return MetaWorkspaceModel.LoadFromXml(workspaceXmlPath);
-    }
 }
 
 public sealed class Workspace

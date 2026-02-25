@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Meta.Adapters;
 using Meta.Core.Domain;
-using Meta.Core.WorkspaceConfig;
+using MetaWorkspaceConfig = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace;
 
 namespace Meta.Core.Tests;
 
@@ -41,7 +41,7 @@ public sealed class WorkspaceServiceTests
     }
 
     [Fact]
-    public async Task Save_WritesWorkspaceManifestAndShardedInstances()
+    public async Task Save_WritesWorkspaceConfigAndShardedInstances()
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
@@ -56,12 +56,12 @@ public sealed class WorkspaceServiceTests
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
 
             var metadataRoot = Path.Combine(tempRoot, "metadata");
-            var manifestPath = Path.Combine(metadataRoot, "workspace.xml");
+            var workspaceConfigPath = Path.Combine(metadataRoot, "workspace.xml");
             var modelPath = Path.Combine(metadataRoot, "model.xml");
             var instanceDir = Path.Combine(metadataRoot, "instance");
             var legacyInstancePath = Path.Combine(metadataRoot, "instance.xml");
 
-            Assert.True(File.Exists(manifestPath), "workspace.xml should exist after save.");
+            Assert.True(File.Exists(workspaceConfigPath), "workspace.xml should exist after save.");
             Assert.True(File.Exists(modelPath), "model.xml should exist after save.");
             Assert.True(Directory.Exists(instanceDir), "instance shard directory should exist after save.");
             Assert.True(Directory.GetFiles(instanceDir, "*.xml").Length > 0, "instance shard directory should contain XML files.");
@@ -70,7 +70,7 @@ public sealed class WorkspaceServiceTests
             var reloaded = await services.WorkspaceService.LoadAsync(tempRoot);
             var reloadedRows = reloaded.Instance.RecordsByEntity.Values.Sum(records => records.Count);
             Assert.Equal(expectedRows, reloadedRows);
-            Assert.Equal("1.0", MetaWorkspaceModel.GetContractVersion(reloaded.WorkspaceConfig));
+            Assert.Equal("1.0", MetaWorkspaceConfig.GetContractVersion(reloaded.WorkspaceConfig));
         }
         finally
         {
@@ -250,13 +250,13 @@ public sealed class WorkspaceServiceTests
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
-            var manifest = XDocument.Load(manifestPath);
-            manifest
+            var workspaceConfigPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var workspaceConfig = XDocument.Load(workspaceConfigPath);
+            workspaceConfig
                 .Descendants("FormatVersion")
                 .Single()
                 .Value = "2.0";
-            manifest.Save(manifestPath);
+            workspaceConfig.Save(workspaceConfigPath);
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await services.WorkspaceService.LoadAsync(tempRoot));
@@ -283,16 +283,16 @@ public sealed class WorkspaceServiceTests
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
-            var manifest = XDocument.Load(manifestPath);
-            manifest
+            var workspaceConfigPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var workspaceConfig = XDocument.Load(workspaceConfigPath);
+            workspaceConfig
                 .Descendants("FormatVersion")
                 .Single()
                 .Value = "1.7";
-            manifest.Save(manifestPath);
+            workspaceConfig.Save(workspaceConfigPath);
 
             var loaded = await services.WorkspaceService.LoadAsync(tempRoot);
-            Assert.Equal("1.7", MetaWorkspaceModel.GetContractVersion(loaded.WorkspaceConfig));
+            Assert.Equal("1.7", MetaWorkspaceConfig.GetContractVersion(loaded.WorkspaceConfig));
         }
         finally
         {
@@ -345,7 +345,7 @@ public sealed class WorkspaceServiceTests
     }
 
     [Fact]
-    public async Task Load_RejectsManifestPathsOutsideWorkspaceRoot()
+    public async Task Load_RejectsWorkspaceConfigPathsOutsideWorkspaceRoot()
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
@@ -356,11 +356,11 @@ public sealed class WorkspaceServiceTests
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var manifestPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
-            var manifest = XDocument.Load(manifestPath);
-            var workspaceLayout = manifest.Descendants("WorkspaceLayout").Single();
+            var workspaceConfigPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var workspaceConfig = XDocument.Load(workspaceConfigPath);
+            var workspaceLayout = workspaceConfig.Descendants("WorkspaceLayout").Single();
             workspaceLayout.Element("ModelFilePath")!.Value = "../outside-model.xml";
-            manifest.Save(manifestPath);
+            workspaceConfig.Save(workspaceConfigPath);
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await services.WorkspaceService.LoadAsync(tempRoot));
@@ -376,7 +376,7 @@ public sealed class WorkspaceServiceTests
     }
 
     [Fact]
-    public async Task Save_RejectsManifestPathsOutsideWorkspaceRoot()
+    public async Task Save_RejectsWorkspaceConfigPathsOutsideWorkspaceRoot()
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
@@ -387,7 +387,7 @@ public sealed class WorkspaceServiceTests
         try
         {
             workspace.WorkspaceRootPath = tempRoot;
-            MetaWorkspaceModel.SetInstanceDir(workspace.WorkspaceConfig, "../outside-instance");
+            MetaWorkspaceConfig.SetInstanceDir(workspace.WorkspaceConfig, "../outside-instance");
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await services.WorkspaceService.SaveAsync(workspace));
@@ -851,7 +851,7 @@ public sealed class WorkspaceServiceTests
         {
             WorkspaceRootPath = workspaceRoot,
             MetadataRootPath = Path.Combine(workspaceRoot, "metadata"),
-            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceConfig.CreateDefault(),
             Model = new GenericModel
             {
                 Name = "RoundTripModel",
@@ -944,7 +944,7 @@ public sealed class WorkspaceServiceTests
         {
             WorkspaceRootPath = workspaceRoot,
             MetadataRootPath = Path.Combine(workspaceRoot, "metadata"),
-            WorkspaceConfig = MetaWorkspaceModel.CreateDefault(),
+            WorkspaceConfig = MetaWorkspaceConfig.CreateDefault(),
             Model = new GenericModel
             {
                 Name = "RoundTripModel",
@@ -1022,6 +1022,9 @@ public sealed class WorkspaceServiceTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+
+
+
 
 
 

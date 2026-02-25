@@ -131,8 +131,8 @@ public sealed class WorkspaceService : IWorkspaceService
             }
         }
 
-        var modelPath = ResolvePathFromWorkspaceRoot(workspaceRoot, MetaWorkspaceModel.GetModelFile(workspaceConfig));
-        var instanceDirectoryPath = ResolvePathFromWorkspaceRoot(workspaceRoot, MetaWorkspaceModel.GetInstanceDir(workspaceConfig));
+        var modelPath = ResolvePathFromWorkspaceRoot(workspaceRoot, MetaWorkspaceGenerated.GetModelFile(workspaceConfig));
+        var instanceDirectoryPath = ResolvePathFromWorkspaceRoot(workspaceRoot, MetaWorkspaceGenerated.GetInstanceDir(workspaceConfig));
         EnsurePathUnderMetadataRoot(modelPath, metadataRootPath, "ModelFilePath");
         EnsurePathUnderMetadataRoot(instanceDirectoryPath, metadataRootPath, "InstanceDirPath");
 
@@ -293,24 +293,24 @@ public sealed class WorkspaceService : IWorkspaceService
         if (File.Exists(workspaceJsonPath))
         {
             throw new InvalidDataException(
-                $"Workspace manifest '{workspaceXmlPath}' is required. Legacy '{workspaceJsonPath}' is not supported.");
+                $"Workspace config '{workspaceXmlPath}' is required. Legacy '{workspaceJsonPath}' is not supported.");
         }
 
-        return MetaWorkspaceModel.CreateDefault();
+        return MetaWorkspaceGenerated.CreateDefault();
     }
 
     private static MetaWorkspaceGenerated NormalizeWorkspaceConfig(MetaWorkspaceGenerated? workspaceConfig, string sourcePath)
     {
-        return MetaWorkspaceModel.Normalize(workspaceConfig, sourcePath);
+        return MetaWorkspaceGenerated.Normalize(workspaceConfig, sourcePath);
     }
 
     private static void ValidateContractVersion(MetaWorkspaceGenerated workspaceConfig, string workspaceFilePath)
     {
-        var contractVersion = MetaWorkspaceModel.GetContractVersion(workspaceConfig);
-        if (!MetaWorkspaceModel.TryParseContractVersion(contractVersion, out var major, out _))
+        var contractVersion = MetaWorkspaceGenerated.GetContractVersion(workspaceConfig);
+        if (!MetaWorkspaceGenerated.TryParseContractVersion(contractVersion, out var major, out _))
         {
             throw new InvalidDataException(
-                $"Workspace manifest '{workspaceFilePath}' has invalid contractVersion '{contractVersion}'.");
+                $"Workspace config '{workspaceFilePath}' has invalid contractVersion '{contractVersion}'.");
         }
 
         if (major != SupportedContractMajorVersion)
@@ -323,18 +323,18 @@ public sealed class WorkspaceService : IWorkspaceService
     private static void WriteWorkspaceConfigToFile(MetaWorkspaceGenerated workspaceConfig, string workspaceFilePath)
     {
         var normalizedWorkspaceConfig = NormalizeWorkspaceConfig(workspaceConfig, workspaceFilePath);
-        var document = MetaWorkspaceModel.BuildDocument(normalizedWorkspaceConfig);
+        var document = MetaWorkspaceGenerated.BuildDocument(normalizedWorkspaceConfig);
         WriteXmlToFile(document, workspaceFilePath, indented: true);
     }
 
     private static string ResolveModelPath(string workspaceRootPath, string metadataRootPath, MetaWorkspaceGenerated workspaceConfig)
     {
-        var manifestModelPath = ResolvePathFromWorkspaceRoot(
+        var workspaceModelPath = ResolvePathFromWorkspaceRoot(
             workspaceRootPath,
-            MetaWorkspaceModel.GetModelFile(workspaceConfig));
+            MetaWorkspaceGenerated.GetModelFile(workspaceConfig));
         var candidatePaths = new[]
         {
-            manifestModelPath,
+            workspaceModelPath,
             Path.Combine(metadataRootPath, ModelFileName),
             Path.Combine(workspaceRootPath, ModelFileName),
         };
@@ -350,7 +350,7 @@ public sealed class WorkspaceService : IWorkspaceService
     {
         var shardDirectoryPath = ResolvePathFromWorkspaceRoot(
             workspaceRootPath,
-            MetaWorkspaceModel.GetInstanceDir(workspaceConfig));
+            MetaWorkspaceGenerated.GetInstanceDir(workspaceConfig));
         var hasShardDirectory = Directory.Exists(shardDirectoryPath);
         if (Directory.Exists(shardDirectoryPath))
         {
@@ -670,12 +670,12 @@ public sealed class WorkspaceService : IWorkspaceService
         return hasNonZeroDigit;
     }
 
-    private static void EnsurePathUnderMetadataRoot(string path, string metadataRootPath, string manifestFieldName)
+    private static void EnsurePathUnderMetadataRoot(string path, string metadataRootPath, string workspaceConfigFieldName)
     {
         if (!IsPathWithinRoot(path, metadataRootPath))
         {
             throw new InvalidDataException(
-                $"Workspace manifest '{manifestFieldName}' must resolve under '{MetadataDirectoryName}/'. Resolved path '{path}' is outside '{metadataRootPath}'.");
+                $"Workspace config '{workspaceConfigFieldName}' must resolve under '{MetadataDirectoryName}/'. Resolved path '{path}' is outside '{metadataRootPath}'.");
         }
     }
 
@@ -718,7 +718,7 @@ public sealed class WorkspaceService : IWorkspaceService
     private static string SerializeWorkspaceConfig(MetaWorkspaceGenerated workspaceConfig)
     {
         return SerializeXml(
-            MetaWorkspaceModel.BuildDocument(
+            MetaWorkspaceGenerated.BuildDocument(
                 NormalizeWorkspaceConfig(workspaceConfig, WorkspaceXmlFileName)),
             indented: false);
     }
@@ -745,7 +745,7 @@ public sealed class WorkspaceService : IWorkspaceService
         if (Path.IsPathRooted(normalized))
         {
             throw new InvalidDataException(
-                $"Workspace manifest path '{path}' must be relative to the workspace root.");
+                $"Workspace config path '{path}' must be relative to the workspace root.");
         }
 
         var resolvedPath = Path.GetFullPath(Path.Combine(workspaceRootPath, normalized));
@@ -753,7 +753,7 @@ public sealed class WorkspaceService : IWorkspaceService
         if (!IsPathWithinRoot(resolvedPath, workspaceRoot))
         {
             throw new InvalidDataException(
-                $"Workspace manifest path '{path}' resolves outside workspace root '{workspaceRoot}'.");
+                $"Workspace config path '{path}' resolves outside workspace root '{workspaceRoot}'.");
         }
 
         return resolvedPath;
@@ -870,6 +870,8 @@ public sealed class WorkspaceService : IWorkspaceService
         public string MetadataRootPath { get; }
     }
 }
+
+
 
 
 
