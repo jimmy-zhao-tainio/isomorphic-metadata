@@ -1,4 +1,6 @@
+using System.Xml.Linq;
 using Meta.Core.Domain;
+using Meta.Core.Serialization;
 
 namespace Meta.Core.WorkspaceConfig;
 
@@ -6,76 +8,22 @@ public static class MetaWorkspaceModels
 {
     public const string ModelName = "MetaWorkspace";
     public const string DefaultWorkspaceName = "Workspace";
+    private const string ModelResourceName = "Meta.Core.WorkspaceConfig.Models.MetaWorkspace.model.xml";
 
     public static ModelDefinition CreateModel()
     {
-        var model = new ModelDefinition
+        var assembly = typeof(MetaWorkspaceModels).Assembly;
+        using var stream = assembly.GetManifestResourceStream(ModelResourceName)
+                           ?? throw new InvalidOperationException(
+                               $"Could not load embedded MetaWorkspace model resource '{ModelResourceName}'.");
+        var document = XDocument.Load(stream, LoadOptions.None);
+        var model = ModelXmlCodec.Load(document);
+        if (!string.Equals(model.Name, ModelName, StringComparison.Ordinal))
         {
-            Name = ModelName,
-        };
+            throw new InvalidOperationException(
+                $"Embedded MetaWorkspace model name '{model.Name}' does not match expected '{ModelName}'.");
+        }
 
-        var workspace = new EntityDefinition
-        {
-            Name = "Workspace",
-        };
-        workspace.Properties.Add(new PropertyDefinition { Name = "Name" });
-        workspace.Properties.Add(new PropertyDefinition { Name = "FormatVersion" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "WorkspaceLayout" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "Encoding" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "Newlines" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Role = "EntitiesOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Role = "PropertiesOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Role = "RelationshipsOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Role = "RowsOrder" });
-        workspace.Relationships.Add(new RelationshipDefinition { Entity = "CanonicalOrder", Role = "AttributesOrder" });
-
-        var workspaceLayout = new EntityDefinition
-        {
-            Name = "WorkspaceLayout",
-            Plural = "WorkspaceLayouts",
-        };
-        workspaceLayout.Properties.Add(new PropertyDefinition { Name = "ModelFilePath" });
-        workspaceLayout.Properties.Add(new PropertyDefinition { Name = "InstanceDirPath" });
-
-        var encoding = new EntityDefinition
-        {
-            Name = "Encoding",
-            Plural = "Encodings",
-        };
-        encoding.Properties.Add(new PropertyDefinition { Name = "Name" });
-
-        var newlines = new EntityDefinition
-        {
-            Name = "Newlines",
-            Plural = "NewlinesValues",
-        };
-        newlines.Properties.Add(new PropertyDefinition { Name = "Name" });
-
-        var canonicalOrder = new EntityDefinition
-        {
-            Name = "CanonicalOrder",
-            Plural = "CanonicalOrders",
-        };
-        canonicalOrder.Properties.Add(new PropertyDefinition { Name = "Name" });
-
-        var entityStorage = new EntityDefinition
-        {
-            Name = "EntityStorage",
-            Plural = "EntityStorages",
-        };
-        entityStorage.Properties.Add(new PropertyDefinition { Name = "EntityName" });
-        entityStorage.Properties.Add(new PropertyDefinition { Name = "StorageKind" });
-        entityStorage.Properties.Add(new PropertyDefinition { Name = "DirectoryPath", IsNullable = true });
-        entityStorage.Properties.Add(new PropertyDefinition { Name = "FilePath", IsNullable = true });
-        entityStorage.Properties.Add(new PropertyDefinition { Name = "Pattern", IsNullable = true });
-        entityStorage.Relationships.Add(new RelationshipDefinition { Entity = "Workspace" });
-
-        model.Entities.Add(workspace);
-        model.Entities.Add(workspaceLayout);
-        model.Entities.Add(encoding);
-        model.Entities.Add(newlines);
-        model.Entities.Add(canonicalOrder);
-        model.Entities.Add(entityStorage);
         return model;
     }
 }

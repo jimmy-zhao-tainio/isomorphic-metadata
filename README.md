@@ -100,25 +100,26 @@ FOREIGN KEY ([CubeId]) REFERENCES [dbo].[Cube]([Id]);
 
 ### Generated C# (`meta generate csharp`)
 
-Generated models have two usage modes.
+`meta generate csharp` always emits dependency-free POCOs in `GeneratedMetadata`:
+- `<ModelName>.cs` (model container)
+- `<Entity>.cs` (one file per entity)
 
-Consumer usage: `<ModelName>.<EntityPlural>` iterates over a built-in generated snapshot (no disk I/O).  
-Tooling usage: `<ModelName>Model.LoadFromXmlWorkspace(...)` loads an explicit instance object from a workspace and can be saved back.
+Optional tooling helpers are emitted only when `--tooling` is passed:
+- `<ModelName>.Tooling.cs` with workspace/import helper methods backed by Meta runtime services.
 
 ```csharp
-using GeneratedModel;
-using System;
+using GeneratedMetadata;
+using System.Threading.Tasks;
 
-// Consumer usage (built-in generated snapshot; no disk I/O):
-foreach (var m in EnterpriseBIPlatform.Measures)
+// Dependency-free consumer model classes:
+var model = new EnterpriseBIPlatform();
+model.Cube.Add(new Cube { Id = "1", CubeName = "Sales" });
+
+// Optional tooling helpers (generated with --tooling):
+public static async Task LoadWorkspaceAsync()
 {
-    Console.WriteLine(m.Id);
-    Console.WriteLine(m.Cube.Name); // relationships are required
+    var workspace = await EnterpriseBIPlatformTooling.LoadWorkspaceAsync(@".\Samples\CommandExamples");
 }
-
-// Tooling usage (explicit workspace I/O):
-var model = EnterpriseBIPlatformModel.LoadFromXmlWorkspace(@"C:\repo\Metadata\Samples");
-EnterpriseBIPlatformModel.SaveToXmlWorkspace(model, @"C:\repo\Metadata\Samples");
 ```
 
 ## Install and run
@@ -247,9 +248,11 @@ Import and generate:
 ```powershell
 meta import xml .\Samples\SampleModel.xml .\Samples\SampleInstance.xml --new-workspace .\Samples\ImportedXml
 meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\Samples\ImportedSql
+meta import csv .\Samples\landing.csv --entity Landing --new-workspace .\Samples\ImportedCsv
 
 meta generate sql --out .\out\sql --workspace .\Samples\CommandExamples
 meta generate csharp --out .\out\csharp --workspace .\Samples\CommandExamples
+meta generate csharp --out .\out\csharp --tooling --workspace .\Samples\CommandExamples
 meta generate ssdt --out .\out\ssdt --workspace .\Samples\CommandExamples
 ```
 
@@ -265,6 +268,19 @@ meta instance merge .\TargetWs .\RightWs.instance-diff
 MetaSchema is the separate schema/canonical-catalog toolchain.
 
 It handles schema extraction and sanctioned catalogs that `meta` can treat as metadata workspaces.
+
+Sanctioned model references are kept as XML on disk and loaded by core runtime code:
+- `Meta.Core/WorkspaceConfig/Models/MetaWorkspace.model.xml`
+- `MetaSchema.Core/Models/SchemaCatalog.model.xml`
+- `MetaSchema.Catalogs/TypeConversionCatalog/metadata/model.xml`
+
+To regenerate sanctioned model C# APIs through the same public CLI surface, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Generate-SanctionedModelApis.ps1
+```
+
+This script uses `meta generate csharp --tooling` for each sanctioned model.
 
 Current status: `meta-schema extract sqlserver` is implemented as a scaffold and does not query SQL Server yet.
 

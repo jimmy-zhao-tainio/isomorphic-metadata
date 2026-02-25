@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Model name="MetaWorkspace">
+  <Entities>
+    <Entity name="Workspace">
+      <Properties>
+        <Property name="Name" />
+        <Property name="FormatVersion" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="WorkspaceLayout" />
+        <Relationship entity="Encoding" />
+        <Relationship entity="Newlines" />
+        <Relationship entity="CanonicalOrder" role="EntitiesOrder" />
+        <Relationship entity="CanonicalOrder" role="PropertiesOrder" />
+        <Relationship entity="CanonicalOrder" role="RelationshipsOrder" />
+        <Relationship entity="CanonicalOrder" role="RowsOrder" />
+        <Relationship entity="CanonicalOrder" role="AttributesOrder" />
+      </Relationships>
+    </Entity>
+    <Entity name="WorkspaceLayout" plural="WorkspaceLayouts">
+      <Properties>
+        <Property name="ModelFilePath" />
+        <Property name="InstanceDirPath" />
+      </Properties>
+    </Entity>
+    <Entity name="Encoding" plural="Encodings">
+      <Properties>
+        <Property name="Name" />
+      </Properties>
+    </Entity>
+    <Entity name="Newlines" plural="NewlinesValues">
+      <Properties>
+        <Property name="Name" />
+      </Properties>
+    </Entity>
+    <Entity name="CanonicalOrder" plural="CanonicalOrders">
+      <Properties>
+        <Property name="Name" />
+      </Properties>
+    </Entity>
+    <Entity name="EntityStorage" plural="EntityStorages">
+      <Properties>
+        <Property name="EntityName" />
+        <Property name="StorageKind" />
+        <Property name="DirectoryPath" isRequired="false" />
+        <Property name="FilePath" isRequired="false" />
+        <Property name="Pattern" isRequired="false" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="Workspace" />
+      </Relationships>
+    </Entity>
+  </Entities>
+</Model>

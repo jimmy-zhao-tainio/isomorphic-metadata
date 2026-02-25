@@ -10,4 +10,13 @@
     <ProjectReference Include="..\Meta.Core\Meta.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Models\SchemaCatalog.model.xml">
+      <LogicalName>MetaSchema.Core.Models.SchemaCatalog.model.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\MetaSchema.Catalogs\TypeConversionCatalog\metadata\model.xml">
+      <LogicalName>MetaSchema.Core.Models.TypeConversionCatalog.model.xml</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>
