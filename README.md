@@ -233,42 +233,39 @@ FOREIGN KEY ([SystemId]) REFERENCES [dbo].[System]([Id]);
 
 ### Generated C# (`meta generate csharp`)
 
-`meta generate csharp` always emits dependency-free POCOs in `GeneratedMetadata`:
-- `<ModelName>.cs` (model container)
-- `<Entity>.cs` (one file per entity)
+#### What gets generated
 
-Optional tooling helpers are emitted only when `--tooling` is passed:
-- `<ModelName>.Tooling.cs` with workspace/import helper methods backed by Meta runtime services.
+`meta generate csharp` emits dependency-free consumer types in `GeneratedMetadata`:
+- `<ModelName>.cs` (static model facade / container, e.g. `EnterpriseBIPlatform`)
+- `<Entity>.cs` (one file per entity, POCOs)
+
+#### Consumer usage (dependency-free)
 
 ```csharp
 using GeneratedMetadata;
 using System;
 using System.Linq;
-using System.Threading.Tasks;
 
-// Dependency-free consumer model instance loaded from workspace XML:
-var model = EnterpriseBIPlatformModel.LoadFromXmlWorkspace(@".\Samples\CommandExamples");
-
-foreach (var system in model.Systems)
+// Consumer view: dependency-free POCOs + a strongly-typed model facade.
+foreach (var system in EnterpriseBIPlatform.Systems)
 {
     Console.WriteLine($"{system.SystemName} [{system.SystemType.TypeName}]");
-    foreach (var link in model.SystemCubes.Where(link => link.SystemId == system.Id))
+
+    foreach (var link in EnterpriseBIPlatform.SystemCubes.Where(x => x.SystemId == system.Id))
     {
-        Console.WriteLine($"  Cube: {link.Cube.CubeName} (mode: {link.ProcessingMode ?? "n/a"})");
+        Console.WriteLine($"  Cube: {link.Cube.CubeName} (mode: {link.ProcessingMode ?? "n/a" })");
     }
 }
 
-foreach (var measure in model.Measures)
+foreach (var measure in EnterpriseBIPlatform.Measures)
 {
     Console.WriteLine($"{measure.Cube.CubeName}.{measure.MeasureName}");
 }
-
-// Optional tooling helpers (generated with --tooling):
-public static async Task LoadWorkspaceAsync()
-{
-    var workspace = await EnterpriseBIPlatformTooling.LoadWorkspaceAsync(@".\Samples\CommandExamples");
-}
 ```
+
+#### Optional tooling surface (`--tooling`)
+
+If you also run `meta generate csharp --tooling`, the generator emits `<ModelName>.Tooling.cs` with workspace load/save helpers backed by Meta runtime services. Keep this separate from dependency-free consumer usage.
 
 ## Install and run
 
@@ -387,7 +384,6 @@ Global behavior:
 | `meta list entities` | List entities and high-level counts. | `meta list entities` |
 | `meta list properties <Entity>` | List scalar properties for one entity. | `meta list properties Cube` |
 | `meta list relationships <Entity>` | List declared outgoing relationships for one entity. | `meta list relationships Measure` |
-| `meta list tasks` | List task files from `metadata/tasks`. | `meta list tasks` |
 | `meta view entity <Entity>` | Show one entity schema card. | `meta view entity Cube` |
 | `meta view instance <Entity> <Id>` | Show one instance field/value view. | `meta view instance Cube 1` |
 | `meta query <Entity> ...` | Search instances with `--equals` / `--contains` filters. | `meta query Cube --contains CubeName Sales --top 20` |

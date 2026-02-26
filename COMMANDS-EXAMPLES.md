@@ -27,7 +27,7 @@ Model:
 
   check  Check model and instance integrity.
   graph  Graph stats and inbound relationships.
-  list   List entities, properties, relationships, and tasks.
+  list   List entities, properties, and relationships.
   model  Mutate model entities, properties, and relationships.
   view   View entity or instance details.
 
@@ -257,25 +257,6 @@ Failure:
 Error: Entity 'MissingEntity' was not found.
 
 Next: meta list entities
-```
-
-## list tasks
-
-Success:
-```powershell
-> .\\meta.cmd list tasks --workspace Samples\CommandExamples
-[exit 0]
-Tasks (1):
-  sample-task
-```
-
-Failure:
-```powershell
-> .\\meta.cmd list tasks --workspace Samples\MissingWorkspace
-[exit 4]
-Error: Workspace was not found.
-
-Next: meta init .
 ```
 
 ## check

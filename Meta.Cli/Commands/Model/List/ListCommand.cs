@@ -4,7 +4,7 @@ internal sealed partial class CliRuntime
     {
         if (commandArgs.Length < 2)
         {
-            return PrintUsageError("Usage: list <entities|properties|relationships|tasks> ...");
+            return PrintUsageError("Usage: list <entities|properties|relationships> ...");
         }
     
         var mode = commandArgs[1].Trim().ToLowerInvariant();
@@ -13,7 +13,6 @@ internal sealed partial class CliRuntime
             "entities" => await ListEntitiesAsync(commandArgs).ConfigureAwait(false),
             "properties" => await ListPropertiesAsync(commandArgs).ConfigureAwait(false),
             "relationships" => await ListRelationshipsAsync(commandArgs).ConfigureAwait(false),
-            "tasks" => await ListTasksAsync(commandArgs).ConfigureAwait(false),
             _ => PrintCommandUnknownError($"list {mode}"),
         };
     }

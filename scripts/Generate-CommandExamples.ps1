@@ -146,13 +146,6 @@ Invoke-MetaStrict -MetaArgs @("import", "xml", "Samples\SampleModel.xml", "Sampl
 Invoke-MetaStrict -MetaArgs @("insert", "Cube", "99", "--set", "CubeName=Diff Cube", "--set", "Purpose=Diff sample", "--set", "RefreshMode=Manual", "--workspace", $diffRightWorkspace) | Out-Null
 
 New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
-$tasksRoot = Join-Path $baseWorkspace "metadata\tasks"
-New-Item -ItemType Directory -Path $tasksRoot -Force | Out-Null
-$taskContent = @"
-name=sample-task
-steps=
-"@
-Set-Content -Path (Join-Path $tasksRoot "sample-task.task") -Value $taskContent -Encoding utf8
 
 $brokenMetadataRoot = Join-Path $brokenWorkspace "metadata"
 New-Item -ItemType Directory -Path (Join-Path $brokenMetadataRoot "instance") -Force | Out-Null
@@ -217,7 +210,6 @@ Add-Case -Name "instance diff" -SuccessArgs @("instance", "diff", $diffLeftWorks
 Add-Case -Name "list entities" -SuccessArgs @("list", "entities", "--workspace", $baseWorkspace) -FailureArgs @("list", "entities", "--workspace", $brokenWorkspace)
 Add-Case -Name "list properties" -SuccessArgs @("list", "properties", "Cube", "--workspace", $baseWorkspace) -FailureArgs @("list", "properties", "MissingEntity", "--workspace", $baseWorkspace)
 Add-Case -Name "list relationships" -SuccessArgs @("list", "relationships", "Measure", "--workspace", $baseWorkspace) -FailureArgs @("list", "relationships", "MissingEntity", "--workspace", $baseWorkspace)
-Add-Case -Name "list tasks" -SuccessArgs @("list", "tasks", "--workspace", $baseWorkspace) -FailureArgs @("list", "tasks", "--workspace", "Samples\MissingWorkspace")
 Add-Case -Name "check" -SuccessArgs @("check", "--workspace", $baseWorkspace) -FailureArgs @("check", "--workspace", $brokenWorkspace)
 Add-Case -Name "view entity" -SuccessArgs @("view", "entity", "Cube", "--workspace", $baseWorkspace) -FailureArgs @("view", "entity", "MissingEntity", "--workspace", $baseWorkspace)
 Add-Case -Name "view instance" -SuccessArgs @("view", "instance", "Cube", "1", "--workspace", $baseWorkspace) -FailureArgs @("view", "instance", "Cube", "999", "--workspace", $baseWorkspace)

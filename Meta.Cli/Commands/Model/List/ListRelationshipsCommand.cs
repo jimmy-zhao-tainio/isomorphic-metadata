@@ -44,38 +44,5 @@ internal sealed partial class CliRuntime
     
         return 0;
     }
-    
-    Task<int> ListTasksAsync(string[] commandArgs)
-    {
-        var options = ParseWorkspaceOnlyOptions(commandArgs, startIndex: 2);
-        if (!options.Ok)
-        {
-            return Task.FromResult(PrintArgumentError(options.ErrorMessage));
-        }
-    
-        var filesystemContext = ResolveWorkspaceFilesystemContext(options.WorkspacePath);
-        var tasksRoot = Path.Combine(filesystemContext.MetadataRootPath, "tasks");
-        var taskFiles = Directory.Exists(tasksRoot)
-            ? Directory.GetFiles(tasksRoot, "*.task", SearchOption.TopDirectoryOnly)
-                .Select(file => Path.GetFileNameWithoutExtension(file) ?? string.Empty)
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .ToList()
-            : new List<string>();
-
-        presenter.WriteInfo($"Tasks ({taskFiles.Count}):");
-        if (taskFiles.Count == 0)
-        {
-            presenter.WriteInfo("  (none)");
-            return Task.FromResult(0);
-        }
-    
-        foreach (var task in taskFiles)
-        {
-            presenter.WriteInfo($"  {task}");
-        }
-    
-        return Task.FromResult(0);
-    }
 }
 

@@ -36,10 +36,9 @@ internal sealed partial class CliRuntime
                     "entities" => "meta list entities [--workspace <path>]",
                     "properties" => "meta list properties <Entity> [--workspace <path>]",
                     "relationships" => "meta list relationships <Entity> [--workspace <path>]",
-                    "tasks" => "meta list tasks [--workspace <path>]",
-                    _ => "meta list <entities|properties|relationships|tasks> [--workspace <path>]",
+                    _ => "meta list <entities|properties|relationships> [--workspace <path>]",
                 }
-                : "meta list <entities|properties|relationships|tasks> [--workspace <path>]",
+                : "meta list <entities|properties|relationships> [--workspace <path>]",
             "check" => "meta check [--workspace <path>]",
             "view" => args.Length >= 2
                 ? args[1].Trim().ToLowerInvariant() switch

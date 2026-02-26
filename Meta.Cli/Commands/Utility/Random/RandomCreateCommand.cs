@@ -665,8 +665,7 @@ internal sealed partial class CliRuntime
         return File.Exists(Path.Combine(metadataRootPath, "workspace.xml")) ||
                File.Exists(Path.Combine(metadataRootPath, "model.xml")) ||
                File.Exists(Path.Combine(metadataRootPath, "instance.xml")) ||
-               Directory.Exists(Path.Combine(metadataRootPath, "instance")) ||
-               Directory.Exists(Path.Combine(metadataRootPath, "tasks"));
+               Directory.Exists(Path.Combine(metadataRootPath, "instance"));
     }
     
     void PrintSelectedRecord(string entityName, GenericRecord record)

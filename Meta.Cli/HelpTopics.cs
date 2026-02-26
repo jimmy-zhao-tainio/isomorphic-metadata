@@ -182,15 +182,14 @@ internal static class HelpTopics
             case "list":
                 document = BuildTopicDocument(
                     title: "Command: list",
-                    summary: "List entities, properties, relationships, or tasks.",
-                    usage: "meta list <entities|properties|relationships|tasks> ...",
+                    summary: "List entities, properties, or relationships.",
+                    usage: "meta list <entities|properties|relationships> ...",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[]
                     {
                         "meta list entities",
                         "meta list properties Cube",
                         "meta list relationships Measure",
-                        "meta list tasks",
                     },
                     next: "meta list entities --help");
                 return true;
@@ -223,16 +222,6 @@ internal static class HelpTopics
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta list relationships Measure" },
                     next: "meta instance relationship list <Entity> <Id>");
-                return true;
-
-            case "list tasks":
-                document = BuildTopicDocument(
-                    title: "Command: list tasks",
-                    summary: "List task files from metadata/tasks.",
-                    usage: "meta list tasks [--workspace <path>]",
-                    options: new[] { ("--workspace <path>", "Override workspace root.") },
-                    examples: new[] { "meta list tasks" },
-                    next: "meta help");
                 return true;
 
             case "view":

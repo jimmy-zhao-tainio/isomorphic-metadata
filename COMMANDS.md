@@ -117,7 +117,7 @@ Workspace:
 - `meta status [--workspace <path>]`
 
 Inspect:
-- `meta list <entities|properties|relationships|tasks> ...`
+- `meta list <entities|properties|relationships> ...`
 - `meta view <entity|instance> ...`
 - `meta query <Entity> [--equals <Field> <Value>]... [--contains <Field> <Value>]... [--top <n>] [--workspace <path>]`
 - `meta graph <stats|inbound> ...`
@@ -172,7 +172,6 @@ Inspect and validate:
 | `meta list entities` | You need the entity inventory. | `meta list entities` |
 | `meta list properties <Entity>` | You need scalar schema of one entity. | `meta list properties Cube` |
 | `meta list relationships <Entity>` | You need outgoing relationship schema of one entity. | `meta list relationships Measure` |
-| `meta list tasks` | You need task file inventory from `metadata/tasks`. | `meta list tasks` |
 | `meta view entity <Entity>` | You need a schema card view for one entity. | `meta view entity Cube` |
 | `meta view instance <Entity> <Id>` | You need a row-level view by identity. | `meta view instance Cube 1` |
 | `meta query <Entity> ...` | You need filtered row lookup. | `meta query Cube --contains CubeName Sales --top 20` |
