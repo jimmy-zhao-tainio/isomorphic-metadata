@@ -221,7 +221,7 @@ Import and generate:
 |---|---|---|
 | `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Source-of-truth is XML model+instance files. | `meta import xml .\\model.xml .\\instance.xml --new-workspace .\\ImportedWorkspace` |
 | `meta import sql <connectionString> <schema> --new-workspace <path>` | Source-of-truth is SQL metadata. | `meta import sql "Server=...;Database=...;..." dbo --new-workspace .\\ImportedWorkspace` |
-| `meta import csv <csvFile> --entity <EntityName> ...` | Landing import of one file into one entity + rows. | `meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace` |
+| `meta import csv <csvFile> --entity <EntityName> (--new-workspace <path> or --workspace <path>)` | Landing import of one file into one entity + rows. | `meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace` |
 | `meta generate sql --out <dir>` | You need deterministic SQL schema/data scripts. | `meta generate sql --out .\\out\\sql` |
 | `meta generate csharp --out <dir>` | You need dependency-free generated consumer C# API. | `meta generate csharp --out .\\out\\csharp` |
 | `meta generate csharp --out <dir> --tooling` | You need optional generated tooling helpers for workspace/io. | `meta generate csharp --out .\\out\\csharp --tooling` |

@@ -420,7 +420,7 @@ Global behavior:
 | `meta instance relationship list <FromEntity> <FromId>` | List relationship usages for one row. | `meta instance relationship list Measure 1` |
 | `meta delete <Entity> <Id>` | Delete one row by Id. | `meta delete Cube 10` |
 
-### Instance diff and merge
+### Instance diff and merge (quick index)
 
 | Command | What it is for | Example |
 |---|---|---|
@@ -435,7 +435,7 @@ Global behavior:
 |---|---|---|
 | `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Create new workspace from XML model+instance files. | `meta import xml .\\Samples\\SampleModel.xml .\\Samples\\SampleInstance.xml --new-workspace .\\Samples\\ImportedXml` |
 | `meta import sql <connectionString> <schema> --new-workspace <path>` | Create new workspace by importing SQL metadata. | `meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\\Samples\\ImportedSql` |
-| `meta import csv <csvFile> --entity <EntityName> [--new-workspace|--workspace]` | Landing import: one CSV to one entity + rows in new or existing workspace. | `meta import csv .\\Samples\\landing.csv --entity Landing --new-workspace .\\Samples\\ImportedCsv` |
+| `meta import csv <csvFile> --entity <EntityName> (--new-workspace <path> or --workspace <path>)` | Landing import: one CSV to one entity + rows in new or existing workspace. | `meta import csv .\\Samples\\landing.csv --entity Landing --new-workspace .\\Samples\\ImportedCsv` |
 | `meta generate sql --out <dir>` | Generate deterministic SQL schema + data scripts. | `meta generate sql --out .\\out\\sql` |
 | `meta generate csharp --out <dir>` | Generate dependency-free consumer C# API. | `meta generate csharp --out .\\out\\csharp` |
 | `meta generate csharp --out <dir> --tooling` | Generate optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
@@ -537,11 +537,131 @@ After running all three `property-to-relationship` refactors (`ProductCode`, `Su
 
 These promotions rewrite each `Order` row from scalar `ProductCode`/`SupplierCode`/`WarehouseCode` values to required relationship usages `ProductId`/`SupplierId`/`WarehouseId`, then remove the source scalar properties when `--drop-source-property` is used.
 
-Instance diff and merge:
+Instance diff/merge can be used to propagate these changes across workspaces (see **Instance diff and merge**).
+
+### Instance diff and merge
+
+#### 1. Purpose
+
+Workspaces evolve independently on different branches. `meta instance diff` and `meta instance merge` are deterministic synchronization primitives for instance data:
+
+- `diff` produces a structured change artifact from Left -> Right.
+- `merge` applies that artifact to a target workspace with strict validation.
+
+This is not a text diff. It is a semantic diff over entity rows, scalar values, and relationship usages.
+
+#### 2. What `meta instance diff` does (mechanics)
+
+Inputs:
+
+- Left workspace
+- Right workspace
+
+Output:
+
+- a deterministic diff workspace artifact (default sibling path: `<RightWorkspace>.instance-diff`)
+
+Mechanics:
+
+- requires byte-identical `metadata/model.xml` for equal-model diff.
+- compares row identity by entity + `Id`.
+- compares scalar property values.
+- compares relationship usage values (`...Id` attributes).
+- compares row presence/absence.
+
+Conceptual change classes captured by the artifact:
+
+- added rows (present in Right, absent in Left)
+- removed rows (present in Left, absent in Right)
+- updated scalar values on shared rows
+- updated relationship references on shared rows
+
+Determinism guarantees:
+
+- canonical ordering/normalization is applied before writing the diff artifact.
+- entity/property traversal and row comparisons are stable.
+- same inputs produce the same logical diff artifact.
+
+The artifact is a structured description of how to transform Left into Right.
+
+#### 3. What `meta instance merge` does (mechanics)
+
+Inputs:
+
+- target workspace
+- diff artifact workspace (from `meta instance diff`)
+
+Operation:
+
+- verifies precondition: target must match the diff Left snapshot.
+- applies the diff Right snapshot to the target in memory.
+- normalizes and validates the resulting workspace.
+- persists once only if validation/postconditions pass.
+
+Atomicity and safety:
+
+- all changes are applied or none are persisted.
+- any failure restores pre-merge in-memory state and aborts.
+- save is a single workspace write operation after successful validation.
+
+Determinism:
+
+- same target + same diff artifact -> same resulting workspace state.
+
+#### 4. Referential integrity behavior
+
+Merge is strict. It fails rather than writing invalid state.
+
+- required relationship usage missing -> validation failure.
+- relationship target row missing -> validation failure.
+- deleting rows that remain referenced -> validation failure.
+- relationship updates are applied as part of the snapshot and validated with the whole workspace.
+
+Operation ordering is snapshot-based: merge builds the target end state in memory, validates, then saves. It does not persist partial intermediate steps.
+
+#### 5. Row identity model
+
+Rows are matched by identity (`Entity`, `Id`), not by value similarity.
+
+- identity stability is assumed.
+- no fuzzy matching.
+- no business-key reconciliation.
+
+#### 6. Typical workflow
+
+Example flow with two independently evolved workspaces:
+
+1. baseline/integration workspace is your Left reference.
+2. feature workspace with intended changes is your Right reference.
+3. generate diff from Left -> Right.
+4. apply diff into integration target (which must still match Left snapshot).
 
 ```powershell
-meta instance diff .\LeftWs .\RightWs
-meta instance merge .\TargetWs .\RightWs.instance-diff
+meta instance diff .\WorkspaceA .\WorkspaceB
+meta instance merge .\WorkspaceA .\WorkspaceB.instance-diff
+```
+
+If merge precondition fails, regenerate diff against the current target baseline.
+
+#### 7. Interaction with model refactoring
+
+`model refactor property-to-relationship` changes instance structure (scalar values moved to required relationship usages). Diff/merge captures and replays those instance-level structural value changes when both sides share the same model contract.
+
+For model-contract drift between workspaces, use the aligned diff/merge path (`instance diff-aligned` / `instance merge-aligned`) with explicit alignment mappings.
+
+#### 8. What this is NOT
+
+- not a text merge tool.
+- not automatic conflict resolution.
+- not model/schema merge.
+- not record matching by business key.
+- not best-effort partial reconciliation.
+
+#### 9. Command reference
+
+```powershell
+meta instance diff <LeftWs> <RightWs>
+meta instance merge <TargetWs> <DiffWorkspace>
 ```
 
 ## MetaSchema
