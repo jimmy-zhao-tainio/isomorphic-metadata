@@ -33,22 +33,23 @@ Metadata gives you:
 - explicit schema/instance contracts you can inspect and validate.
 - deterministic refactors (model + instance rewritten together).
 - generation targets (SQL/C#/SSDT) from one authoritative model.
-- repeatable onboarding: juniors can inspect the model and instance graph directly.
+- repeatable onboarding: team members can inspect the model and instance graph directly.
 
 ### Why isomorphic metadata
 
-Isomorphic means one logical model can be represented and consumed in multiple forms without changing meaning:
+Isomorphic means the **same semantics** can live in multiple forms without translation drift.
 
-- XML workspace is canonical and git-friendly.
-- SQL can be imported into a workspace.
-- SQL/C# artifacts can be generated from the workspace.
-- generated C# can be consumed as POCO model objects; tooling helpers can load/save workspace state.
+Think of it as one model with three "native surfaces", each optimized for a different kind of work:
 
-This allows multiple producers and consumers to work on the same semantics:
+- **XML workspace**: canonical, deterministic, and **git-first** (clean diffs, reviewable history, mergeable refactors).
+- **SQL**: **data-first** and database-native (easy to inspect/query/validate at scale; good interchange format when your source of truth starts in a database).
+- **C#**: **application-first** (strongly typed objects for tools and apps; no XML parsing in consumer code; easy to integrate into pipelines/services).
 
-- analysts/modelers editing model+instance in workspace form.
-- platform engineers generating SQL/SSDT.
-- application/tooling engineers consuming generated C#.
+Because the semantics are the same, multiple producers and consumers can collaborate without rewriting the model for each layer:
+
+- analysts/modelers edit model + instance in workspace form,
+- platform engineers generate SQL/SSDT,
+- application/tooling engineers consume the generated C# API.
 
 ### Why git matters for metadata
 
