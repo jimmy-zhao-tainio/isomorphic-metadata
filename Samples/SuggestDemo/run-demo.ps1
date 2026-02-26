@@ -11,7 +11,12 @@ Set-Location $repoRoot
 
 $workspace = Join-Path $repoRoot ($WorkspacePath.Replace('/', '\'))
 $csvRoot = Join-Path $repoRoot "Samples\SuggestDemo\demo-csv"
-$metaProject = Join-Path $repoRoot "Meta.Cli\Meta.Cli.csproj"
+$metaExe = Join-Path $repoRoot "meta.exe"
+
+if (-not (Test-Path $metaExe))
+{
+    throw "meta.exe not found at '$metaExe'."
+}
 
 if (Test-Path $workspace)
 {
@@ -21,12 +26,11 @@ if (Test-Path $workspace)
 function Invoke-MetaStrict {
     param([string[]]$MetaArgs)
 
-    $args = @("run", "--project", $metaProject, "--") + $MetaArgs
     $previousErrorActionPreference = $ErrorActionPreference
     try
     {
         $ErrorActionPreference = "Continue"
-        & dotnet @args
+        & $metaExe @MetaArgs
     }
     finally
     {
@@ -41,14 +45,22 @@ function Invoke-MetaStrict {
 
 Write-Host "== Import CSV landing entities =="
 Invoke-MetaStrict -MetaArgs @("import", "csv", (Join-Path $csvRoot "products.csv"), "--entity", "Product", "--new-workspace", $workspace)
-Invoke-MetaStrict -MetaArgs @("import", "csv", (Join-Path $csvRoot "suppliers.csv"), "--entity", "Supplier", "--workspace", $workspace)
-Invoke-MetaStrict -MetaArgs @("import", "csv", (Join-Path $csvRoot "categories.csv"), "--entity", "Category", "--workspace", $workspace)
-Invoke-MetaStrict -MetaArgs @("import", "csv", (Join-Path $csvRoot "warehouses.csv"), "--entity", "Warehouse", "--workspace", $workspace)
-Invoke-MetaStrict -MetaArgs @("import", "csv", (Join-Path $csvRoot "orders.csv"), "--entity", "Order", "--workspace", $workspace)
+Push-Location $workspace
+try
+{
+    Invoke-MetaStrict -MetaArgs @("import", "csv", "..\demo-csv\suppliers.csv", "--entity", "Supplier")
+    Invoke-MetaStrict -MetaArgs @("import", "csv", "..\demo-csv\categories.csv", "--entity", "Category")
+    Invoke-MetaStrict -MetaArgs @("import", "csv", "..\demo-csv\warehouses.csv", "--entity", "Warehouse")
+    Invoke-MetaStrict -MetaArgs @("import", "csv", "..\demo-csv\orders.csv", "--entity", "Order")
 
-Write-Host ""
-Write-Host "== Suggest pass (business keys + lookup relationships) =="
-Invoke-MetaStrict -MetaArgs @("model", "suggest", "--workspace", $workspace)
+    Write-Host ""
+    Write-Host "== Suggest pass (business keys + lookup relationships) =="
+    Invoke-MetaStrict -MetaArgs @("model", "suggest")
+}
+finally
+{
+    Pop-Location
+}
 
 Write-Host ""
 Write-Host "OK: suggest demo complete"

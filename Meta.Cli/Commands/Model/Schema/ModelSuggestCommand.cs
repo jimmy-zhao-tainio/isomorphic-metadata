@@ -18,17 +18,23 @@ internal sealed partial class CliRuntime
         PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
         var report = ModelSuggestService.Analyze(workspace);
 
-        PrintModelSuggestReport(report, options.ShowKeys, options.ShowBlocked, options.Explain);
+        PrintModelSuggestReport(
+            report,
+            options.ShowKeys,
+            options.ShowBlocked,
+            options.Explain,
+            options.PrintCommands);
         return 0;
     }
 
-    (bool Ok, string WorkspacePath, bool ShowKeys, bool ShowBlocked, bool Explain, string ErrorMessage)
+    (bool Ok, string WorkspacePath, bool ShowKeys, bool ShowBlocked, bool Explain, bool PrintCommands, string ErrorMessage)
         ParseModelSuggestOptions(string[] commandArgs, int startIndex)
     {
         var workspacePath = DefaultWorkspacePath();
         var showKeys = false;
         var showBlocked = false;
         var explain = false;
+        var printCommands = false;
 
         for (var i = startIndex; i < commandArgs.Length; i++)
         {
@@ -37,7 +43,7 @@ internal sealed partial class CliRuntime
             {
                 if (i + 1 >= commandArgs.Length)
                 {
-                    return (false, workspacePath, showKeys, showBlocked, explain, "Error: --workspace requires a path.");
+                    return (false, workspacePath, showKeys, showBlocked, explain, printCommands, "Error: --workspace requires a path.");
                 }
 
                 workspacePath = commandArgs[++i];
@@ -62,92 +68,80 @@ internal sealed partial class CliRuntime
                 continue;
             }
 
-            return (false, workspacePath, showKeys, showBlocked, explain, $"Error: unknown option '{arg}'.");
+            if (string.Equals(arg, "--print-commands", StringComparison.OrdinalIgnoreCase))
+            {
+                printCommands = true;
+                continue;
+            }
+
+            return (false, workspacePath, showKeys, showBlocked, explain, printCommands, $"Error: unknown option '{arg}'.");
         }
 
-        return (true, workspacePath, showKeys, showBlocked, explain, string.Empty);
+        return (true, workspacePath, showKeys, showBlocked, explain, printCommands, string.Empty);
     }
 
-    void PrintModelSuggestReport(ModelSuggestReport report, bool showKeys, bool showBlocked, bool explain)
+    void PrintModelSuggestReport(
+        ModelSuggestReport report,
+        bool showKeys,
+        bool showBlocked,
+        bool explain,
+        bool printCommands)
     {
-        presenter.WriteInfo("meta model suggest");
-        presenter.WriteInfo($"Workspace: {report.WorkspaceRootPath}");
-        presenter.WriteInfo($"Model: {report.ModelName}");
-        presenter.WriteInfo(string.Empty);
+        presenter.WriteOk(
+            "model suggest",
+            ("Workspace", report.WorkspaceRootPath),
+            ("Model", report.ModelName),
+            ("Suggestions", report.EligibleRelationshipSuggestions.Count.ToString(CultureInfo.InvariantCulture)));
 
-        presenter.WriteInfo("Relationship suggestions");
-        if (report.EligibleRelationshipSuggestions.Count == 0)
+        // Keep a fixed, compact structure for default output.
+        presenter.WriteInfo(string.Empty);
+        PrintRelationshipSection(report.EligibleRelationshipSuggestions, explain);
+        if (printCommands)
         {
-            presenter.WriteInfo("  (none)");
-        }
-        else
-        {
-            for (var index = 0; index < report.EligibleRelationshipSuggestions.Count; index++)
-            {
-                var suggestion = report.EligibleRelationshipSuggestions[index];
-                PrintEligibleRelationshipSuggestion(suggestion, index + 1, explain);
-            }
+            PrintSuggestedCommandSection(report.WorkspaceRootPath, report.EligibleRelationshipSuggestions);
         }
 
         if (showKeys)
         {
+            presenter.WriteInfo(string.Empty);
             PrintKeySection(report.BusinessKeys, explain);
         }
 
         if (showBlocked)
         {
+            presenter.WriteInfo(string.Empty);
             PrintBlockedSection(report.BlockedRelationshipCandidates, explain);
-        }
-
-        presenter.WriteInfo("Summary");
-        presenter.WriteInfo($"  Relationship suggestions: {report.EligibleRelationshipSuggestions.Count.ToString(CultureInfo.InvariantCulture)}");
-        if (showKeys)
-        {
-            presenter.WriteInfo($"  Candidate business keys: {report.BusinessKeys.Count.ToString(CultureInfo.InvariantCulture)}");
-        }
-
-        if (showBlocked)
-        {
-            presenter.WriteInfo($"  Blocked relationship candidates: {report.BlockedRelationshipCandidates.Count.ToString(CultureInfo.InvariantCulture)}");
         }
     }
 
-    void PrintEligibleRelationshipSuggestion(LookupRelationshipSuggestion suggestion, int ordinal, bool explain)
+    void PrintRelationshipSection(IReadOnlyList<LookupRelationshipSuggestion> suggestions, bool explain)
     {
-        presenter.WriteInfo($"  Suggestion {ordinal.ToString(CultureInfo.InvariantCulture)}");
-        presenter.WriteInfo($"    Source: {suggestion.Source.EntityName}.{suggestion.Source.PropertyName}");
-        presenter.WriteInfo(
-            $"    Target: {suggestion.TargetLookup.EntityName} (lookup key: {suggestion.TargetLookup.EntityName}.{suggestion.TargetLookup.PropertyName})");
-        presenter.WriteInfo("    Proposed refactor:");
-        presenter.WriteInfo(
-            $"      - Add relationship {suggestion.Source.EntityName} -> {suggestion.TargetLookup.EntityName}");
-        presenter.WriteInfo(
-            $"      - Rewrite {suggestion.Source.EntityName} rows by resolving {suggestion.Source.PropertyName} against {suggestion.TargetLookup.EntityName}.{suggestion.TargetLookup.PropertyName}");
-        presenter.WriteInfo(
-            $"      - {suggestion.Source.EntityName}.{suggestion.Source.PropertyName} can be dropped after successful rewrite");
-
-        if (explain)
+        presenter.WriteInfo("Relationship suggestions");
+        if (suggestions.Count == 0)
         {
-            presenter.WriteInfo("    Stats:");
-            presenter.WriteInfo(
-                $"      - Source non-blank rows: {suggestion.SourceComparableRowCount.ToString(CultureInfo.InvariantCulture)} (distinct {suggestion.SourceDistinctComparableValueCount.ToString(CultureInfo.InvariantCulture)})");
-            presenter.WriteInfo(
-                $"      - Target non-blank rows: {suggestion.TargetComparableRowCount.ToString(CultureInfo.InvariantCulture)} (distinct {suggestion.TargetDistinctComparableValueCount.ToString(CultureInfo.InvariantCulture)})");
-            presenter.WriteInfo(
-                $"      - Matched source rows: {suggestion.MatchedSourceRowCount.ToString(CultureInfo.InvariantCulture)}/{suggestion.SourceComparableRowCount.ToString(CultureInfo.InvariantCulture)}");
-
-            presenter.WriteInfo("    Evidence:");
-            foreach (var reason in suggestion.Evidence)
-            {
-                presenter.WriteInfo("      - " + reason);
-            }
-
-            presenter.WriteInfo("    Why:");
-            presenter.WriteInfo("      - Candidate is eligible: strict RI checks passed.");
-            presenter.WriteInfo("      - Source values fully resolve to target lookup key.");
+            presenter.WriteInfo("  (none)");
+            return;
         }
 
-        presenter.WriteInfo(string.Empty);
+        for (var index = 0; index < suggestions.Count; index++)
+        {
+            var suggestion = suggestions[index];
+            presenter.WriteInfo(
+                $"  {(index + 1).ToString(CultureInfo.InvariantCulture)}) {suggestion.Source.EntityName}.{suggestion.Source.PropertyName} -> {suggestion.TargetLookup.EntityName} (lookup: {suggestion.TargetLookup.EntityName}.{suggestion.TargetLookup.PropertyName})");
+
+            if (!explain)
+            {
+                continue;
+            }
+
+            presenter.WriteInfo("     Plan:");
+            presenter.WriteInfo(
+                $"       - Add relationship {suggestion.Source.EntityName} -> {suggestion.TargetLookup.EntityName}");
+            presenter.WriteInfo(
+                $"       - Rewrite {suggestion.Source.EntityName} rows by resolving {suggestion.Source.PropertyName} against {suggestion.TargetLookup.EntityName}.{suggestion.TargetLookup.PropertyName}");
+            presenter.WriteInfo(
+                $"       - Drop {suggestion.Source.EntityName}.{suggestion.Source.PropertyName} after successful rewrite");
+        }
     }
 
     void PrintKeySection(IReadOnlyList<BusinessKeyCandidate> keys, bool explain)
@@ -163,44 +157,49 @@ internal sealed partial class CliRuntime
         for (var index = 0; index < keys.Count; index++)
         {
             var key = keys[index];
-            presenter.WriteInfo($"  Key {(index + 1).ToString(CultureInfo.InvariantCulture)}");
-            presenter.WriteInfo($"    Target: {key.Target.EntityName}.{key.Target.PropertyName}");
+            presenter.WriteInfo($"  {(index + 1).ToString(CultureInfo.InvariantCulture)}) {key.Target.EntityName}.{key.Target.PropertyName}");
 
-            if (explain)
+            if (!explain)
             {
-                presenter.WriteInfo("    Stats:");
-                presenter.WriteInfo(
-                    $"      - rows={key.Target.RowCount.ToString(CultureInfo.InvariantCulture)}, non-null={key.Target.NonNullCount.ToString(CultureInfo.InvariantCulture)}, non-blank={key.Target.NonBlankCount.ToString(CultureInfo.InvariantCulture)}, distinct={key.Target.DistinctNonBlankCount.ToString(CultureInfo.InvariantCulture)}, unique={(key.Target.IsUniqueOverNonBlank ? "yes" : "no")}");
-
-                presenter.WriteInfo("    Why:");
-                if (key.Reasons.Count == 0)
-                {
-                    presenter.WriteInfo("      - (none)");
-                }
-                else
-                {
-                    foreach (var reason in key.Reasons)
-                    {
-                        presenter.WriteInfo("      - " + reason);
-                    }
-                }
-
-                presenter.WriteInfo("    Blockers:");
-                if (key.Blockers.Count == 0)
-                {
-                    presenter.WriteInfo("      - (none)");
-                }
-                else
-                {
-                    foreach (var blocker in key.Blockers)
-                    {
-                        presenter.WriteInfo("      - " + blocker);
-                    }
-                }
+                continue;
             }
 
-            presenter.WriteInfo(string.Empty);
+            presenter.WriteInfo("     Details:");
+            presenter.WriteInfo(
+                $"       - rows={key.Target.RowCount.ToString(CultureInfo.InvariantCulture)}, non-null={key.Target.NonNullCount.ToString(CultureInfo.InvariantCulture)}, non-blank={key.Target.NonBlankCount.ToString(CultureInfo.InvariantCulture)}, distinct={key.Target.DistinctNonBlankCount.ToString(CultureInfo.InvariantCulture)}, unique={(key.Target.IsUniqueOverNonBlank ? "yes" : "no")}");
+            foreach (var reason in key.Reasons)
+            {
+                presenter.WriteInfo("       - " + reason);
+            }
+
+            foreach (var blocker in key.Blockers)
+            {
+                presenter.WriteInfo("       - Blocker: " + blocker);
+            }
         }
+    }
+
+    void PrintSuggestedCommandSection(string workspacePath, IReadOnlyList<LookupRelationshipSuggestion> suggestions)
+    {
+        presenter.WriteInfo(string.Empty);
+        presenter.WriteInfo("Suggested commands");
+        if (suggestions.Count == 0)
+        {
+            presenter.WriteInfo("  (none)");
+            return;
+        }
+
+        for (var index = 0; index < suggestions.Count; index++)
+        {
+            var suggestion = suggestions[index];
+            presenter.WriteInfo(
+                $"  {(index + 1).ToString(CultureInfo.InvariantCulture)}) meta model refactor property-to-relationship --workspace {QuoteIfNeeded(workspacePath)} --source {suggestion.Source.EntityName}.{suggestion.Source.PropertyName} --target {suggestion.TargetLookup.EntityName} --lookup {suggestion.TargetLookup.PropertyName} --drop-source-property");
+        }
+    }
+
+    static string QuoteIfNeeded(string path)
+    {
+        return path.Contains(' ', StringComparison.Ordinal) ? "\"" + path + "\"" : path;
     }
 
     void PrintBlockedSection(IReadOnlyList<LookupRelationshipSuggestion> blockedCandidates, bool explain)
@@ -216,41 +215,25 @@ internal sealed partial class CliRuntime
         for (var index = 0; index < blockedCandidates.Count; index++)
         {
             var suggestion = blockedCandidates[index];
-            presenter.WriteInfo($"  Candidate {(index + 1).ToString(CultureInfo.InvariantCulture)}");
-            presenter.WriteInfo($"    Source: {suggestion.Source.EntityName}.{suggestion.Source.PropertyName}");
             presenter.WriteInfo(
-                $"    Target: {suggestion.TargetLookup.EntityName} (lookup key: {suggestion.TargetLookup.EntityName}.{suggestion.TargetLookup.PropertyName})");
+                $"  {(index + 1).ToString(CultureInfo.InvariantCulture)}) {suggestion.Source.EntityName}.{suggestion.Source.PropertyName} -> {suggestion.TargetLookup.EntityName} (lookup: {suggestion.TargetLookup.EntityName}.{suggestion.TargetLookup.PropertyName})");
 
-            presenter.WriteInfo("    Blockers:");
+            if (!explain)
+            {
+                continue;
+            }
+
+            presenter.WriteInfo("     Blockers:");
             foreach (var blocker in suggestion.Blockers)
             {
-                presenter.WriteInfo("      - " + blocker);
+                presenter.WriteInfo("       - " + blocker);
             }
 
-            if (explain)
+            if (suggestion.UnmatchedDistinctValueCount > 0)
             {
-                presenter.WriteInfo("    Stats:");
                 presenter.WriteInfo(
-                    $"      - Source non-blank rows: {suggestion.SourceComparableRowCount.ToString(CultureInfo.InvariantCulture)} (distinct {suggestion.SourceDistinctComparableValueCount.ToString(CultureInfo.InvariantCulture)})");
-                presenter.WriteInfo(
-                    $"      - Target non-blank rows: {suggestion.TargetComparableRowCount.ToString(CultureInfo.InvariantCulture)} (distinct {suggestion.TargetDistinctComparableValueCount.ToString(CultureInfo.InvariantCulture)})");
-                presenter.WriteInfo(
-                    $"      - Matched source rows: {suggestion.MatchedSourceRowCount.ToString(CultureInfo.InvariantCulture)}/{suggestion.SourceComparableRowCount.ToString(CultureInfo.InvariantCulture)}");
-
-                if (suggestion.UnmatchedDistinctValueCount > 0)
-                {
-                    presenter.WriteInfo(
-                        $"      - Unmatched value sample: {string.Join(", ", suggestion.UnmatchedDistinctValuesSample)}");
-                }
-
-                presenter.WriteInfo("    Evidence:");
-                foreach (var reason in suggestion.Evidence)
-                {
-                    presenter.WriteInfo("      - " + reason);
-                }
+                    $"       - Unmatched value sample: {string.Join(", ", suggestion.UnmatchedDistinctValuesSample)}");
             }
-
-            presenter.WriteInfo(string.Empty);
         }
     }
 }

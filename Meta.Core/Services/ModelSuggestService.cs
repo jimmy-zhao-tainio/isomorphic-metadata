@@ -112,6 +112,57 @@ public static class ModelSuggestService
         return report;
     }
 
+    public static LookupRelationshipSuggestion AnalyzeLookupRelationship(
+        Workspace workspace,
+        string sourceEntityName,
+        string sourcePropertyName,
+        string targetEntityName,
+        string targetPropertyName)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+
+        if (string.IsNullOrWhiteSpace(sourceEntityName))
+        {
+            throw new InvalidOperationException("Source entity name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(sourcePropertyName))
+        {
+            throw new InvalidOperationException("Source property name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(targetEntityName))
+        {
+            throw new InvalidOperationException("Target entity name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(targetPropertyName))
+        {
+            throw new InvalidOperationException("Lookup property name is required.");
+        }
+
+        var profiles = BuildPropertyProfiles(workspace);
+        var source = profiles.FirstOrDefault(item =>
+            string.Equals(item.Stats.EntityName, sourceEntityName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Stats.PropertyName, sourcePropertyName, StringComparison.OrdinalIgnoreCase));
+        if (source == null)
+        {
+            throw new InvalidOperationException(
+                $"Property '{sourceEntityName}.{sourcePropertyName}' does not exist.");
+        }
+
+        var target = profiles.FirstOrDefault(item =>
+            string.Equals(item.Stats.EntityName, targetEntityName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Stats.PropertyName, targetPropertyName, StringComparison.OrdinalIgnoreCase));
+        if (target == null)
+        {
+            throw new InvalidOperationException(
+                $"Property '{targetEntityName}.{targetPropertyName}' does not exist.");
+        }
+
+        return BuildLookupRelationshipSuggestion(source, target);
+    }
+
     private static List<PropertyProfile> BuildPropertyProfiles(Workspace workspace)
     {
         var model = workspace.Model ?? throw new InvalidDataException("Workspace model is missing.");
@@ -300,42 +351,7 @@ public static class ModelSuggestService
                     continue;
                 }
 
-                var typeCompatible = IsTypeCompatibleStrict(sourceStats.DataType, targetStats.DataType);
-                var coverage = BuildCoverageMetrics(source, target);
-                var blockers = BuildRelationshipBlockers(sourceStats, targetStats, coverage, typeCompatible, target.ComparableValueCounts);
-
-                var suggestion = new LookupRelationshipSuggestion
-                {
-                    Status = blockers.Count == 0 ? LookupCandidateStatus.Eligible : LookupCandidateStatus.Blocked,
-                    Source = CloneStats(sourceStats),
-                    TargetLookup = CloneStats(targetStats),
-                    SourceComparableRowCount = sourceStats.NonBlankCount,
-                    SourceDistinctComparableValueCount = sourceStats.DistinctNonBlankCount,
-                    MatchedSourceRowCount = coverage.MatchedSourceRowCount,
-                    MatchedDistinctSourceValueCount = coverage.MatchedDistinctCount,
-                    UnmatchedSourceRowCount = coverage.UnmatchedSourceRowCount,
-                    UnmatchedDistinctValueCount = coverage.UnmatchedDistinctCount,
-                    UnmatchedDistinctValuesSample = coverage.UnmatchedDistinctSample,
-                    TargetComparableRowCount = targetStats.NonBlankCount,
-                    TargetDistinctComparableValueCount = targetStats.DistinctNonBlankCount,
-                    TargetComparableIsUnique = targetStats.IsUniqueOverNonBlank,
-                    SourceShowsReuse = sourceStats.NonBlankCount > sourceStats.DistinctNonBlankCount,
-                    Score = ScoreRelationshipCandidate(sourceStats, targetStats, coverage, typeCompatible, blockers.Count),
-                };
-                suggestion.Blockers.AddRange(blockers);
-
-                suggestion.Evidence.Add("Exact property-name match.");
-                suggestion.Evidence.Add(typeCompatible
-                    ? "Compatible scalar type."
-                    : "Incompatible scalar type.");
-                suggestion.Evidence.Add(
-                    $"Source values matched target key: {coverage.MatchedSourceRowCount.ToString(CultureInfo.InvariantCulture)}/{sourceStats.NonBlankCount.ToString(CultureInfo.InvariantCulture)} rows (distinct {coverage.MatchedDistinctCount.ToString(CultureInfo.InvariantCulture)}/{sourceStats.DistinctNonBlankCount.ToString(CultureInfo.InvariantCulture)}).");
-                suggestion.Evidence.Add(
-                    targetStats.IsUniqueOverNonBlank
-                        ? "Target lookup key values are unique over non-blank values."
-                        : "Target lookup key values are not unique over non-blank values.");
-
-                candidates.Add(suggestion);
+                candidates.Add(BuildLookupRelationshipSuggestion(source, target));
             }
         }
 
@@ -350,6 +366,51 @@ public static class ModelSuggestService
             .ThenBy(item => item.TargetLookup.EntityName, StringComparer.Ordinal)
             .ThenBy(item => item.TargetLookup.PropertyName, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private static LookupRelationshipSuggestion BuildLookupRelationshipSuggestion(PropertyProfile source, PropertyProfile target)
+    {
+        var sourceStats = source.Stats;
+        var targetStats = target.Stats;
+        var typeCompatible = IsTypeCompatibleStrict(sourceStats.DataType, targetStats.DataType);
+        var coverage = BuildCoverageMetrics(source, target);
+        var blockers = BuildRelationshipBlockers(sourceStats, targetStats, coverage, typeCompatible, target.ComparableValueCounts);
+
+        var suggestion = new LookupRelationshipSuggestion
+        {
+            Status = blockers.Count == 0 ? LookupCandidateStatus.Eligible : LookupCandidateStatus.Blocked,
+            Source = CloneStats(sourceStats),
+            TargetLookup = CloneStats(targetStats),
+            SourceComparableRowCount = sourceStats.NonBlankCount,
+            SourceDistinctComparableValueCount = sourceStats.DistinctNonBlankCount,
+            MatchedSourceRowCount = coverage.MatchedSourceRowCount,
+            MatchedDistinctSourceValueCount = coverage.MatchedDistinctCount,
+            UnmatchedSourceRowCount = coverage.UnmatchedSourceRowCount,
+            UnmatchedDistinctValueCount = coverage.UnmatchedDistinctCount,
+            UnmatchedDistinctValuesSample = coverage.UnmatchedDistinctSample,
+            TargetComparableRowCount = targetStats.NonBlankCount,
+            TargetDistinctComparableValueCount = targetStats.DistinctNonBlankCount,
+            TargetComparableIsUnique = targetStats.IsUniqueOverNonBlank,
+            SourceShowsReuse = sourceStats.NonBlankCount > sourceStats.DistinctNonBlankCount,
+            Score = ScoreRelationshipCandidate(sourceStats, targetStats, coverage, typeCompatible, blockers.Count),
+        };
+        suggestion.Blockers.AddRange(blockers);
+
+        suggestion.Evidence.Add(
+            string.Equals(sourceStats.PropertyName, targetStats.PropertyName, StringComparison.OrdinalIgnoreCase)
+                ? "Exact property-name match."
+                : "Property names differ.");
+        suggestion.Evidence.Add(typeCompatible
+            ? "Compatible scalar type."
+            : "Incompatible scalar type.");
+        suggestion.Evidence.Add(
+            $"Source values matched target key: {coverage.MatchedSourceRowCount.ToString(CultureInfo.InvariantCulture)}/{sourceStats.NonBlankCount.ToString(CultureInfo.InvariantCulture)} rows (distinct {coverage.MatchedDistinctCount.ToString(CultureInfo.InvariantCulture)}/{sourceStats.DistinctNonBlankCount.ToString(CultureInfo.InvariantCulture)}).");
+        suggestion.Evidence.Add(
+            targetStats.IsUniqueOverNonBlank
+                ? "Target lookup key values are unique over non-blank values."
+                : "Target lookup key values are not unique over non-blank values.");
+
+        return suggestion;
     }
 
     private static List<string> BuildRelationshipBlockers(

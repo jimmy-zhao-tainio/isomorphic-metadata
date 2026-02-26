@@ -266,12 +266,23 @@ public sealed class CliStrictModeTests
 
         var suggestHelp = await RunCliAsync("model", "suggest", "--help");
         Assert.Equal(0, suggestHelp.ExitCode);
-        Assert.Contains(
-            "meta model suggest [--show-keys] [--show-blocked] [--explain] [--workspace <path>]",
-            suggestHelp.StdOut,
-            StringComparison.Ordinal);
+        Assert.Contains("meta model suggest", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--show-keys", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--show-blocked", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--explain", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--print-commands", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace", suggestHelp.StdOut, StringComparison.Ordinal);
         Assert.DoesNotContain("concepts", suggestHelp.StdOut, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("confirm", suggestHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+
+        var refactorHelp = await RunCliAsync("model", "refactor", "property-to-relationship", "--help");
+        Assert.Equal(0, refactorHelp.ExitCode);
+        Assert.Contains("meta model refactor property-to-relationship", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--source <Entity.Property>", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--target <Entity>", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--lookup <Property>", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--drop-source-property", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace <path>", refactorHelp.StdOut, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -282,19 +293,26 @@ public sealed class CliStrictModeTests
         {
             var result = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
             Assert.Equal(0, result.ExitCode);
-            Assert.Contains("meta model suggest", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("OK: model suggest", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Workspace:", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Model:", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Suggestions: 3", result.StdOut, StringComparison.Ordinal);
             Assert.Contains("Relationship suggestions", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Source: Order.ProductCode", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Source: Order.SupplierCode", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Source: Order.WarehouseCode", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Summary", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Relationship suggestions: 3", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  1) Order.ProductCode -> Product (lookup: Product.ProductCode)", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  2) Order.SupplierCode -> Supplier (lookup: Supplier.SupplierCode)", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  3) Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("meta model suggest", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Proposed refactor:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Summary", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("Candidate business keys", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("Blocked relationship candidates", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("Evidence:", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("Stats:", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("Why:", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("score=", result.StdOut, StringComparison.OrdinalIgnoreCase);
+
+            var normalized = result.StdOut.Replace("\r\n", "\n", StringComparison.Ordinal);
+            Assert.Contains("Suggestions: 3\n\nRelationship suggestions", normalized, StringComparison.Ordinal);
         }
         finally
         {
@@ -323,16 +341,18 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task ModelSuggest_Explain_ShowsDetailBlocks()
+    public async Task ModelSuggest_Explain_ShowsPlanBlocks()
     {
         var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
         try
         {
             var explainOnly = await RunCliAsync("model", "suggest", "--explain", "--workspace", workspaceRoot);
             Assert.Equal(0, explainOnly.ExitCode);
-            Assert.Contains("Evidence:", explainOnly.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Stats:", explainOnly.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Why:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Plan:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Add relationship Order -> Product", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Evidence:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Stats:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Why:", explainOnly.StdOut, StringComparison.Ordinal);
 
             var explainKeys = await RunCliAsync(
                 "model",
@@ -343,7 +363,7 @@ public sealed class CliStrictModeTests
                 workspaceRoot);
             Assert.Equal(0, explainKeys.ExitCode);
             Assert.Contains("Candidate business keys", explainKeys.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Why:", explainKeys.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Details:", explainKeys.StdOut, StringComparison.Ordinal);
 
             var explainBlocked = await RunCliAsync(
                 "model",
@@ -354,8 +374,39 @@ public sealed class CliStrictModeTests
                 workspaceRoot);
             Assert.Equal(0, explainBlocked.ExitCode);
             Assert.Contains("Blocked relationship candidates", explainBlocked.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Evidence:", explainBlocked.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Stats:", explainBlocked.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Blockers:", explainBlocked.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_PrintCommands_EmitsRefactorCommands()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var result = await RunCliAsync("model", "suggest", "--print-commands", "--workspace", workspaceRoot);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Suggested commands", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains(
+                $"meta model refactor property-to-relationship --workspace {workspaceRoot}",
+                result.StdOut,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "--source Order.ProductCode --target Product --lookup ProductCode --drop-source-property",
+                result.StdOut,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "--source Order.SupplierCode --target Supplier --lookup SupplierCode --drop-source-property",
+                result.StdOut,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "--source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property",
+                result.StdOut,
+                StringComparison.Ordinal);
         }
         finally
         {
@@ -373,6 +424,7 @@ public sealed class CliStrictModeTests
             await AssertModeDeterministic("model", "suggest", "--show-keys", "--workspace", workspaceRoot);
             await AssertModeDeterministic("model", "suggest", "--show-blocked", "--workspace", workspaceRoot);
             await AssertModeDeterministic("model", "suggest", "--explain", "--workspace", workspaceRoot);
+            await AssertModeDeterministic("model", "suggest", "--print-commands", "--workspace", workspaceRoot);
         }
         finally
         {
@@ -952,7 +1004,7 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task ImportCsv_RequiresWorkspaceOrNewWorkspace()
+    public async Task ImportCsv_WithoutWorkspaceFlags_UsesDefaultWorkspaceDiscovery()
     {
         var csvPath = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"), "landing.csv");
         Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
@@ -971,8 +1023,9 @@ public sealed class CliStrictModeTests
                 "--entity",
                 "Landing");
 
-            Assert.Equal(1, result.ExitCode);
-            Assert.Contains("requires --workspace <path> or --new-workspace <path>", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(4, result.ExitCode);
+            Assert.DoesNotContain("requires --workspace <path> or --new-workspace <path>", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Could not find model.xml", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -1367,6 +1420,320 @@ public sealed class CliStrictModeTests
         finally
         {
             DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_RewritesRowsAndOptionallyDropsSourceProperty()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseCode",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "WarehouseCode",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, refactor.ExitCode);
+            Assert.Contains("OK: refactor property-to-relationship", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Source: Order.WarehouseCode", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Target: Warehouse", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Lookup: Warehouse.WarehouseCode", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Role: (none)", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Drop source property: yes", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Rows rewritten: 5", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Property dropped: yes", refactor.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "metadata", "model.xml"));
+            var orderEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                orderEntity
+                    .Element("Properties")?
+                    .Elements("Property") ?? Enumerable.Empty<XElement>(),
+                property => string.Equals((string?)property.Attribute("name"), "WarehouseCode", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                orderEntity
+                    .Element("Relationships")?
+                    .Elements("Relationship") ?? Enumerable.Empty<XElement>(),
+                relationship =>
+                    string.Equals((string?)relationship.Attribute("entity"), "Warehouse", StringComparison.OrdinalIgnoreCase) &&
+                    relationship.Attribute("role") == null);
+
+            var orderRows = LoadEntityRows(workspaceRoot, "Order");
+            foreach (var row in orderRows)
+            {
+                var warehouseId = (string?)row.Attribute("WarehouseId");
+                Assert.False(string.IsNullOrWhiteSpace(warehouseId));
+                Assert.Null(row.Element("WarehouseCode"));
+            }
+
+            var suggestAfter = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
+            Assert.Equal(0, suggestAfter.ExitCode);
+            Assert.Contains("Suggestions: 2", suggestAfter.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)",
+                suggestAfter.StdOut,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenTargetLookupHasDuplicates_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "insert",
+                "Warehouse",
+                "--auto-id",
+                "--set",
+                "WarehouseName=Duplicate Seattle",
+                "--set",
+                "WarehouseCode=WH-001",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseCode",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "WarehouseCode",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Target lookup key is not unique.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenSourceHasBlank_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "instance",
+                "update",
+                "Order",
+                "1",
+                "--set",
+                "WarehouseCode=",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseCode",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "WarehouseCode",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Source contains null/blank; required relationship cannot be created.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenSourceValueIsUnmatched_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "instance",
+                "update",
+                "Order",
+                "1",
+                "--set",
+                "WarehouseCode=WH-404",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseCode",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "WarehouseCode",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Source values not fully resolvable against target key.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("WH-404", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenRelationshipAlreadyExists_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Order",
+                "Warehouse",
+                "--default-id",
+                "1",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseCode",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "WarehouseCode",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Relationship 'Order.WarehouseId' already exists.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_DropSourcePropertyFailsWhenPropertyMissing_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.DoesNotExist",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "WarehouseCode",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Property 'Order.DoesNotExist' was not found.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_ValidationFailureRollsBackAndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempRefactorCycleWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "B.ACode",
+                "--target",
+                "A",
+                "--lookup",
+                "Code",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Cycle detected", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
         }
     }
 
@@ -3407,6 +3774,25 @@ public sealed class CliStrictModeTests
                     $"Failed to import suggest demo CSV '{item.File}'.{Environment.NewLine}{result.CombinedOutput}");
             }
         }
+
+        return root;
+    }
+
+    private static async Task<string> CreateTempRefactorCycleWorkspaceAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "metadata-refactor-cycle-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        Assert.Equal(0, (await RunCliAsync("init", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-entity", "A", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-entity", "B", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-property", "A", "Code", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-property", "B", "Code", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-property", "B", "ACode", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("insert", "B", "1", "--set", "Code=B1", "--set", "ACode=A1", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-relationship", "A", "B", "--default-id", "1", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("insert", "A", "1", "--set", "Code=A1", "--set", "BId=1", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("check", "--workspace", root)).ExitCode);
 
         return root;
     }

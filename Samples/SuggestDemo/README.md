@@ -13,13 +13,30 @@ This demo shows the `meta model suggest` workflow using the real CSV landing pat
 $workspace = ".\Samples\SuggestDemo\Workspace"
 if (Test-Path $workspace) { Remove-Item -Recurse -Force $workspace }
 
-dotnet run --project Meta.Cli/Meta.Cli.csproj -- import csv .\Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace $workspace
-dotnet run --project Meta.Cli/Meta.Cli.csproj -- import csv .\Samples\SuggestDemo\demo-csv\suppliers.csv --entity Supplier --workspace $workspace
-dotnet run --project Meta.Cli/Meta.Cli.csproj -- import csv .\Samples\SuggestDemo\demo-csv\categories.csv --entity Category --workspace $workspace
-dotnet run --project Meta.Cli/Meta.Cli.csproj -- import csv .\Samples\SuggestDemo\demo-csv\warehouses.csv --entity Warehouse --workspace $workspace
-dotnet run --project Meta.Cli/Meta.Cli.csproj -- import csv .\Samples\SuggestDemo\demo-csv\orders.csv --entity Order --workspace $workspace
+meta import csv .\Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace $workspace
+Set-Location $workspace
+meta import csv ..\demo-csv\suppliers.csv --entity Supplier
+meta import csv ..\demo-csv\categories.csv --entity Category
+meta import csv ..\demo-csv\warehouses.csv --entity Warehouse
+meta import csv ..\demo-csv\orders.csv --entity Order
 
-dotnet run --project Meta.Cli/Meta.Cli.csproj -- model suggest --workspace $workspace
+meta model suggest
+```
+
+CMD.exe variant (from repo root):
+
+```cmd
+set WORKSPACE=Samples\SuggestDemo\Workspace
+if exist "%WORKSPACE%" rmdir /s /q "%WORKSPACE%"
+
+meta import csv Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace "%WORKSPACE%"
+cd /d "%WORKSPACE%"
+meta import csv ..\demo-csv\suppliers.csv --entity Supplier
+meta import csv ..\demo-csv\categories.csv --entity Category
+meta import csv ..\demo-csv\warehouses.csv --entity Warehouse
+meta import csv ..\demo-csv\orders.csv --entity Order
+
+meta model suggest
 ```
 
 ## One-command runner

@@ -128,12 +128,15 @@ Inspect:
 - `meta instance merge-aligned <targetWorkspace> <diffWorkspace>`
 
 Modify:
-- `meta model <suggest|add-entity|rename-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
-  - `suggest` usage: `meta model suggest [--show-keys] [--show-blocked] [--explain] [--workspace <path>]`
+- `meta model <suggest|refactor|add-entity|rename-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
+  - `suggest` usage: `meta model suggest [--show-keys] [--show-blocked] [--explain] [--print-commands] [--workspace <path>]`
   - default suggest output is actionable-only (eligible relationship suggestions + compact summary)
   - `--show-keys` includes candidate business keys
   - `--show-blocked` includes blocked relationship candidates
   - `--explain` includes Evidence/Stats/Why detail blocks
+  - `--print-commands` prints copy/paste `meta model refactor property-to-relationship ...` commands for eligible suggestions
+  - `refactor` usage: `meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]`
+  - refactor is atomic (model + instance): if any precondition fails, nothing is written.
   - `add-property` usage: `meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]`
   - `--default-value` is required when adding a required property to an entity that already has rows (used for backfill).
   - `add-relationship` usage: `meta model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]`
@@ -150,7 +153,7 @@ Generate:
   - `--tooling` emits optional `<ModelName>.Tooling.cs` helpers (C# mode only).
 - `meta import xml <modelXmlPath> <instanceXmlPath> --new-workspace <path>`
 - `meta import sql <connectionString> <schema> --new-workspace <path>`
-- `meta import csv <csvFile> --entity <EntityName> (--workspace <path> | --new-workspace <path>)`
+- `meta import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]`
 
 ## Diff/merge example
 

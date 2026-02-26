@@ -66,10 +66,16 @@ internal sealed partial class CliRuntime
                     "add-property" => "meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]",
                     "rename-property" => "meta model rename-property <Entity> <Old> <New> [--workspace <path>]",
                     "add-relationship" => "meta model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]",
+                    "refactor" when args.Length >= 3 => args[2].Trim().ToLowerInvariant() switch
+                    {
+                        "property-to-relationship" => "meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]",
+                        _ => "meta model refactor <subcommand> [arguments] [--workspace <path>]",
+                    },
+                    "refactor" => "meta model refactor <subcommand> [arguments] [--workspace <path>]",
                     "drop-property" => "meta model drop-property <Entity> <Property> [--workspace <path>]",
                     "drop-relationship" => "meta model drop-relationship <FromEntity> <ToEntity> [--workspace <path>]",
                     "drop-entity" => "meta model drop-entity <Entity> [--workspace <path>]",
-                    "suggest" => "meta model suggest [--show-keys] [--show-blocked] [--explain] [--workspace <path>]",
+                    "suggest" => "meta model suggest [--show-keys] [--show-blocked] [--explain] [--print-commands] [--workspace <path>]",
                     _ => "meta model <subcommand> [arguments] [--workspace <path>]",
                 }
                 : "meta model <subcommand> [arguments] [--workspace <path>]",
@@ -90,7 +96,7 @@ internal sealed partial class CliRuntime
                 {
                     "xml" => "meta import xml <modelXmlPath> <instanceXmlPath> --new-workspace <path>",
                     "sql" => "meta import sql <connectionString> <schema> --new-workspace <path>",
-                    "csv" => "meta import csv <csvFile> --entity <EntityName> (--workspace <path> | --new-workspace <path>)",
+                    "csv" => "meta import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]",
                     _ => "meta import <xml|sql|csv> ...",
                 }
                 : "meta import <xml|sql|csv> ...",

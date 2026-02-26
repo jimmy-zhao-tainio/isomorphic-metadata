@@ -389,12 +389,6 @@ internal sealed partial class CliRuntime
             return (false, entityName, false, workspacePath, newWorkspacePath, "Error: import csv requires --entity <EntityName>.");
         }
 
-        if (!workspaceSelected && string.IsNullOrWhiteSpace(newWorkspacePath))
-        {
-            return (false, entityName, false, workspacePath, newWorkspacePath,
-                "Error: import csv requires --workspace <path> or --new-workspace <path>.");
-        }
-
         return (true, entityName, !string.IsNullOrWhiteSpace(newWorkspacePath), workspacePath, newWorkspacePath, string.Empty);
     }
     

@@ -365,6 +365,7 @@ internal static class HelpTopics
                         ("rename-property", "Rename a property."),
                         ("drop-property", "Remove a property."),
                         ("add-relationship", "Add a relationship."),
+                        ("refactor", "Atomic model+instance refactors."),
                         ("drop-relationship", "Remove a relationship."),
                         ("suggest", "Read-only key/reference inference from model + instance data."),
                     });
@@ -430,6 +431,45 @@ internal static class HelpTopics
                     next: "meta model drop-relationship --help");
                 return true;
 
+            case "model refactor":
+                document = BuildTopicDocument(
+                    title: "Command: model refactor",
+                    summary: "Run atomic model+instance refactors.",
+                    usage: "meta model refactor <subcommand> [arguments] [--workspace <path>]",
+                    options: new[] { ("--workspace <path>", "Override workspace root."), },
+                    examples: new[]
+                    {
+                        "meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property",
+                    },
+                    next: "meta model refactor property-to-relationship --help",
+                    subcommands: new[]
+                    {
+                        ("property-to-relationship", "Promote scalar property to required relationship using lookup key."),
+                    });
+                return true;
+
+            case "model refactor property-to-relationship":
+                document = BuildTopicDocument(
+                    title: "Command: model refactor property-to-relationship",
+                    summary: "Atomically convert a scalar source property to a required relationship using a target lookup key.",
+                    usage: "meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]",
+                    options: new[]
+                    {
+                        ("--source <Entity.Property>", "Required source scalar property to rewrite."),
+                        ("--target <Entity>", "Required target entity."),
+                        ("--lookup <Property>", "Required lookup key property on target entity."),
+                        ("--role <Role>", "Optional relationship role (usage column becomes <Role>Id)."),
+                        ("--drop-source-property", "Drop source scalar property from model and instance rows after rewrite."),
+                        ("--workspace <path>", "Override workspace root."),
+                    },
+                    examples: new[]
+                    {
+                        "meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property",
+                        "meta model refactor property-to-relationship --source Order.ProductCode --target Product --lookup ProductCode --role Product",
+                    },
+                    next: "meta model suggest --print-commands");
+                return true;
+
             case "model drop-property":
                 document = BuildTopicDocument(
                     title: "Command: model drop-property",
@@ -464,12 +504,13 @@ internal static class HelpTopics
                 document = BuildTopicDocument(
                     title: "Command: model suggest",
                     summary: "Read-only relationship inference from model + instance data (actionable output by default).",
-                    usage: "meta model suggest [--show-keys] [--show-blocked] [--explain] [--workspace <path>]",
+                    usage: "meta model suggest [--show-keys] [--show-blocked] [--explain] [--print-commands] [--workspace <path>]",
                     options: new[]
                     {
                         ("--show-keys", "Also print candidate business keys."),
                         ("--show-blocked", "Also print blocked relationship candidates."),
                         ("--explain", "Include Evidence/Stats/Why detail blocks."),
+                        ("--print-commands", "Print copy/paste refactor commands for eligible relationship suggestions."),
                         ("--workspace <path>", "Override workspace root."),
                     },
                     examples: new[]
@@ -477,6 +518,7 @@ internal static class HelpTopics
                         "meta model suggest --workspace Samples",
                         "meta model suggest --show-keys --explain --workspace Samples",
                         "meta model suggest --show-blocked --explain --workspace Samples",
+                        "meta model suggest --print-commands --workspace Samples",
                     },
                     next: "meta model suggest --help");
                 return true;
@@ -706,17 +748,17 @@ internal static class HelpTopics
                 document = BuildTopicDocument(
                     title: "Command: import csv",
                     summary: "Import one CSV file as one entity + rows.",
-                    usage: "meta import csv <csvFile> --entity <EntityName> (--workspace <path> | --new-workspace <path>)",
+                    usage: "meta import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]",
                     options: new[]
                     {
                         ("--entity <EntityName>", "Required. Entity name to create (sanitized deterministically)."),
-                        ("--workspace <path>", "Target existing workspace."),
+                        ("--workspace <path>", "Optional. Target existing workspace (defaults to current workspace)."),
                         ("--new-workspace <path>", "Target new workspace directory (must be empty)."),
                     },
                     examples: new[]
                     {
                         "meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace",
-                        "meta import csv .\\landing.csv --entity Landing --workspace .\\Samples\\CommandExamples",
+                        "meta import csv .\\landing.csv --entity Landing",
                     },
                     next: "meta check --workspace <path>");
                 return true;

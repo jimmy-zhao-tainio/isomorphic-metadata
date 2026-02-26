@@ -24,7 +24,7 @@ Instance data may be sharded: multiple instance files can contain rows for the s
 Workspace operations: create and inspect workspaces (`init`, `status`).  
 Validation and inspection: check integrity and explore model/instance (`check`, `list`, `view`, `query`, `graph`).  
 Edits: mutate models and instance data (`model ...`, `insert`, `delete`, `bulk-insert`, `instance update`, `instance relationship set|list`, `instance diff`, `instance merge`).  
-Model analysis: read-only relationship inference (`model suggest`) with actionable-only default output.  
+Model analysis and guided refactor: read-only relationship inference (`model suggest`) and atomic promotion command (`model refactor property-to-relationship`).  
 Pipelines: import and generate (`import ...`, `generate ...`).
 
 ## One sample across XML, SQL, and C#
@@ -137,10 +137,10 @@ Run directly:
 dotnet run --project Meta.Cli/Meta.Cli.csproj -- help
 ```
 
-Or use the launcher in repo root:
+Or use the executable in repo root:
 
 ```powershell
-.\meta.cmd help
+.\meta.exe help
 ```
 
 Optional PowerShell profile install (so `meta ...` works without `./`):
@@ -220,6 +220,7 @@ meta query Cube --contains CubeName Sales --workspace .\Samples\CommandExamples
 meta graph stats --workspace .\Samples\CommandExamples
 meta check --workspace .\Samples\CommandExamples
 meta model suggest --workspace .\Samples\CommandExamples
+meta model suggest --print-commands --workspace .\Samples\CommandExamples
 meta model suggest --show-keys --explain --workspace .\Samples\CommandExamples
 meta model suggest --show-blocked --explain --workspace .\Samples\CommandExamples
 ```
@@ -230,6 +231,7 @@ Model edits:
 meta model add-entity SourceSystem --workspace .\Samples\CommandExamples
 meta model add-property SourceSystem Name --required true --default-value Unknown --workspace .\Samples\CommandExamples
 meta model add-relationship System SourceSystem --default-id 1 --workspace .\Samples\CommandExamples
+meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property --workspace .\Samples\SuggestDemo\Workspace
 meta model rename-property Cube Purpose BusinessPurpose --workspace .\Samples\CommandExamples
 ```
 
@@ -259,6 +261,64 @@ meta generate csharp --out .\out\csharp --workspace .\Samples\CommandExamples
 meta generate csharp --out .\out\csharp --tooling --workspace .\Samples\CommandExamples
 meta generate ssdt --out .\out\ssdt --workspace .\Samples\CommandExamples
 ```
+
+### Full example: CSV import -> suggest -> refactor
+
+This is the intended landing workflow: import flat CSVs, run suggest, then apply an atomic model+instance refactor.
+
+```cmd
+cd /d C:\Users\jimmy\Desktop\Metadata
+rmdir /s /q C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+
+meta import csv C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+cd /d C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+meta import csv ..\demo-csv\suppliers.csv --entity Supplier
+meta import csv ..\demo-csv\categories.csv --entity Category
+meta import csv ..\demo-csv\warehouses.csv --entity Warehouse
+meta import csv ..\demo-csv\orders.csv --entity Order
+
+meta model suggest
+meta model suggest --print-commands
+
+meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property
+
+meta model suggest
+meta check
+```
+
+Model change example (`metadata/model.xml`) for `Order`:
+
+Before (flat property):
+
+```xml
+<Entity name="Order" plural="Orders">
+  <Properties>
+    <Property name="OrderNumber" />
+    <Property name="ProductCode" />
+    <Property name="SupplierCode" />
+    <Property name="WarehouseCode" />
+    <Property name="StatusText" />
+  </Properties>
+</Entity>
+```
+
+After `property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property`:
+
+```xml
+<Entity name="Order" plural="Orders">
+  <Properties>
+    <Property name="OrderNumber" />
+    <Property name="ProductCode" />
+    <Property name="SupplierCode" />
+    <Property name="StatusText" />
+  </Properties>
+  <Relationships>
+    <Relationship entity="Warehouse" />
+  </Relationships>
+</Entity>
+```
+
+This promotion rewrites each `Order` row from scalar `WarehouseCode` to required relationship usage `WarehouseId`, then removes the source scalar property when `--drop-source-property` is used.
 
 Instance diff and merge:
 

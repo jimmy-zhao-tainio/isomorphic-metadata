@@ -433,11 +433,6 @@ internal sealed partial class CliRuntime
                 detailHints.Add("example: meta import xml .\\model.xml .\\instance.xml --new-workspace .\\ImportedWorkspace");
             }
         }
-        else if (normalized.Contains("import csv requires --workspace", StringComparison.OrdinalIgnoreCase))
-        {
-            detailHints.Add("example: meta import csv .\\landing.csv --entity Landing --workspace .\\Samples\\CommandExamples");
-        }
-    
         var usage = BuildUsageHintForCurrentArgs();
         var next = BuildNextHelpHintForCurrentArgs();
         var hints = new List<string>();

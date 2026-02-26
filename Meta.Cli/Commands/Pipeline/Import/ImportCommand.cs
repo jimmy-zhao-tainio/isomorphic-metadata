@@ -82,7 +82,7 @@ internal sealed partial class CliRuntime
                     if (commandArgs.Length < 3)
                     {
                         return PrintUsageError(
-                            "Usage: import csv <csvFile> --entity <EntityName> (--workspace <path> | --new-workspace <path>)");
+                            "Usage: import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]");
                     }
 
                     var csvOptions = ParseImportCsvOptions(commandArgs, startIndex: 3);
