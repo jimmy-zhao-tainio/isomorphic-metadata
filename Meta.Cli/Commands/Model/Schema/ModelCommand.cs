@@ -19,6 +19,7 @@ internal sealed partial class CliRuntime
             "drop-property" => await ModelDropPropertyAsync(commandArgs).ConfigureAwait(false),
             "drop-relationship" => await ModelDropRelationshipAsync(commandArgs).ConfigureAwait(false),
             "drop-entity" => await ModelDropEntityAsync(commandArgs).ConfigureAwait(false),
+            "suggest" => await ModelSuggestAsync(commandArgs).ConfigureAwait(false),
             _ => UnknownModelCommand(mode),
         };
     }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProductModel>
+  <Products>
+    <Product Id="1">
+      <ProductCode>PRD-001</ProductCode>
+      <ProductGroup>Cycles</ProductGroup>
+      <ProductName>Road Bike</ProductName>
+    </Product>
+    <Product Id="2">
+      <ProductCode>PRD-002</ProductCode>
+      <ProductGroup>Cycles</ProductGroup>
+      <ProductName>Touring Bike</ProductName>
+    </Product>
+    <Product Id="3">
+      <ProductCode>PRD-003</ProductCode>
+      <ProductGroup>Accessories</ProductGroup>
+      <ProductName>Bottle Cage</ProductName>
+    </Product>
+    <Product Id="4">
+      <ProductCode>PRD-004</ProductCode>
+      <ProductGroup>Accessories</ProductGroup>
+      <ProductName>Water Bottle</ProductName>
+    </Product>
+  </Products>
+</ProductModel>

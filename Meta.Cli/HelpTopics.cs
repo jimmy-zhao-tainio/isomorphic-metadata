@@ -345,11 +345,12 @@ internal static class HelpTopics
             case "model":
                 document = BuildTopicDocument(
                     title: string.Empty,
-                    summary: "Edit model entities, properties, and relationships.",
+                    summary: "Inspect and edit model entities, properties, and relationships.",
                     usage: "meta model <subcommand> [arguments] [options]",
                     options: new[] { ("--workspace <path>", "Workspace root override.") },
                     examples: new[]
                     {
+                        "meta model suggest",
                         "meta model add-entity SalesCube",
                         "meta model rename-entity OldName NewName",
                         "meta model add-property Cube Purpose --required true --default-value Unknown",
@@ -365,6 +366,7 @@ internal static class HelpTopics
                         ("drop-property", "Remove a property."),
                         ("add-relationship", "Add a relationship."),
                         ("drop-relationship", "Remove a relationship."),
+                        ("suggest", "Read-only key/reference inference from model + instance data."),
                     });
                 return true;
 
@@ -456,6 +458,27 @@ internal static class HelpTopics
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta model drop-entity SourceSystem" },
                     next: "meta graph inbound --help");
+                return true;
+
+            case "model suggest":
+                document = BuildTopicDocument(
+                    title: "Command: model suggest",
+                    summary: "Read-only relationship inference from model + instance data (actionable output by default).",
+                    usage: "meta model suggest [--show-keys] [--show-blocked] [--explain] [--workspace <path>]",
+                    options: new[]
+                    {
+                        ("--show-keys", "Also print candidate business keys."),
+                        ("--show-blocked", "Also print blocked relationship candidates."),
+                        ("--explain", "Include Evidence/Stats/Why detail blocks."),
+                        ("--workspace <path>", "Override workspace root."),
+                    },
+                    examples: new[]
+                    {
+                        "meta model suggest --workspace Samples",
+                        "meta model suggest --show-keys --explain --workspace Samples",
+                        "meta model suggest --show-blocked --explain --workspace Samples",
+                    },
+                    next: "meta model suggest --help");
                 return true;
 
             case "insert":

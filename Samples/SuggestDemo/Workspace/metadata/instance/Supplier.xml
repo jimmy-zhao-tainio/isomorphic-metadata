@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProductModel>
+  <Suppliers>
+    <Supplier Id="1">
+      <SupplierCode>SUP-001</SupplierCode>
+      <SupplierName>Northwind Parts</SupplierName>
+    </Supplier>
+    <Supplier Id="2">
+      <SupplierCode>SUP-002</SupplierCode>
+      <SupplierName>Contoso Gear</SupplierName>
+    </Supplier>
+    <Supplier Id="3">
+      <SupplierCode>SUP-003</SupplierCode>
+    </Supplier>
+    <Supplier Id="4">
+      <SupplierCode>SUP-004</SupplierCode>
+      <SupplierName>Adventure Works</SupplierName>
+    </Supplier>
+  </Suppliers>
+</ProductModel>

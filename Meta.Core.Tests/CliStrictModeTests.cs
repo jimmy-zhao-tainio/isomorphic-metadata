@@ -263,6 +263,187 @@ public sealed class CliStrictModeTests
         Assert.Contains("model", commandHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("Usage:", commandHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("Next: meta model <subcommand> help", commandHelp.StdOut, StringComparison.Ordinal);
+
+        var suggestHelp = await RunCliAsync("model", "suggest", "--help");
+        Assert.Equal(0, suggestHelp.ExitCode);
+        Assert.Contains(
+            "meta model suggest [--show-keys] [--show-blocked] [--explain] [--workspace <path>]",
+            suggestHelp.StdOut,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("concepts", suggestHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("confirm", suggestHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ModelSuggest_DefaultOutput_IsActionableOnly()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var result = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("meta model suggest", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Relationship suggestions", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Source: Order.ProductCode", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Source: Order.SupplierCode", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Source: Order.WarehouseCode", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Summary", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Relationship suggestions: 3", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Candidate business keys", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Blocked relationship candidates", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Evidence:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Stats:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Why:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("score=", result.StdOut, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_ShowKeysAndShowBlockedFlags_AreOptIn()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var showKeys = await RunCliAsync("model", "suggest", "--show-keys", "--workspace", workspaceRoot);
+            Assert.Equal(0, showKeys.ExitCode);
+            Assert.Contains("Candidate business keys", showKeys.StdOut, StringComparison.Ordinal);
+
+            var showBlocked = await RunCliAsync("model", "suggest", "--show-blocked", "--workspace", workspaceRoot);
+            Assert.Equal(0, showBlocked.ExitCode);
+            Assert.Contains("Blocked relationship candidates", showBlocked.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_Explain_ShowsDetailBlocks()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var explainOnly = await RunCliAsync("model", "suggest", "--explain", "--workspace", workspaceRoot);
+            Assert.Equal(0, explainOnly.ExitCode);
+            Assert.Contains("Evidence:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Stats:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Why:", explainOnly.StdOut, StringComparison.Ordinal);
+
+            var explainKeys = await RunCliAsync(
+                "model",
+                "suggest",
+                "--show-keys",
+                "--explain",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, explainKeys.ExitCode);
+            Assert.Contains("Candidate business keys", explainKeys.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Why:", explainKeys.StdOut, StringComparison.Ordinal);
+
+            var explainBlocked = await RunCliAsync(
+                "model",
+                "suggest",
+                "--show-blocked",
+                "--explain",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, explainBlocked.ExitCode);
+            Assert.Contains("Blocked relationship candidates", explainBlocked.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Evidence:", explainBlocked.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Stats:", explainBlocked.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_Output_IsDeterministic_PerMode()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            await AssertModeDeterministic("model", "suggest", "--workspace", workspaceRoot);
+            await AssertModeDeterministic("model", "suggest", "--show-keys", "--workspace", workspaceRoot);
+            await AssertModeDeterministic("model", "suggest", "--show-blocked", "--workspace", workspaceRoot);
+            await AssertModeDeterministic("model", "suggest", "--explain", "--workspace", workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    private static async Task AssertModeDeterministic(params string[] args)
+    {
+        var first = await RunCliAsync(args);
+        var second = await RunCliAsync(args);
+        Assert.Equal(0, first.ExitCode);
+        Assert.Equal(0, second.ExitCode);
+        Assert.Equal(first.StdOut, second.StdOut);
+    }
+
+    [Fact]
+    public async Task ModelSuggest_RejectsJsonFlag()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync("model", "suggest", "--json", "--workspace", workspaceRoot);
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains(
+                "Error: --json is not supported for 'meta model suggest'.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("\"status\": \"error\"", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_UnknownFlag_ReturnsArgumentError()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync("model", "suggest", "--wat", "--workspace", workspaceRoot);
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("Error: unknown option --wat.", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_SubcommandsAreNotSupported()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var concepts = await RunCliAsync("model", "suggest", "concepts", "--workspace", workspaceRoot);
+            Assert.Equal(1, concepts.ExitCode);
+            Assert.Contains("Unknown command 'model suggest concepts'.", concepts.CombinedOutput, StringComparison.Ordinal);
+
+            var confirm = await RunCliAsync(
+                "model", "suggest", "confirm", "--concept", "DisplayName", "--labels", "CubeName", "--workspace", workspaceRoot);
+            Assert.Equal(1, confirm.ExitCode);
+            Assert.Contains("Unknown command 'model suggest confirm'.", confirm.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
     }
 
     [Fact]
@@ -3216,6 +3397,39 @@ public sealed class CliStrictModeTests
 
             workspace.Instance.GetOrCreateEntityRecords(entityName).Add(row);
         }
+    }
+
+    private static async Task<string> CreateTempSuggestDemoWorkspaceAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "metadata-suggest-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        var repoRoot = FindRepositoryRoot();
+        var csvRoot = Path.Combine(repoRoot, "Samples", "SuggestDemo", "demo-csv");
+        var imports = new[]
+        {
+            (File: "products.csv", Entity: "Product", NewWorkspace: true),
+            (File: "suppliers.csv", Entity: "Supplier", NewWorkspace: false),
+            (File: "categories.csv", Entity: "Category", NewWorkspace: false),
+            (File: "warehouses.csv", Entity: "Warehouse", NewWorkspace: false),
+            (File: "orders.csv", Entity: "Order", NewWorkspace: false),
+        };
+
+        foreach (var item in imports)
+        {
+            var csvPath = Path.Combine(csvRoot, item.File);
+            var args = item.NewWorkspace
+                ? new[] { "import", "csv", csvPath, "--entity", item.Entity, "--new-workspace", root, }
+                : new[] { "import", "csv", csvPath, "--entity", item.Entity, "--workspace", root, };
+            var result = await RunCliAsync(args);
+            if (result.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to import suggest demo CSV '{item.File}'.{Environment.NewLine}{result.CombinedOutput}");
+            }
+        }
+
+        return root;
     }
 
     private static string CreateTempWorkspaceFromSamples()

@@ -24,6 +24,7 @@ Instance data may be sharded: multiple instance files can contain rows for the s
 Workspace operations: create and inspect workspaces (`init`, `status`).  
 Validation and inspection: check integrity and explore model/instance (`check`, `list`, `view`, `query`, `graph`).  
 Edits: mutate models and instance data (`model ...`, `insert`, `delete`, `bulk-insert`, `instance update`, `instance relationship set|list`, `instance diff`, `instance merge`).  
+Model analysis: read-only relationship inference (`model suggest`) with actionable-only default output.  
 Pipelines: import and generate (`import ...`, `generate ...`).
 
 ## One sample across XML, SQL, and C#
@@ -218,6 +219,9 @@ meta view instance Cube 1 --workspace .\Samples\CommandExamples
 meta query Cube --contains CubeName Sales --workspace .\Samples\CommandExamples
 meta graph stats --workspace .\Samples\CommandExamples
 meta check --workspace .\Samples\CommandExamples
+meta model suggest --workspace .\Samples\CommandExamples
+meta model suggest --show-keys --explain --workspace .\Samples\CommandExamples
+meta model suggest --show-blocked --explain --workspace .\Samples\CommandExamples
 ```
 
 Model edits:

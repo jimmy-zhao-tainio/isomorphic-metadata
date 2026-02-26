@@ -69,6 +69,7 @@ internal sealed partial class CliRuntime
                     "drop-property" => "meta model drop-property <Entity> <Property> [--workspace <path>]",
                     "drop-relationship" => "meta model drop-relationship <FromEntity> <ToEntity> [--workspace <path>]",
                     "drop-entity" => "meta model drop-entity <Entity> [--workspace <path>]",
+                    "suggest" => "meta model suggest [--show-keys] [--show-blocked] [--explain] [--workspace <path>]",
                     _ => "meta model <subcommand> [arguments] [--workspace <path>]",
                 }
                 : "meta model <subcommand> [arguments] [--workspace <path>]",

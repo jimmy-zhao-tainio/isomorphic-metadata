@@ -48,8 +48,6 @@ public sealed partial class MetaWorkspace
                 new() { Id = "3", Name = "id-first-then-name-ordinal" },
             },
             EntityStorage = new List<EntityStorage>(),
-            PropertyConcept = new List<PropertyConcept>(),
-            PropertyConceptLabel = new List<PropertyConceptLabel>(),
         };
     }
 
@@ -76,8 +74,6 @@ public sealed partial class MetaWorkspace
             Newlines = ParseNewlinesRows(root),
             CanonicalOrder = ParseCanonicalOrderRows(root),
             EntityStorage = ParseEntityStorageRows(root),
-            PropertyConcept = ParsePropertyConceptRows(root),
-            PropertyConceptLabel = ParsePropertyConceptLabelRows(root),
         };
         return Normalize(raw, workspaceXmlPath);
     }
@@ -101,21 +97,6 @@ public sealed partial class MetaWorkspace
                 .OrderBy(item => item.EntityName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(item => ParseId(item.Id))
                 .Select(ToEntityStorageElement)));
-
-        root.Add(new XElement(
-            "PropertyConcepts",
-            normalized.PropertyConcept
-                .Where(item => string.Equals(item.WorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => ParseId(item.Id))
-                .Select(ToPropertyConceptElement)));
-
-        root.Add(new XElement(
-            "PropertyConceptLabels",
-            normalized.PropertyConceptLabel
-                .OrderBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => ParseId(item.Id))
-                .Select(ToPropertyConceptLabelElement)));
 
         return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
     }
@@ -177,47 +158,6 @@ public sealed partial class MetaWorkspace
                 Pattern = item.Pattern ?? string.Empty,
             })
             .ToList();
-
-        var concepts = (workspaceConfig.PropertyConcept ?? new List<PropertyConcept>())
-            .Where(item => string.Equals(item.WorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase))
-            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
-            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(item => ParseId(item.Id))
-            .ToList();
-        normalized.PropertyConcept = new List<PropertyConcept>();
-        normalized.PropertyConceptLabel = new List<PropertyConceptLabel>();
-        var nextConceptId = 1;
-        var nextLabelId = 1;
-        foreach (var concept in concepts)
-        {
-            var conceptRow = new PropertyConcept
-            {
-                Id = nextConceptId.ToString(),
-                WorkspaceId = targetWorkspace.Id,
-                Workspace = targetWorkspace,
-                Name = concept.Name.Trim(),
-                Description = concept.Description ?? string.Empty,
-            };
-            nextConceptId++;
-            normalized.PropertyConcept.Add(conceptRow);
-
-            foreach (var label in (workspaceConfig.PropertyConceptLabel ?? new List<PropertyConceptLabel>())
-                         .Where(item => string.Equals(item.PropertyConceptId, concept.Id, StringComparison.OrdinalIgnoreCase))
-                         .Where(item => !string.IsNullOrWhiteSpace(item.Label))
-                         .Select(item => item.Label.Trim())
-                         .Distinct(StringComparer.OrdinalIgnoreCase)
-                         .OrderBy(item => item, StringComparer.OrdinalIgnoreCase))
-            {
-                normalized.PropertyConceptLabel.Add(new PropertyConceptLabel
-                {
-                    Id = nextLabelId.ToString(),
-                    PropertyConceptId = conceptRow.Id,
-                    PropertyConcept = conceptRow,
-                    Label = label,
-                });
-                nextLabelId++;
-            }
-        }
 
         return normalized;
     }
@@ -281,8 +221,6 @@ public sealed partial class MetaWorkspace
         target.Newlines = source.Newlines;
         target.CanonicalOrder = source.CanonicalOrder;
         target.EntityStorage = source.EntityStorage;
-        target.PropertyConcept = source.PropertyConcept;
-        target.PropertyConceptLabel = source.PropertyConceptLabel;
     }
 
     private static Workspace RequireSingleWorkspace(MetaWorkspace workspaceConfig, string sourcePath)
@@ -332,8 +270,6 @@ public sealed partial class MetaWorkspace
             Newlines value => value.Id,
             CanonicalOrder value => value.Id,
             EntityStorage value => value.Id,
-            PropertyConcept value => value.Id,
-            PropertyConceptLabel value => value.Id,
             _ => string.Empty,
         };
     }
@@ -433,26 +369,6 @@ public sealed partial class MetaWorkspace
         return element;
     }
 
-    private static XElement ToPropertyConceptElement(PropertyConcept row)
-    {
-        var element = new XElement(
-            "PropertyConcept",
-            new XAttribute("Id", row.Id),
-            new XAttribute("WorkspaceId", row.WorkspaceId),
-            new XElement("Name", row.Name));
-        AddOptionalElement(element, "Description", row.Description);
-        return element;
-    }
-
-    private static XElement ToPropertyConceptLabelElement(PropertyConceptLabel row)
-    {
-        return new XElement(
-            "PropertyConceptLabel",
-            new XAttribute("Id", row.Id),
-            new XAttribute("PropertyConceptId", row.PropertyConceptId),
-            new XElement("Label", row.Label));
-    }
-
     private static void AddOptionalElement(XContainer container, string name, string? value)
     {
         if (!string.IsNullOrWhiteSpace(value))
@@ -538,31 +454,6 @@ public sealed partial class MetaWorkspace
                 DirectoryPath = (string?)item.Element("DirectoryPath") ?? string.Empty,
                 FilePath = (string?)item.Element("FilePath") ?? string.Empty,
                 Pattern = (string?)item.Element("Pattern") ?? string.Empty,
-            })
-            .ToList();
-    }
-
-    private static List<PropertyConcept> ParsePropertyConceptRows(XElement root)
-    {
-        return GetRows(root, "PropertyConcepts", "PropertyConcept")
-            .Select(item => new PropertyConcept
-            {
-                Id = (string?)item.Attribute("Id") ?? string.Empty,
-                WorkspaceId = (string?)item.Attribute("WorkspaceId") ?? string.Empty,
-                Name = (string?)item.Element("Name") ?? string.Empty,
-                Description = (string?)item.Element("Description") ?? string.Empty,
-            })
-            .ToList();
-    }
-
-    private static List<PropertyConceptLabel> ParsePropertyConceptLabelRows(XElement root)
-    {
-        return GetRows(root, "PropertyConceptLabels", "PropertyConceptLabel")
-            .Select(item => new PropertyConceptLabel
-            {
-                Id = (string?)item.Attribute("Id") ?? string.Empty,
-                PropertyConceptId = (string?)item.Attribute("PropertyConceptId") ?? string.Empty,
-                Label = (string?)item.Element("Label") ?? string.Empty,
             })
             .ToList();
     }

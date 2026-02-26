@@ -6,8 +6,6 @@ public sealed partial class MetaWorkspace
     public List<Encoding> Encoding { get; set; } = new();
     public List<EntityStorage> EntityStorage { get; set; } = new();
     public List<Newlines> Newlines { get; set; } = new();
-    public List<PropertyConcept> PropertyConcept { get; set; } = new();
-    public List<PropertyConceptLabel> PropertyConceptLabel { get; set; } = new();
     public List<Workspace> Workspace { get; set; } = new();
     public List<WorkspaceLayout> WorkspaceLayout { get; set; } = new();
 
@@ -71,21 +69,4 @@ public sealed class EntityStorage
     public string StorageKind { get; set; } = string.Empty;
     public string WorkspaceId { get; set; } = string.Empty;
     public Workspace Workspace { get; set; } = new();
-}
-
-public sealed class PropertyConcept
-{
-    public string Id { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string WorkspaceId { get; set; } = string.Empty;
-    public Workspace Workspace { get; set; } = new();
-}
-
-public sealed class PropertyConceptLabel
-{
-    public string Id { get; set; } = string.Empty;
-    public string Label { get; set; } = string.Empty;
-    public string PropertyConceptId { get; set; } = string.Empty;
-    public PropertyConcept PropertyConcept { get; set; } = new();
 }

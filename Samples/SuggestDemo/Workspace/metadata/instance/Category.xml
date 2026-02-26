@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProductModel>
+  <Categorys>
+    <Category Id="1">
+      <CategoryCode>CAT-001</CategoryCode>
+      <CategoryName>Cycles</CategoryName>
+    </Category>
+    <Category Id="2">
+      <CategoryCode>CAT-002</CategoryCode>
+      <CategoryName>Accessories</CategoryName>
+    </Category>
+    <Category Id="3">
+      <CategoryCode>CAT-003</CategoryCode>
+      <CategoryName>Maintenance</CategoryName>
+    </Category>
+  </Categorys>
+</ProductModel>

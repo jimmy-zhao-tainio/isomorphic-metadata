@@ -1006,7 +1006,7 @@ internal sealed partial class CliRuntime
         Register("check", "Model", "Check model and instance integrity.", CheckWorkspaceAsync);
         Register("graph", "Model", "Graph stats and inbound relationships.", GraphAsync);
         Register("list", "Model", "List entities, properties, relationships, and tasks.", ListAsync);
-        Register("model", "Model", "Mutate model entities, properties, and relationships.", ModelAsync);
+        Register("model", "Model", "Inspect and mutate model entities, properties, and relationships.", ModelAsync);
         Register("view", "Model", "View entity or instance details.", ViewAsync);
 
         Register("instance", "Instance", "Diff and merge instance artifacts.", InstanceAsync);

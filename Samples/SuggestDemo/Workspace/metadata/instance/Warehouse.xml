@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProductModel>
+  <Warehouses>
+    <Warehouse Id="1">
+      <WarehouseCode>WH-001</WarehouseCode>
+      <WarehouseName>Seattle Main</WarehouseName>
+    </Warehouse>
+    <Warehouse Id="2">
+      <WarehouseCode>WH-002</WarehouseCode>
+      <WarehouseName>Denver Hub</WarehouseName>
+    </Warehouse>
+    <Warehouse Id="3">
+      <WarehouseCode>WH-003</WarehouseCode>
+      <WarehouseName>Dallas Overflow</WarehouseName>
+    </Warehouse>
+  </Warehouses>
+</ProductModel>
