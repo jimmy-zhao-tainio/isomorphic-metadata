@@ -351,7 +351,7 @@ Example:
 </Measures>
 ```
 
-## Meta command guide (exhaustive)
+## Meta command guide
 
 Workspace discovery defaults to the current directory (searching upward). Use `--workspace <path>` to override.
 
