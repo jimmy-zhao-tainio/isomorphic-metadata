@@ -441,7 +441,9 @@ Global behavior:
 | `meta generate csharp --out <dir> --tooling` | Generate optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
 | `meta generate ssdt --out <dir>` | Generate SSDT project artifacts. | `meta generate ssdt --out .\\out\\ssdt` |
 
-### Full example: CSV import -> suggest -> refactor
+### Suggest workflow
+
+#### Full example: CSV import -> suggest -> refactor
 
 This is the intended landing workflow: import flat CSVs, run suggest, then apply an atomic model+instance refactor.
 
