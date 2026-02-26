@@ -7,6 +7,58 @@ This repo ships two CLI tools:
 `meta` (Meta CLI): workspace/model/instance operations, diff/merge, import, generate.  
 `meta-schema` (MetaSchema CLI): schema extraction and sanctioned catalogs (for example `TypeConversionCatalog`).
 
+## Metadata foundations (project terminology)
+
+In this project, metadata is not "extra comments about data". Metadata is the product model itself:
+
+- `metadata/model.xml`: the schema contract (entities, scalar properties, required relationships).
+- `metadata/instance/*.xml`: the instance graph for that model (rows + relationship usages).
+- `metadata/workspace.xml`: workspace-level configuration for layout/encoding/order and storage.
+
+Core terms:
+
+- `Model`: named set of entity definitions.
+- `Entity`: a record type (similar to a table).
+- `Property`: scalar attribute on an entity instance.
+- `Relationship`: required reference from one entity to another.
+- `Instance`: one row/record of an entity, identified by `Id`.
+- `Workspace`: on-disk unit that contains model + instance + workspace config.
+
+### Why we need metadata
+
+For BI/data-platform teams, semantics change constantly (new systems, new mappings, new rules). If semantics are hardcoded in application code only, change velocity and reviewability collapse.
+
+Metadata gives you:
+
+- explicit schema/instance contracts you can inspect and validate.
+- deterministic refactors (model + instance rewritten together).
+- generation targets (SQL/C#/SSDT) from one authoritative model.
+- repeatable onboarding: juniors can inspect the model and instance graph directly.
+
+### Why isomorphic metadata
+
+Isomorphic means one logical model can be represented and consumed in multiple forms without changing meaning:
+
+- XML workspace is canonical and git-friendly.
+- SQL can be imported into a workspace.
+- SQL/C# artifacts can be generated from the workspace.
+- generated C# can be consumed as POCO model objects; tooling helpers can load/save workspace state.
+
+This allows multiple producers and consumers to work on the same semantics:
+
+- analysts/modelers editing model+instance in workspace form.
+- platform engineers generating SQL/SSDT.
+- application/tooling engineers consuming generated C#.
+
+### Why git matters for metadata
+
+The workspace is designed for version control:
+
+- deterministic writer output (stable ordering, utf-8 no bom, LF) keeps diffs clean.
+- model and instance changes are code-reviewed like source code.
+- branch/merge workflows apply to metadata evolution.
+- refactors are auditable through before/after XML deltas.
+
 ## Workspace contract
 
 A workspace is a directory containing:
@@ -17,9 +69,9 @@ A workspace is a directory containing:
 
 Instance data may be sharded: multiple instance files can contain rows for the same entity; load merges those shards and save preserves existing shard file layout (new rows for an entity are written to that entity's primary shard).
 
-## What `meta` supports
+## Meta CLI at a glance
 
-`meta` operates on workspaces and provides four broad capabilities.
+`meta` operates on workspaces and provides these capability groups:
 
 Workspace operations: create and inspect workspaces (`init`, `status`).  
 Validation and inspection: check integrity and explore model/instance (`check`, `list`, `view`, `query`, `graph`).  
@@ -301,60 +353,96 @@ Example:
 </Measures>
 ```
 
-## Core workflows with examples
+## Meta command guide (exhaustive)
 
-Inspect:
+Workspace discovery defaults to the current directory (searching upward). Use `--workspace <path>` to override.
 
-```powershell
-meta status --workspace .\Samples\CommandExamples
-meta list entities --workspace .\Samples\CommandExamples
-meta view entity Cube --workspace .\Samples\CommandExamples
-meta view instance Cube 1 --workspace .\Samples\CommandExamples
-meta query Cube --contains CubeName Sales --workspace .\Samples\CommandExamples
-meta graph stats --workspace .\Samples\CommandExamples
-meta check --workspace .\Samples\CommandExamples
-meta model suggest --workspace .\Samples\CommandExamples
-meta model suggest --print-commands --workspace .\Samples\CommandExamples
-meta model suggest --show-keys --explain --workspace .\Samples\CommandExamples
-meta model suggest --show-blocked --explain --workspace .\Samples\CommandExamples
-```
+Global behavior:
 
-Model edits:
+- success responses use `OK: ...`.
+- validation/usage/runtime failures use `Error: ...` and non-zero exit.
+- `--strict` upgrades warnings to errors for mutating commands.
 
-```powershell
-meta model add-entity SourceSystem --workspace .\Samples\CommandExamples
-meta model add-property SourceSystem Name --required true --default-value Unknown --workspace .\Samples\CommandExamples
-meta model add-relationship System SourceSystem --default-id 1 --workspace .\Samples\CommandExamples
-meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property --workspace .\Samples\SuggestDemo\Workspace
-meta model rename-property Cube Purpose BusinessPurpose --workspace .\Samples\CommandExamples
-```
+### Command discovery
 
-Instance edits:
+| Command | What it is for | Example |
+|---|---|---|
+| `meta help` | Show top-level command groups and examples. | `meta help` |
+| `meta <command> help` | Show usage/options/examples for one command. | `meta model help` |
+| `meta <command> <subcommand> --help` | Show detailed subcommand help. | `meta model suggest --help` |
 
-```powershell
-meta insert Cube 10 --set "CubeName=Ops Cube" --set "RefreshMode=Manual" --workspace .\Samples\CommandExamples
-meta insert Cube --auto-id --set "CubeName=Auto Cube" --workspace .\Samples\CommandExamples
+### Workspace commands
 
-meta instance update Cube 10 --set "Purpose=Operations reporting" --workspace .\Samples\CommandExamples
+| Command | What it is for | Example |
+|---|---|---|
+| `meta init [<path>]` | Create a new workspace at target path (or current directory). | `meta init Samples\\DemoWorkspace` |
+| `meta status` | Print workspace summary (entities, rows, basic counts). | `meta status` |
 
-meta instance relationship set Measure 1 --to Cube 10 --workspace .\Samples\CommandExamples
-meta instance relationship list Measure 1 --workspace .\Samples\CommandExamples
+### Inspect and validate
 
-meta delete Cube 10 --workspace .\Samples\CommandExamples
-```
+| Command | What it is for | Example |
+|---|---|---|
+| `meta check` | Run model+instance integrity checks. | `meta check` |
+| `meta list entities` | List entities and high-level counts. | `meta list entities` |
+| `meta list properties <Entity>` | List scalar properties for one entity. | `meta list properties Cube` |
+| `meta list relationships <Entity>` | List declared outgoing relationships for one entity. | `meta list relationships Measure` |
+| `meta list tasks` | List task files from `metadata/tasks`. | `meta list tasks` |
+| `meta view entity <Entity>` | Show one entity schema card. | `meta view entity Cube` |
+| `meta view instance <Entity> <Id>` | Show one instance field/value view. | `meta view instance Cube 1` |
+| `meta query <Entity> ...` | Search instances with `--equals` / `--contains` filters. | `meta query Cube --contains CubeName Sales --top 20` |
+| `meta graph stats` | Print graph metrics, top degrees, cycle samples. | `meta graph stats --top 10 --cycles 5` |
+| `meta graph inbound <Entity>` | Show who references the target entity. | `meta graph inbound Cube --top 20` |
 
-Import and generate:
+### Model commands
 
-```powershell
-meta import xml .\Samples\SampleModel.xml .\Samples\SampleInstance.xml --new-workspace .\Samples\ImportedXml
-meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\Samples\ImportedSql
-meta import csv .\Samples\landing.csv --entity Landing --new-workspace .\Samples\ImportedCsv
+| Command | What it is for | Example |
+|---|---|---|
+| `meta model suggest` | Read-only key/reference inference (eligible relationship suggestions by default). | `meta model suggest` |
+| `meta model suggest --print-commands` | Print copy/paste refactor commands for eligible suggestions. | `meta model suggest --print-commands` |
+| `meta model suggest --show-keys --explain` | Include candidate key diagnostics and explain blocks. | `meta model suggest --show-keys --explain` |
+| `meta model suggest --show-blocked --explain` | Include blocked relationship candidates and blockers. | `meta model suggest --show-blocked --explain` |
+| `meta model refactor property-to-relationship ...` | Atomic model+instance rewrite from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property` |
+| `meta model add-entity <Name>` | Add a new entity definition. | `meta model add-entity SourceSystem` |
+| `meta model rename-entity <Old> <New>` | Rename an entity definition. | `meta model rename-entity SourceSystem Source` |
+| `meta model drop-entity <Entity>` | Drop entity definition (blocked if instances or inbound refs exist). | `meta model drop-entity SourceSystem` |
+| `meta model add-property <Entity> <Property> ...` | Add scalar property; uses `--default-value` to backfill required additions on existing rows. | `meta model add-property Cube Purpose --required true --default-value Unknown` |
+| `meta model rename-property <Entity> <Old> <New>` | Rename one scalar property. | `meta model rename-property Cube Purpose BusinessPurpose` |
+| `meta model drop-property <Entity> <Property>` | Remove one scalar property. | `meta model drop-property Cube Description` |
+| `meta model add-relationship <From> <To> ...` | Add required relationship; uses `--default-id` for backfill when source has rows. | `meta model add-relationship Measure Cube --default-id 1` |
+| `meta model drop-relationship <From> <To>` | Remove declared relationship from model. | `meta model drop-relationship Measure Cube` |
 
-meta generate sql --out .\out\sql --workspace .\Samples\CommandExamples
-meta generate csharp --out .\out\csharp --workspace .\Samples\CommandExamples
-meta generate csharp --out .\out\csharp --tooling --workspace .\Samples\CommandExamples
-meta generate ssdt --out .\out\ssdt --workspace .\Samples\CommandExamples
-```
+### Instance commands
+
+| Command | What it is for | Example |
+|---|---|---|
+| `meta insert <Entity> <Id> --set ...` | Insert one row with explicit Id. | `meta insert Cube 10 --set "CubeName=Ops Cube"` |
+| `meta insert <Entity> --auto-id --set ...` | Insert one row with generated numeric Id. | `meta insert Cube --auto-id --set "CubeName=Auto Cube"` |
+| `meta bulk-insert <Entity> ...` | Insert many rows from tsv/csv file or stdin. | `meta bulk-insert Cube --from tsv --file .\\cube.tsv --key Id` |
+| `meta instance update <Entity> <Id> --set ...` | Update fields on one row by Id. | `meta instance update Cube 10 --set "Purpose=Operations reporting"` |
+| `meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId>` | Set exact-one relationship usage to target row. | `meta instance relationship set Measure 1 --to Cube 10` |
+| `meta instance relationship list <FromEntity> <FromId>` | List relationship usages for one row. | `meta instance relationship list Measure 1` |
+| `meta delete <Entity> <Id>` | Delete one row by Id. | `meta delete Cube 10` |
+
+### Instance diff and merge
+
+| Command | What it is for | Example |
+|---|---|---|
+| `meta instance diff <left> <right>` | Diff two workspaces with byte-identical `model.xml`. | `meta instance diff .\\LeftWorkspace .\\RightWorkspace` |
+| `meta instance merge <target> <diffWorkspace>` | Apply equal-model diff artifact to target workspace. | `meta instance merge .\\TargetWorkspace .\\RightWorkspace.instance-diff` |
+| `meta instance diff-aligned <left> <right> <alignment>` | Diff two workspaces using explicit alignment mappings. | `meta instance diff-aligned .\\LeftWorkspace .\\RightWorkspace .\\AlignmentWorkspace` |
+| `meta instance merge-aligned <target> <diffWorkspace>` | Apply aligned diff artifact to target workspace. | `meta instance merge-aligned .\\TargetWorkspace .\\RightWorkspace.instance-diff-aligned` |
+
+### Import and generate
+
+| Command | What it is for | Example |
+|---|---|---|
+| `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Create new workspace from XML model+instance files. | `meta import xml .\\Samples\\SampleModel.xml .\\Samples\\SampleInstance.xml --new-workspace .\\Samples\\ImportedXml` |
+| `meta import sql <connectionString> <schema> --new-workspace <path>` | Create new workspace by importing SQL metadata. | `meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\\Samples\\ImportedSql` |
+| `meta import csv <csvFile> --entity <EntityName> [--new-workspace|--workspace]` | Landing import: one CSV to one entity + rows in new or existing workspace. | `meta import csv .\\Samples\\landing.csv --entity Landing --new-workspace .\\Samples\\ImportedCsv` |
+| `meta generate sql --out <dir>` | Generate deterministic SQL schema + data scripts. | `meta generate sql --out .\\out\\sql` |
+| `meta generate csharp --out <dir>` | Generate dependency-free consumer C# API. | `meta generate csharp --out .\\out\\csharp` |
+| `meta generate csharp --out <dir> --tooling` | Generate optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
+| `meta generate ssdt --out <dir>` | Generate SSDT project artifacts. | `meta generate ssdt --out .\\out\\ssdt` |
 
 ### Full example: CSV import -> suggest -> refactor
 
