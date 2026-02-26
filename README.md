@@ -441,8 +441,6 @@ Global behavior:
 | `meta generate csharp --out <dir> --tooling` | Generate optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
 | `meta generate ssdt --out <dir>` | Generate SSDT project artifacts. | `meta generate ssdt --out .\\out\\ssdt` |
 
-`meta import sql` writes a complete workspace on disk (`metadata/workspace.xml`, `metadata/model.xml`, and `metadata/instance/...`). It builds the model from SQL table/column/foreign-key metadata, then imports table rows into instance records. The instance therefore represents the imported relational row graph for the selected schema; it is not schema-only unless the source tables themselves are metadata/schema-object tables.
-
 ### Suggest workflow
 
 #### Full example: CSV import -> suggest -> refactor
