@@ -360,6 +360,16 @@ meta generate ssdt --out .\out\ssdt --workspace .\Samples\CommandExamples
 
 This is the intended landing workflow: import flat CSVs, run suggest, then apply an atomic model+instance refactor.
 
+`meta model suggest` is structural and deterministic. It scans model+instance data and only prints eligible relationship promotions by default.
+
+Eligible means the promotion satisfies 100% referential integrity (RI) before any mutation:
+- target lookup property is complete and unambiguous (no null/blank values, no duplicates)
+- source property is complete (no null/blank values)
+- every source value resolves to an existing target lookup value (full coverage, no unmatched values)
+- source and target scalar types are compatible under strict rules (no implicit casting)
+
+If any rule fails, the item is not printed as a default suggestion.
+
 ```cmd
 cd /d C:\Users\jimmy\Desktop\Metadata
 rmdir /s /q C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
