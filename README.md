@@ -1,6 +1,6 @@
 # isomorphic-metadata
 
-`isomorphic-metadata` is a deterministic metadata backend. The canonical representation is an XML workspace on disk (git-friendly), but you can round-trip: import from SQL, generate SQL/C#/SSDT, and load/save model instances via generated C# APIs for tooling.
+`isomorphic-metadata` is a deterministic metadata backend. The canonical representation is an XML workspace on disk (git-friendly), but you can round-trip: materialize a workspace from SQL, generate SQL/C#/SSDT, and load/save model instances via generated C# APIs for tooling.
 
 This repo ships two CLI tools:
 
@@ -434,12 +434,14 @@ Global behavior:
 | Command | What it is for | Example |
 |---|---|---|
 | `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Create new workspace from XML model+instance files. | `meta import xml .\\Samples\\SampleModel.xml .\\Samples\\SampleInstance.xml --new-workspace .\\Samples\\ImportedXml` |
-| `meta import sql <connectionString> <schema> --new-workspace <path>` | Create new workspace by importing SQL metadata. | `meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\\Samples\\ImportedSql` |
+| `meta import sql <connectionString> <schema> --new-workspace <path>` | Create a new workspace by importing a SQL schema into workspace form (model + instance). | `meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\\Samples\\ImportedSql` |
 | `meta import csv <csvFile> --entity <EntityName> (--new-workspace <path> or --workspace <path>)` | Landing import: one CSV to one entity + rows in new or existing workspace. | `meta import csv .\\Samples\\landing.csv --entity Landing --new-workspace .\\Samples\\ImportedCsv` |
 | `meta generate sql --out <dir>` | Generate deterministic SQL schema + data scripts. | `meta generate sql --out .\\out\\sql` |
 | `meta generate csharp --out <dir>` | Generate dependency-free consumer C# API. | `meta generate csharp --out .\\out\\csharp` |
 | `meta generate csharp --out <dir> --tooling` | Generate optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
 | `meta generate ssdt --out <dir>` | Generate SSDT project artifacts. | `meta generate ssdt --out .\\out\\ssdt` |
+
+`meta import sql` writes a complete workspace on disk (`metadata/workspace.xml`, `metadata/model.xml`, and `metadata/instance/...`). It builds the model from SQL table/column/foreign-key metadata, then imports table rows into instance records. The instance therefore represents the imported relational row graph for the selected schema; it is not schema-only unless the source tables themselves are metadata/schema-object tables.
 
 ### Suggest workflow
 
