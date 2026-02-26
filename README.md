@@ -46,9 +46,36 @@ Pipelines: import and generate (`import ...`, `generate ...`).
     <Entity name="Measure" plural="Measures">
       <Properties>
         <Property name="MeasureName" />
+        <Property name="MDX" isRequired="false" />
       </Properties>
       <Relationships>
         <Relationship entity="Cube" />
+      </Relationships>
+    </Entity>
+
+    <Entity name="SystemType" plural="SystemTypes">
+      <Properties>
+        <Property name="TypeName" />
+      </Properties>
+    </Entity>
+
+    <Entity name="System" plural="Systems">
+      <Properties>
+        <Property name="SystemName" />
+        <Property name="Version" isRequired="false" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="SystemType" />
+      </Relationships>
+    </Entity>
+
+    <Entity name="SystemCube" plural="SystemCubes">
+      <Properties>
+        <Property name="ProcessingMode" isRequired="false" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="Cube" />
+        <Relationship entity="System" />
       </Relationships>
     </Entity>
   </Entities>
@@ -71,8 +98,28 @@ Pipelines: import and generate (`import ...`, `generate ...`).
   <Measures>
     <Measure Id="1" CubeId="1">
       <MeasureName>Sales Amount</MeasureName>
+      <MDX>[Measures].[Sales Amount]</MDX>
     </Measure>
   </Measures>
+
+  <SystemTypes>
+    <SystemType Id="1">
+      <TypeName>Internal</TypeName>
+    </SystemType>
+  </SystemTypes>
+
+  <Systems>
+    <System Id="1" SystemTypeId="1">
+      <SystemName>Enterprise Analytics Platform</SystemName>
+      <Version>2.1</Version>
+    </System>
+  </Systems>
+
+  <SystemCubes>
+    <SystemCube Id="1" CubeId="1" SystemId="1">
+      <ProcessingMode>InMemory</ProcessingMode>
+    </SystemCube>
+  </SystemCubes>
 </EnterpriseBIPlatform>
 ```
 
@@ -91,12 +138,44 @@ CREATE TABLE [dbo].[Cube] (
 CREATE TABLE [dbo].[Measure] (
   [Id] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
   [MeasureName] NVARCHAR(256) NOT NULL,
+  [MDX] NVARCHAR(256) NULL,
   [CubeId] INT NOT NULL
+);
+
+CREATE TABLE [dbo].[SystemType] (
+  [Id] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  [TypeName] NVARCHAR(256) NOT NULL
+);
+
+CREATE TABLE [dbo].[System] (
+  [Id] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  [SystemName] NVARCHAR(256) NOT NULL,
+  [Version] NVARCHAR(256) NULL,
+  [SystemTypeId] INT NOT NULL
+);
+
+CREATE TABLE [dbo].[SystemCube] (
+  [Id] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  [ProcessingMode] NVARCHAR(256) NULL,
+  [CubeId] INT NOT NULL,
+  [SystemId] INT NOT NULL
 );
 
 ALTER TABLE [dbo].[Measure]
 ADD CONSTRAINT [FK_Measure_Cube_CubeId]
 FOREIGN KEY ([CubeId]) REFERENCES [dbo].[Cube]([Id]);
+
+ALTER TABLE [dbo].[System]
+ADD CONSTRAINT [FK_System_SystemType_SystemTypeId]
+FOREIGN KEY ([SystemTypeId]) REFERENCES [dbo].[SystemType]([Id]);
+
+ALTER TABLE [dbo].[SystemCube]
+ADD CONSTRAINT [FK_SystemCube_Cube_CubeId]
+FOREIGN KEY ([CubeId]) REFERENCES [dbo].[Cube]([Id]);
+
+ALTER TABLE [dbo].[SystemCube]
+ADD CONSTRAINT [FK_SystemCube_System_SystemId]
+FOREIGN KEY ([SystemId]) REFERENCES [dbo].[System]([Id]);
 ```
 
 ### Generated C# (`meta generate csharp`)
@@ -110,11 +189,26 @@ Optional tooling helpers are emitted only when `--tooling` is passed:
 
 ```csharp
 using GeneratedMetadata;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 
-// Dependency-free consumer model classes:
-var model = new EnterpriseBIPlatform();
-model.Cube.Add(new Cube { Id = "1", CubeName = "Sales" });
+// Dependency-free consumer model instance loaded from workspace XML:
+var model = EnterpriseBIPlatformModel.LoadFromXmlWorkspace(@".\Samples\CommandExamples");
+
+foreach (var system in model.Systems)
+{
+    Console.WriteLine($"{system.SystemName} [{system.SystemType.TypeName}]");
+    foreach (var link in model.SystemCubes.Where(link => link.SystemId == system.Id))
+    {
+        Console.WriteLine($"  Cube: {link.Cube.CubeName} (mode: {link.ProcessingMode ?? "n/a"})");
+    }
+}
+
+foreach (var measure in model.Measures)
+{
+    Console.WriteLine($"{measure.Cube.CubeName}.{measure.MeasureName}");
+}
 
 // Optional tooling helpers (generated with --tooling):
 public static async Task LoadWorkspaceAsync()
@@ -280,18 +374,46 @@ meta import csv ..\demo-csv\orders.csv --entity Order
 meta model suggest
 meta model suggest --print-commands
 
+meta model refactor property-to-relationship --source Order.ProductCode --target Product --lookup ProductCode --drop-source-property
+meta model refactor property-to-relationship --source Order.SupplierCode --target Supplier --lookup SupplierCode --drop-source-property
 meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property
 
 meta model suggest
 meta check
 ```
 
+`meta model suggest` output before refactor:
+
+```text
+OK: model suggest
+Workspace: C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+Model: ProductModel
+Suggestions: 3
+
+Relationship suggestions
+  1) Order.ProductCode -> Product (lookup: Product.ProductCode)
+  2) Order.SupplierCode -> Supplier (lookup: Supplier.SupplierCode)
+  3) Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)
+```
+
+`meta model suggest` output after all three refactors:
+
+```text
+OK: model suggest
+Workspace: C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+Model: ProductModel
+Suggestions: 0
+
+Relationship suggestions
+  (none)
+```
+
 Model change example (`metadata/model.xml`) for `Order`:
 
-Before (flat property):
+Before (after CSV import, before refactor):
 
 ```xml
-<Entity name="Order" plural="Orders">
+<Entity name="Order">
   <Properties>
     <Property name="OrderNumber" />
     <Property name="ProductCode" />
@@ -302,23 +424,23 @@ Before (flat property):
 </Entity>
 ```
 
-After `property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property`:
+After running all three `property-to-relationship` refactors (`ProductCode`, `SupplierCode`, `WarehouseCode`):
 
 ```xml
-<Entity name="Order" plural="Orders">
+<Entity name="Order">
   <Properties>
     <Property name="OrderNumber" />
-    <Property name="ProductCode" />
-    <Property name="SupplierCode" />
     <Property name="StatusText" />
   </Properties>
   <Relationships>
+    <Relationship entity="Product" />
+    <Relationship entity="Supplier" />
     <Relationship entity="Warehouse" />
   </Relationships>
 </Entity>
 ```
 
-This promotion rewrites each `Order` row from scalar `WarehouseCode` to required relationship usage `WarehouseId`, then removes the source scalar property when `--drop-source-property` is used.
+These promotions rewrite each `Order` row from scalar `ProductCode`/`SupplierCode`/`WarehouseCode` values to required relationship usages `ProductId`/`SupplierId`/`WarehouseId`, then remove the source scalar properties when `--drop-source-property` is used.
 
 Instance diff and merge:
 
