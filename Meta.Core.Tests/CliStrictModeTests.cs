@@ -3439,7 +3439,8 @@ public sealed class CliStrictModeTests
     {
         cliAssemblyPath = null;
         var repoRoot = FindRepositoryRoot();
-        var candidate = Path.Combine(repoRoot, "Meta.Cli", "bin", "Debug", "net9.0", "meta.dll");
+        var targetFramework = ResolveCliTargetFramework(repoRoot);
+        var candidate = Path.Combine(repoRoot, "Meta.Cli", "bin", "Debug", targetFramework, "meta.dll");
         if (File.Exists(candidate))
         {
             File.Delete(candidate);
@@ -3461,7 +3462,8 @@ public sealed class CliStrictModeTests
                 return cliAssemblyPath;
             }
 
-            var candidate = Path.Combine(repoRoot, "Meta.Cli", "bin", "Debug", "net9.0", "meta.dll");
+            var targetFramework = ResolveCliTargetFramework(repoRoot);
+            var candidate = Path.Combine(repoRoot, "Meta.Cli", "bin", "Debug", targetFramework, "meta.dll");
             if (!File.Exists(candidate))
             {
                 var cliProject = Path.Combine(repoRoot, "Meta.Cli", "Meta.Cli.csproj");
@@ -3514,6 +3516,29 @@ public sealed class CliStrictModeTests
         {
             CliBuildGate.Release();
         }
+    }
+
+    private static string ResolveCliTargetFramework(string repoRoot)
+    {
+        var cliProject = Path.Combine(repoRoot, "Meta.Cli", "Meta.Cli.csproj");
+        if (!File.Exists(cliProject))
+        {
+            throw new FileNotFoundException($"Could not find CLI project at '{cliProject}'.");
+        }
+
+        var document = XDocument.Load(cliProject, LoadOptions.None);
+        var targetFramework = document
+            .Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "TargetFramework", StringComparison.OrdinalIgnoreCase))
+            ?.Value
+            ?.Trim();
+
+        if (string.IsNullOrWhiteSpace(targetFramework))
+        {
+            throw new InvalidOperationException($"Project '{cliProject}' does not define <TargetFramework>.");
+        }
+
+        return targetFramework;
     }
 
     private static HashSet<string> AssertIdentityIds(string workspacePath, string entityName)
