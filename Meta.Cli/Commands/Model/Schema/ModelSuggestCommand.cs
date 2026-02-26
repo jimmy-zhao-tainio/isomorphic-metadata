@@ -2,20 +2,6 @@ internal sealed partial class CliRuntime
 {
     async Task<int> ModelSuggestAsync(string[] commandArgs)
     {
-        if (globalJson)
-        {
-            var previousJson = globalJson;
-            globalJson = false;
-            try
-            {
-                return PrintArgumentError("--json is not supported for 'meta model suggest'.");
-            }
-            finally
-            {
-                globalJson = previousJson;
-            }
-        }
-
         if (commandArgs.Length >= 3 && !commandArgs[2].StartsWith("--", StringComparison.Ordinal))
         {
             var mode = commandArgs[2].Trim().ToLowerInvariant();

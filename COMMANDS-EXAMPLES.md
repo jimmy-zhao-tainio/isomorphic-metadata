@@ -16,7 +16,6 @@ Usage:
 Global options:
 
   --workspace <path>  Override workspace root.
-  --json              Return structured JSON output.
   --strict            Treat warnings as errors for mutating commands.
 
 Workspace:
@@ -38,7 +37,7 @@ Instance:
   insert       Insert one instance: <Entity> <Id> or --auto-id.
   delete       Delete one instance: <Entity> <Id>.
   query        Search instances with equals/contains filters.
-  bulk-insert  Insert many instances from tsv/csv/jsonl input (supports --auto-id).
+  bulk-insert  Insert many instances from tsv/csv input (supports --auto-id).
 
 Pipeline:
 
@@ -736,7 +735,7 @@ Failure:
 [exit 1]
 Error: --auto-id cannot be combined with --key.
 
-Usage: meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]
+Usage: meta bulk-insert <Entity> [--from tsv|csv] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]
 
 Next: meta bulk-insert help
 ```

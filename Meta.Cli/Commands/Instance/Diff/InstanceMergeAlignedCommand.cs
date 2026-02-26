@@ -70,21 +70,9 @@ internal sealed partial class CliRuntime
             }
 
             await services.WorkspaceService.SaveAsync(targetWorkspace).ConfigureAwait(false);
-            if (globalJson)
-            {
-                WriteJson(new
-                {
-                    command = "instance.merge-aligned",
-                    status = "ok",
-                    target = targetPath,
-                });
-            }
-            else
-            {
-                presenter.WriteOk(
-                    "instance merge-aligned applied",
-                    ("Target", targetPath));
-            }
+            presenter.WriteOk(
+                "instance merge-aligned applied",
+                ("Target", targetPath));
 
             return 0;
         }

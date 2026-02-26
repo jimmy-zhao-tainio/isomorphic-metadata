@@ -27,27 +27,6 @@ internal sealed partial class CliRuntime
             .Where(item => !string.IsNullOrWhiteSpace(item.Key) && !string.IsNullOrWhiteSpace(item.Value))
             .ToList();
     
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                status = "error",
-                code,
-                message = normalizedMessage,
-                where = normalizedWhere
-                    .OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
-                    .Select(item => new { key = item.Key, value = item.Value }),
-                hints = normalizedHints,
-                table = new
-                {
-                    title = tableTitle,
-                    headers,
-                    rows,
-                },
-            });
-            return exitCode;
-        }
-    
         var normalizedHumanDetails = NormalizeHumanErrorDetails(normalizedHints);
         var errorDocument = BuildErrorDocument(normalizedMessage, normalizedHumanDetails);
         RenderErrorDocument(
@@ -101,21 +80,6 @@ internal sealed partial class CliRuntime
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .ToList();
         var wherePairs = ParseWherePairs(where);
-    
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                status = "error",
-                code,
-                message = normalizedMessage,
-                where = wherePairs
-                    .OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
-                    .Select(item => new { key = item.Key, value = item.Value }),
-                hints = normalizedHints,
-            });
-            return exitCode;
-        }
     
         PrintHumanFailure(normalizedMessage, normalizedHints);
     
@@ -254,27 +218,6 @@ internal sealed partial class CliRuntime
         WorkspaceDiagnostics diagnostics)
     {
         var headline = BuildOperationValidationHeadline(commandName, operations, diagnostics);
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                status = "error",
-                code = "E_OPERATION_VALIDATION",
-                message = "operation validation failed.",
-                errors = diagnostics.ErrorCount,
-                warnings = diagnostics.WarningCount,
-                total = diagnostics.Issues.Count,
-                issues = diagnostics.Issues.Select(issue => new
-                {
-                    severity = issue.Severity.ToString().ToLowerInvariant(),
-                    code = issue.Code,
-                    location = issue.Location,
-                    message = issue.Message,
-                }),
-            });
-            return 4;
-        }
-    
         PrintHumanFailure(headline, BuildHumanValidationBlockers(commandName, operations, diagnostics));
         return 4;
     }
@@ -636,7 +579,7 @@ internal sealed partial class CliRuntime
         {
             var formatMatch = Regex.Match(message, "unsupported --from '([^']+)'", RegexOptions.IgnoreCase);
             var provided = formatMatch.Success ? formatMatch.Groups[1].Value : string.Empty;
-            var allowed = new[] { "tsv", "csv", "jsonl" };
+            var allowed = new[] { "tsv", "csv" };
             suggestions = SuggestValues(provided, allowed);
             normalized = "Unsupported value for --from.";
     
@@ -662,7 +605,7 @@ internal sealed partial class CliRuntime
     
             if (hints.Count == 0)
             {
-                hints.Add("Allowed values: tsv, csv, jsonl.");
+                hints.Add("Allowed values: tsv, csv.");
                 hints.Add("Next: meta bulk-insert <Entity> --from tsv --file <path> --key Id");
             }
         }

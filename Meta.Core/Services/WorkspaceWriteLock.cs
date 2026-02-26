@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
-using System.Text.Json;
 
 namespace Meta.Core.Services;
 
@@ -27,10 +27,10 @@ internal static class WorkspaceWriteLock
             try
             {
                 var stream = new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read);
-                var json = JsonSerializer.Serialize(record, WorkspaceLockRecord.JsonOptions);
+                var content = record.Serialize();
                 using (var writer = new StreamWriter(stream, leaveOpen: true))
                 {
-                    writer.Write(json);
+                    writer.Write(content);
                     writer.Flush();
                 }
 
@@ -59,9 +59,14 @@ internal static class WorkspaceWriteLock
         record = null;
         try
         {
-            var json = File.ReadAllText(lockPath);
-            record = JsonSerializer.Deserialize<WorkspaceLockRecord>(json, WorkspaceLockRecord.JsonOptions);
-            return record != null;
+            var content = File.ReadAllText(lockPath);
+            if (!WorkspaceLockRecord.TryParse(content, out var parsed))
+            {
+                return false;
+            }
+
+            record = parsed;
+            return true;
         }
         catch
         {
@@ -193,12 +198,6 @@ internal sealed class WorkspaceLockRecord
     public DateTime? ProcessStartTimeUtc { get; set; }
     public DateTime? AcquiredUtc { get; set; }
 
-    public static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false,
-    };
-
     public static WorkspaceLockRecord CreateCurrent()
     {
         DateTime? processStart = null;
@@ -220,5 +219,82 @@ internal sealed class WorkspaceLockRecord
             ProcessStartTimeUtc = processStart,
             AcquiredUtc = DateTime.UtcNow,
         };
+    }
+
+    public string Serialize()
+    {
+        return string.Join(
+                   Environment.NewLine,
+                   new[]
+                   {
+                       $"Pid={Pid.ToString(CultureInfo.InvariantCulture)}",
+                       $"MachineName={MachineName ?? string.Empty}",
+                       $"ToolVersion={ToolVersion ?? string.Empty}",
+                       $"ProcessStartTimeUtc={ProcessStartTimeUtc?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty}",
+                       $"AcquiredUtc={AcquiredUtc?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty}",
+                   }) +
+               Environment.NewLine;
+    }
+
+    public static bool TryParse(string content, out WorkspaceLockRecord record)
+    {
+        record = null!;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return false;
+        }
+
+        var map = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var lines = content.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            var separator = line.IndexOf('=');
+            if (separator <= 0 || separator == line.Length - 1)
+            {
+                continue;
+            }
+
+            var key = line[..separator].Trim();
+            var value = line[(separator + 1)..].Trim();
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                map[key] = value;
+            }
+        }
+
+        if (!map.TryGetValue("Pid", out var pidText) ||
+            !int.TryParse(pidText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid))
+        {
+            return false;
+        }
+
+        map.TryGetValue("MachineName", out var machineName);
+        map.TryGetValue("ToolVersion", out var toolVersion);
+        map.TryGetValue("ProcessStartTimeUtc", out var processStartText);
+        map.TryGetValue("AcquiredUtc", out var acquiredText);
+
+        var hasProcessStart = DateTime.TryParseExact(
+            processStartText,
+            "o",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out var processStartTimeUtc);
+        var hasAcquired = DateTime.TryParseExact(
+            acquiredText,
+            "o",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out var acquiredUtc);
+
+        record = new WorkspaceLockRecord
+        {
+            Pid = pid,
+            MachineName = machineName ?? string.Empty,
+            ToolVersion = toolVersion ?? string.Empty,
+            ProcessStartTimeUtc = hasProcessStart ? processStartTimeUtc : null,
+            AcquiredUtc = hasAcquired ? acquiredUtc : null,
+        };
+
+        return true;
     }
 }

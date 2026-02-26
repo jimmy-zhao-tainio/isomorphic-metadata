@@ -40,58 +40,30 @@ internal sealed partial class CliRuntime
             {
                 case "sql":
                     manifest = GenerationService.GenerateSql(workspace, options.OutputDirectory);
-                    if (globalJson)
-                    {
-                        WriteJson(new { command = "generate", mode = "sql", files = manifest.FileHashes.Count, hash = manifest.CombinedHash });
-                    }
-                    else
-                    {
-                        presenter.WriteOk(
-                            "generated sql",
-                            ("Out", Path.GetFullPath(options.OutputDirectory)),
-                            ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
-                            ("Hash", manifest.CombinedHash));
-                    }
+                    presenter.WriteOk(
+                        "generated sql",
+                        ("Out", Path.GetFullPath(options.OutputDirectory)),
+                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
+                        ("Hash", manifest.CombinedHash));
     
                     return 0;
                 case "csharp":
                     manifest = GenerationService.GenerateCSharp(workspace, options.OutputDirectory, includeTooling: options.IncludeTooling);
-                    if (globalJson)
-                    {
-                        WriteJson(new
-                        {
-                            command = "generate",
-                            mode = "csharp",
-                            tooling = options.IncludeTooling,
-                            files = manifest.FileHashes.Count,
-                            hash = manifest.CombinedHash,
-                        });
-                    }
-                    else
-                    {
-                        presenter.WriteOk(
-                            "generated csharp",
-                            ("Out", Path.GetFullPath(options.OutputDirectory)),
-                            ("Tooling", options.IncludeTooling ? "yes" : "no"),
-                            ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
-                            ("Hash", manifest.CombinedHash));
-                    }
+                    presenter.WriteOk(
+                        "generated csharp",
+                        ("Out", Path.GetFullPath(options.OutputDirectory)),
+                        ("Tooling", options.IncludeTooling ? "yes" : "no"),
+                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
+                        ("Hash", manifest.CombinedHash));
     
                     return 0;
                 case "ssdt":
                     manifest = GenerationService.GenerateSsdt(workspace, options.OutputDirectory);
-                    if (globalJson)
-                    {
-                        WriteJson(new { command = "generate", mode = "ssdt", files = manifest.FileHashes.Count, hash = manifest.CombinedHash });
-                    }
-                    else
-                    {
-                        presenter.WriteOk(
-                            "generated ssdt",
-                            ("Out", Path.GetFullPath(options.OutputDirectory)),
-                            ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
-                            ("Hash", manifest.CombinedHash));
-                    }
+                    presenter.WriteOk(
+                        "generated ssdt",
+                        ("Out", Path.GetFullPath(options.OutputDirectory)),
+                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
+                        ("Hash", manifest.CombinedHash));
     
                     return 0;
                 default:

@@ -74,7 +74,7 @@ internal sealed partial class CliRuntime
                 }
                 : "meta model <subcommand> [arguments] [--workspace <path>]",
             "insert" => "meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Value ...] [--workspace <path>]",
-            "bulk-insert" => "meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]",
+            "bulk-insert" => "meta bulk-insert <Entity> [--from tsv|csv] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]",
             "delete" => "meta delete <Entity> <Id> [--workspace <path>]",
             "generate" => args.Length >= 2
                 ? args[1].Trim().ToLowerInvariant() switch
@@ -266,7 +266,6 @@ internal sealed partial class CliRuntime
             Options: new[]
             {
                 ("--workspace <path>", "Override workspace root."),
-                ("--json", "Return structured JSON output."),
                 ("--strict", "Treat warnings as errors for mutating commands."),
             },
             Sections: sections,

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Xml.Linq;
 using Meta.Adapters;
 using Meta.Core.Domain;
@@ -82,7 +81,7 @@ public sealed class WorkspaceServiceTests
     }
 
     [Fact]
-    public async Task Load_LegacyWorkspaceJson_DoesNotAutoMigrateToWorkspaceXml()
+    public async Task Load_MissingWorkspaceConfig_UsesDefaultWorkspaceConfig()
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
@@ -95,19 +94,13 @@ public sealed class WorkspaceServiceTests
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
             var metadataRoot = Path.Combine(tempRoot, "metadata");
             var workspaceXmlPath = Path.Combine(metadataRoot, "workspace.xml");
-            var workspaceJsonPath = Path.Combine(metadataRoot, "workspace.json");
-
             Assert.True(File.Exists(workspaceXmlPath));
-            var legacyJson = "{\"contractVersion\":\"1.0\"}";
-
             File.Delete(workspaceXmlPath);
-            await File.WriteAllTextAsync(workspaceJsonPath, legacyJson);
 
-            var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
-                services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false));
-            Assert.Contains("workspace.xml", exception.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("workspace.json", exception.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.False(File.Exists(workspaceXmlPath), "workspace.xml should not be auto-created from legacy workspace.json.");
+            var loaded = await services.WorkspaceService.LoadAsync(tempRoot, searchUpward: false);
+            Assert.NotNull(loaded.WorkspaceConfig);
+            Assert.Equal("1.0", MetaWorkspaceConfig.GetContractVersion(loaded.WorkspaceConfig));
+            Assert.False(File.Exists(workspaceXmlPath), "workspace.xml should not be auto-created when loading defaults.");
         }
         finally
         {
@@ -518,14 +511,16 @@ public sealed class WorkspaceServiceTests
             Directory.CreateDirectory(tempRoot);
 
             var process = System.Diagnostics.Process.GetCurrentProcess();
-            var lockContent = JsonSerializer.Serialize(new
-            {
-                pid = Environment.ProcessId,
-                machineName = Environment.MachineName,
-                toolVersion = "test",
-                processStartTimeUtc = process.StartTime.ToUniversalTime(),
-                acquiredUtc = DateTime.UtcNow,
-            });
+            var lockContent = string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    $"Pid={Environment.ProcessId}",
+                    $"MachineName={Environment.MachineName}",
+                    "ToolVersion=test",
+                    $"ProcessStartTimeUtc={process.StartTime.ToUniversalTime():o}",
+                    $"AcquiredUtc={DateTime.UtcNow:o}",
+                }) + Environment.NewLine;
             File.WriteAllText(Path.Combine(tempRoot, ".meta.lock"), lockContent);
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -556,14 +551,16 @@ public sealed class WorkspaceServiceTests
             workspace.MetadataRootPath = Path.Combine(tempRoot, "metadata");
             Directory.CreateDirectory(tempRoot);
 
-            var staleLockContent = JsonSerializer.Serialize(new
-            {
-                pid = 999999,
-                machineName = Environment.MachineName,
-                toolVersion = "test",
-                processStartTimeUtc = DateTime.UtcNow.AddDays(-1),
-                acquiredUtc = DateTime.UtcNow.AddDays(-1),
-            });
+            var staleLockContent = string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    "Pid=999999",
+                    $"MachineName={Environment.MachineName}",
+                    "ToolVersion=test",
+                    $"ProcessStartTimeUtc={DateTime.UtcNow.AddDays(-1):o}",
+                    $"AcquiredUtc={DateTime.UtcNow.AddDays(-1):o}",
+                }) + Environment.NewLine;
             var lockPath = Path.Combine(tempRoot, ".meta.lock");
             File.WriteAllText(lockPath, staleLockContent);
 

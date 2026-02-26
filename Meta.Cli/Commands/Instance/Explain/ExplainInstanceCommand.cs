@@ -23,20 +23,7 @@ internal sealed partial class CliRuntime
         PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
         RequireEntity(workspace, entityName);
         var row = ResolveRowById(workspace, entityName, id);
-    
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                command = "view.instance",
-                entity = entityName,
-                id = row.Id,
-                values = row.Values.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase),
-                relationships = row.RelationshipIds.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase),
-            });
-            return 0;
-        }
-    
+
         PrintSelectedRecord(entityName, row);
         return 0;
     }

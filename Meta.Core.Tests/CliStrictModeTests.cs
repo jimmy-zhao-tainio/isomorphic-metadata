@@ -390,26 +390,6 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task ModelSuggest_RejectsJsonFlag()
-    {
-        var workspaceRoot = CreateTempWorkspaceFromSamples();
-        try
-        {
-            var result = await RunCliAsync("model", "suggest", "--json", "--workspace", workspaceRoot);
-            Assert.Equal(1, result.ExitCode);
-            Assert.Contains(
-                "Error: --json is not supported for 'meta model suggest'.",
-                result.CombinedOutput,
-                StringComparison.Ordinal);
-            Assert.DoesNotContain("\"status\": \"error\"", result.CombinedOutput, StringComparison.Ordinal);
-        }
-        finally
-        {
-            DeleteDirectorySafe(workspaceRoot);
-        }
-    }
-
-    [Fact]
     public async Task ModelSuggest_UnknownFlag_ReturnsArgumentError()
     {
         var workspaceRoot = CreateTempWorkspaceFromSamples();
@@ -556,13 +536,12 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task GraphStats_ReturnsStructuredJson()
+    public async Task GraphStats_ReturnsTextOutput()
     {
         var workspaceRoot = CreateTempWorkspaceFromSamples();
         try
         {
             var result = await RunCliAsync(
-                "--json",
                 "graph",
                 "stats",
                 "--workspace",
@@ -573,10 +552,10 @@ public sealed class CliStrictModeTests
                 "2");
 
             Assert.Equal(0, result.ExitCode);
-            Assert.Contains("\"command\": \"graph.stats\"", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("\"nodes\":", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("\"topOutDegree\":", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("\"topInDegree\":", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Graph:", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Nodes:", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Top out-degree", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Top in-degree", result.StdOut, StringComparison.Ordinal);
         }
         finally
         {

@@ -144,27 +144,6 @@ internal sealed partial class CliRuntime
             randomWorkspace.Workspace.Diagnostics = diagnostics;
             if (diagnostics.HasErrors || (globalStrict && diagnostics.WarningCount > 0))
             {
-                if (globalJson)
-                {
-                    WriteJson(new
-                    {
-                        status = "error",
-                        code = "E_RANDOM_VALIDATION",
-                        message = "randomized workspace failed validation.",
-                        errors = diagnostics.ErrorCount,
-                        warnings = diagnostics.WarningCount,
-                        total = diagnostics.Issues.Count,
-                        issues = diagnostics.Issues.Select(issue => new
-                        {
-                            severity = issue.Severity.ToString().ToLowerInvariant(),
-                            code = issue.Code,
-                            location = issue.Location,
-                            message = issue.Message,
-                        }),
-                    });
-                    return 2;
-                }
-    
                 PrintHumanFailure("Cannot create randomized workspace", BuildHumanValidationBlockers("random.create", Array.Empty<WorkspaceOp>(), diagnostics));
                 return 2;
             }
@@ -188,55 +167,31 @@ internal sealed partial class CliRuntime
                 var dataPath = Path.Combine(sqlRoot, "data.sql");
                 await RecreateDatabaseFromScriptsAsync(dbConnection, dbName, schemaPath, dataPath).ConfigureAwait(false);
             }
-    
-            if (globalJson)
-            {
-                WriteJson(new
+
+            presenter.WriteOk(
+                "random workspace created",
+                ("Workspace", workspaceRoot),
+                ("Model", randomWorkspace.Workspace.Model.Name),
+                ("Entities", randomWorkspace.Workspace.Model.Entities.Count.ToString(CultureInfo.InvariantCulture)),
+                ("Relationships", randomWorkspace.TotalRelationships.ToString(CultureInfo.InvariantCulture)),
+                ("Rows", randomWorkspace.TotalRows.ToString(CultureInfo.InvariantCulture)),
+                ("MaxDepth", randomWorkspace.MaxDepth.ToString(CultureInfo.InvariantCulture)),
+                ("Seed", seed.ToString(CultureInfo.InvariantCulture)));
+            presenter.WriteKeyValueBlock(
+                "Generated",
+                new[]
                 {
-                    command = "random.create",
-                    status = "ok",
-                    workspace = workspaceRoot,
-                    model = randomWorkspace.Workspace.Model.Name,
-                    entities = randomWorkspace.Workspace.Model.Entities.Count,
-                    relationships = randomWorkspace.TotalRelationships,
-                    rows = randomWorkspace.TotalRows,
-                    maxDepth = randomWorkspace.MaxDepth,
-                    generated = new
-                    {
-                        sqlHash = sqlManifest.CombinedHash,
-                        csharpHash = csharpManifest.CombinedHash,
-                        ssdtHash = ssdtManifest.CombinedHash,
-                    },
-                    database = applyDb ? dbName : "(skipped)",
+                    ("sql", sqlRoot),
+                    ("csharp", csharpRoot),
+                    ("ssdt", ssdtRoot),
                 });
+            if (applyDb)
+            {
+                presenter.WriteInfo($"Database: recreated ({dbName})");
             }
             else
             {
-                presenter.WriteOk(
-                    "random workspace created",
-                    ("Workspace", workspaceRoot),
-                    ("Model", randomWorkspace.Workspace.Model.Name),
-                    ("Entities", randomWorkspace.Workspace.Model.Entities.Count.ToString(CultureInfo.InvariantCulture)),
-                    ("Relationships", randomWorkspace.TotalRelationships.ToString(CultureInfo.InvariantCulture)),
-                    ("Rows", randomWorkspace.TotalRows.ToString(CultureInfo.InvariantCulture)),
-                    ("MaxDepth", randomWorkspace.MaxDepth.ToString(CultureInfo.InvariantCulture)),
-                    ("Seed", seed.ToString(CultureInfo.InvariantCulture)));
-                presenter.WriteKeyValueBlock(
-                    "Generated",
-                    new[]
-                    {
-                        ("sql", sqlRoot),
-                        ("csharp", csharpRoot),
-                        ("ssdt", ssdtRoot),
-                    });
-                if (applyDb)
-                {
-                    presenter.WriteInfo($"Database: recreated ({dbName})");
-                }
-                else
-                {
-                    presenter.WriteInfo("Database: skipped (--no-database)");
-                }
+                presenter.WriteInfo("Database: skipped (--no-database)");
             }
     
             return 0;
@@ -1466,7 +1421,6 @@ internal sealed partial class CliRuntime
     
         return effectiveFormat switch
         {
-            "jsonl" => ParseJsonlRows(input),
             "tsv" => ParseDelimitedRows(input, '\t'),
             "csv" => ParseDelimitedRows(input, ','),
             _ => throw new InvalidOperationException($"Unsupported input format '{effectiveFormat}'."),
@@ -1475,12 +1429,6 @@ internal sealed partial class CliRuntime
     
     string DetectBulkFormat(string input)
     {
-        var trimmed = (input ?? string.Empty).TrimStart();
-        if (trimmed.StartsWith("{", StringComparison.Ordinal))
-        {
-            return "jsonl";
-        }
-    
         var firstLine = (input ?? string.Empty)
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault() ?? string.Empty;
@@ -1519,48 +1467,6 @@ internal sealed partial class CliRuntime
             for (var c = 0; c < header.Length; c++)
             {
                 row[header[c]] = parts[c].Trim();
-            }
-    
-            rows.Add(row);
-        }
-    
-        return rows;
-    }
-    
-    IReadOnlyList<Dictionary<string, string>> ParseJsonlRows(string input)
-    {
-        var rows = new List<Dictionary<string, string>>();
-        var lines = (input ?? string.Empty)
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
-    
-        for (var i = 0; i < lines.Length; i++)
-        {
-            var line = lines[i].Trim();
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-    
-            using var document = JsonDocument.Parse(line);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                throw new InvalidOperationException($"jsonl row {i + 1} is not a JSON object.");
-            }
-    
-            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var property in document.RootElement.EnumerateObject())
-            {
-                row[property.Name] = property.Value.ValueKind switch
-                {
-                    JsonValueKind.String => property.Value.GetString() ?? string.Empty,
-                    JsonValueKind.Number => property.Value.ToString(),
-                    JsonValueKind.True => "true",
-                    JsonValueKind.False => "false",
-                    JsonValueKind.Null => string.Empty,
-                    _ => property.Value.GetRawText(),
-                };
             }
     
             rows.Add(row);

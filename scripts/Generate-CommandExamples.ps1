@@ -148,8 +148,11 @@ Invoke-MetaStrict -MetaArgs @("insert", "Cube", "99", "--set", "CubeName=Diff Cu
 New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
 $tasksRoot = Join-Path $baseWorkspace "metadata\tasks"
 New-Item -ItemType Directory -Path $tasksRoot -Force | Out-Null
-$taskJson = "{`n  `"name`": `"sample-task`",`n  `"steps`": []`n}"
-Set-Content -Path (Join-Path $tasksRoot "sample-task.json") -Value $taskJson -Encoding utf8
+$taskContent = @"
+name=sample-task
+steps=
+"@
+Set-Content -Path (Join-Path $tasksRoot "sample-task.task") -Value $taskContent -Encoding utf8
 
 $brokenMetadataRoot = Join-Path $brokenWorkspace "metadata"
 New-Item -ItemType Directory -Path (Join-Path $brokenMetadataRoot "instance") -Force | Out-Null

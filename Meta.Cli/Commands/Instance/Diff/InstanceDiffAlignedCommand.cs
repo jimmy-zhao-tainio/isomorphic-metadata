@@ -70,34 +70,14 @@ internal sealed partial class CliRuntime
 
         await services.WorkspaceService.SaveAsync(diff.DiffWorkspace).ConfigureAwait(false);
         var diffPath = Path.GetFullPath(diff.DiffWorkspacePath);
-
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                command = "instance.diff-aligned",
-                status = diff.HasDifferences ? "differences" : "clean",
-                hasDifferences = diff.HasDifferences,
-                diffWorkspace = diffPath,
-                leftRows = diff.LeftRowCount,
-                rightRows = diff.RightRowCount,
-                leftProperties = diff.LeftPropertyCount,
-                rightProperties = diff.RightPropertyCount,
-                leftNotInRight = diff.LeftNotInRightCount,
-                rightNotInLeft = diff.RightNotInLeftCount,
-            });
-        }
-        else
-        {
-            presenter.WriteInfo(diff.HasDifferences
-                ? "Instance diff-aligned: differences found."
-                : "Instance diff-aligned: no differences.");
-            presenter.WriteInfo($"DiffWorkspace: {diffPath}");
-            presenter.WriteInfo(
-                $"Rows: left={diff.LeftRowCount}, right={diff.RightRowCount}  Properties: left={diff.LeftPropertyCount}, right={diff.RightPropertyCount}");
-            presenter.WriteInfo(
-                $"NotIn: left-not-in-right={diff.LeftNotInRightCount}, right-not-in-left={diff.RightNotInLeftCount}");
-        }
+        presenter.WriteInfo(diff.HasDifferences
+            ? "Instance diff-aligned: differences found."
+            : "Instance diff-aligned: no differences.");
+        presenter.WriteInfo($"DiffWorkspace: {diffPath}");
+        presenter.WriteInfo(
+            $"Rows: left={diff.LeftRowCount}, right={diff.RightRowCount}  Properties: left={diff.LeftPropertyCount}, right={diff.RightPropertyCount}");
+        presenter.WriteInfo(
+            $"NotIn: left-not-in-right={diff.LeftNotInRightCount}, right-not-in-left={diff.RightNotInLeftCount}");
 
         return diff.HasDifferences ? 1 : 0;
     }

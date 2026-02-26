@@ -38,19 +38,7 @@ internal sealed partial class CliRuntime
                     ToInstance = BuildEntityInstanceAddress(item.Entity, row.RelationshipIds[item.GetColumnName()]),
                 })
                 .ToList();
-    
-            if (globalJson)
-            {
-                WriteJson(new
-                {
-                    command = "instance.relationship.list",
-                    fromInstance = BuildEntityInstanceAddress(fromEntityName, row.Id),
-                    count = relationshipRows.Count,
-                    relationships = relationshipRows,
-                });
-                return 0;
-            }
-    
+
             if (relationshipRows.Count == 0)
             {
                 presenter.WriteOk("no relationship usage", ("Instance", BuildEntityInstanceAddress(fromEntityName, row.Id)));

@@ -6,7 +6,6 @@ internal sealed partial class CliRuntime
     private const int SupportedContractMinorVersion = 0;
     private string[] args = Array.Empty<string>();
     private string? globalWorkspacePath;
-    private bool globalJson;
     private bool globalStrict;
     private Dictionary<string, CliCommandRegistration> commandRegistry = new(StringComparer.OrdinalIgnoreCase);
 
@@ -14,7 +13,6 @@ internal sealed partial class CliRuntime
     {
         var globalOptions = ParseGlobalOptions(cliArgs);
         globalWorkspacePath = globalOptions.WorkspacePath;
-        globalJson = globalOptions.Json;
         globalStrict = globalOptions.Strict;
         if (!globalOptions.Ok)
         {
@@ -111,7 +109,7 @@ internal sealed partial class CliRuntime
                 "E_INTERNAL",
                 NormalizeErrorMessage(exception.Message),
                 exitCode: 6,
-                hints: new[] { "Next: rerun with --json and capture the output for investigation." });
+                hints: new[] { "Next: rerun the command and inspect the human-readable error details above." });
         }
     }
 
@@ -182,35 +180,18 @@ internal sealed partial class CliRuntime
         }
     
         await services.WorkspaceService.SaveAsync(workspace).ConfigureAwait(false);
-        if (globalJson)
+        var details = new List<(string Key, string Value)>();
+        if (successDetails is { Count: > 0 })
         {
-            WriteJson(new
-            {
-                command = commandName,
-                status = "ok",
-                message = successMessage,
-                operations = operations.Count,
-                warnings = diagnostics.WarningCount,
-                warningDiagnostics = diagnostics.Issues
-                    .Where(item => item.Severity == IssueSeverity.Warning)
-                    .ToList(),
-            });
+            details.AddRange(successDetails);
         }
-        else
+
+        presenter.WriteOk(successMessage, details.ToArray());
+
+        if (diagnostics.WarningCount > 0)
         {
-            var details = new List<(string Key, string Value)>();
-            if (successDetails is { Count: > 0 })
-            {
-                details.AddRange(successDetails);
-            }
-    
-            presenter.WriteOk(successMessage, details.ToArray());
-    
-            if (diagnostics.WarningCount > 0)
-            {
-                presenter.WriteInfo(
-                    $"Validation: warnings={diagnostics.WarningCount.ToString(CultureInfo.InvariantCulture)}, total={diagnostics.Issues.Count.ToString(CultureInfo.InvariantCulture)} (no errors)");
-            }
+            presenter.WriteInfo(
+                $"Validation: warnings={diagnostics.WarningCount.ToString(CultureInfo.InvariantCulture)}, total={diagnostics.Issues.Count.ToString(CultureInfo.InvariantCulture)} (no errors)");
         }
     
         return 0;
@@ -234,19 +215,10 @@ internal sealed partial class CliRuntime
     
     
     
-    void WriteJson<T>(T value)
-    {
-        var json = JsonSerializer.Serialize(value, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-        });
-        Console.WriteLine(json);
-    }
-    (bool Ok, string WorkspacePath, bool Json, bool Strict, string[] CommandArgs, string ErrorMessage)
+    (bool Ok, string WorkspacePath, bool Strict, string[] CommandArgs, string ErrorMessage)
         ParseGlobalOptions(string[] allArgs)
     {
         var workspacePath = string.Empty;
-        var json = false;
         var strict = false;
         var commandArgs = new List<string>(allArgs.Length);
     
@@ -257,17 +229,11 @@ internal sealed partial class CliRuntime
             {
                 if (index + 1 >= allArgs.Length)
                 {
-                    return (false, workspacePath, json, strict, Array.Empty<string>(),
+                    return (false, workspacePath, strict, Array.Empty<string>(),
                         "Error: global --workspace requires a path.");
                 }
     
                 workspacePath = allArgs[++index];
-                continue;
-            }
-    
-            if (string.Equals(arg, "--json", StringComparison.OrdinalIgnoreCase))
-            {
-                json = true;
                 continue;
             }
     
@@ -280,7 +246,7 @@ internal sealed partial class CliRuntime
             commandArgs.Add(arg);
         }
     
-        return (true, workspacePath, json, strict, commandArgs.ToArray(), string.Empty);
+        return (true, workspacePath, strict, commandArgs.ToArray(), string.Empty);
     }
     
     (bool Ok, string WorkspacePath, string ErrorMessage)
@@ -865,7 +831,7 @@ internal sealed partial class CliRuntime
                     if (i + 1 >= commandArgs.Length)
                     {
                         return (false, format, filePath, useStdin, workspacePath, keyFields, autoId,
-                            "Error: --from requires a value (tsv|csv|jsonl).");
+                            "Error: --from requires a value (tsv|csv).");
                     }
     
                     format = commandArgs[++i].Trim().ToLowerInvariant();
@@ -1013,7 +979,7 @@ internal sealed partial class CliRuntime
         Register("insert", "Instance", "Insert one instance: <Entity> <Id> or --auto-id.", InsertAsync);
         Register("delete", "Instance", "Delete one instance: <Entity> <Id>.", DeleteAsync);
         Register("query", "Instance", "Search instances with equals/contains filters.", QueryAsync);
-        Register("bulk-insert", "Instance", "Insert many instances from tsv/csv/jsonl input (supports --auto-id).", BulkInsertAsync);
+        Register("bulk-insert", "Instance", "Insert many instances from tsv/csv input (supports --auto-id).", BulkInsertAsync);
 
         Register("import", "Pipeline", "Import xml/sql into NEW workspace or csv into NEW/existing workspace.", ImportAsync);
         Register("generate", "Pipeline", "Generate artifacts from the workspace.", GenerateAsync);

@@ -13,16 +13,9 @@ internal sealed partial class CliRuntime
     
         if (WorkspaceLooksInitialized(workspaceRoot, metadataRoot))
         {
-            if (globalJson)
-            {
-                WriteJson(new { command = "init", status = "exists", workspace = workspaceRoot });
-            }
-            else
-            {
-                presenter.WriteOk(
-                    "workspace already initialized",
-                    ("Path", workspaceRoot));
-            }
+            presenter.WriteOk(
+                "workspace already initialized",
+                ("Path", workspaceRoot));
     
             return 0;
         }
@@ -44,16 +37,9 @@ internal sealed partial class CliRuntime
         };
     
         await services.WorkspaceService.SaveAsync(workspace).ConfigureAwait(false);
-        if (globalJson)
-        {
-            WriteJson(new { command = "init", status = "initialized", workspace = workspaceRoot });
-        }
-        else
-        {
-            presenter.WriteOk(
-                "workspace initialized",
-                ("Path", workspaceRoot));
-        }
+        presenter.WriteOk(
+            "workspace initialized",
+            ("Path", workspaceRoot));
     
         return 0;
     }

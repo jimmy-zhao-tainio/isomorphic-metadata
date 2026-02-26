@@ -96,8 +96,6 @@ Human output:
 - optional blocker/details
 - optional single `Next:` line (last line)
 
-JSON output (`--json`) keeps structured details.
-
 Exit codes:
 - `0` success
 - `1` usage/argument error, diff has differences, or merge precondition conflict
@@ -110,7 +108,6 @@ Exit codes:
 ## Global flags
 
 - `--workspace <path>`
-- `--json`
 - `--strict`
 
 ## Command surface
@@ -142,7 +139,7 @@ Modify:
   - `add-relationship` usage: `meta model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]`
   - `--default-id` is required when `<FromEntity>` already has rows (used for backfill).
 - `meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Value ...] [--workspace <path>]`
-- `meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]`
+- `meta bulk-insert <Entity> [--from tsv|csv] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]`
 - `meta instance update <Entity> <Id> --set Field=Value [--set Field=Value ...] [--workspace <path>]`
 - `meta delete <Entity> <Id> [--workspace <path>]`
 - `meta instance relationship <set|list> ...`

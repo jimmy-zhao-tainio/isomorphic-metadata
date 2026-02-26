@@ -40,21 +40,9 @@ internal sealed partial class CliRuntime
                         return PrintOperationValidationFailure("import", Array.Empty<WorkspaceOp>(), xmlDiagnostics);
                     }
                     await services.ExportService.ExportXmlAsync(importedWorkspace, workspacePath).ConfigureAwait(false);
-                    if (globalJson)
-                    {
-                        WriteJson(new
-                        {
-                            command = "import.xml",
-                            status = "ok",
-                            workspace = Path.GetFullPath(workspacePath),
-                        });
-                    }
-                    else
-                    {
-                        presenter.WriteOk(
-                            "imported xml",
-                            ("Workspace", Path.GetFullPath(workspacePath)));
-                    }
+                    presenter.WriteOk(
+                        "imported xml",
+                        ("Workspace", Path.GetFullPath(workspacePath)));
     
                     return 0;
                 case "sql":
@@ -85,24 +73,9 @@ internal sealed partial class CliRuntime
                         return PrintOperationValidationFailure("import", Array.Empty<WorkspaceOp>(), sqlDiagnostics);
                     }
                     await services.ExportService.ExportXmlAsync(importedFromSql, workspacePath).ConfigureAwait(false);
-                    if (globalJson)
-                    {
-                        WriteJson(new
-                        {
-                            command = "import.sql",
-                            status = "ok",
-                            workspace = Path.GetFullPath(workspacePath),
-                            model = importedFromSql.Model.Name,
-                            entities = importedFromSql.Model.Entities.Count,
-                            rows = importedFromSql.Instance.RecordsByEntity.Values.Sum(rows => rows.Count),
-                        });
-                    }
-                    else
-                    {
-                        presenter.WriteOk(
-                            "imported sql",
-                            ("Workspace", Path.GetFullPath(workspacePath)));
-                    }
+                    presenter.WriteOk(
+                        "imported sql",
+                        ("Workspace", Path.GetFullPath(workspacePath)));
     
                     return 0;
                 case "csv":
@@ -142,26 +115,11 @@ internal sealed partial class CliRuntime
                         }
 
                         await services.ExportService.ExportXmlAsync(importedFromCsv, workspacePath).ConfigureAwait(false);
-                        if (globalJson)
-                        {
-                            WriteJson(new
-                            {
-                                command = "import.csv",
-                                status = "ok",
-                                workspace = Path.GetFullPath(workspacePath),
-                                entity = importedEntity.Name,
-                                rows = importedRows.Count,
-                                properties = importedEntity.Properties.Count,
-                            });
-                        }
-                        else
-                        {
-                            presenter.WriteOk(
-                                "imported csv",
-                                ("Workspace", Path.GetFullPath(workspacePath)),
-                                ("Entity", importedEntity.Name),
-                                ("Rows", importedRows.Count.ToString()));
-                        }
+                        presenter.WriteOk(
+                            "imported csv",
+                            ("Workspace", Path.GetFullPath(workspacePath)),
+                            ("Entity", importedEntity.Name),
+                            ("Rows", importedRows.Count.ToString()));
 
                         return 0;
                     }
@@ -190,26 +148,11 @@ internal sealed partial class CliRuntime
                     }
 
                     await services.WorkspaceService.SaveAsync(workspaceForCsv).ConfigureAwait(false);
-                    if (globalJson)
-                    {
-                        WriteJson(new
-                        {
-                            command = "import.csv",
-                            status = "ok",
-                            workspace = Path.GetFullPath(workspaceForCsv.WorkspaceRootPath),
-                            entity = importedEntity.Name,
-                            rows = importedRows.Count,
-                            properties = importedEntity.Properties.Count,
-                        });
-                    }
-                    else
-                    {
-                        presenter.WriteOk(
-                            "imported csv",
-                            ("Workspace", Path.GetFullPath(workspaceForCsv.WorkspaceRootPath)),
-                            ("Entity", importedEntity.Name),
-                            ("Rows", importedRows.Count.ToString()));
-                    }
+                    presenter.WriteOk(
+                        "imported csv",
+                        ("Workspace", Path.GetFullPath(workspaceForCsv.WorkspaceRootPath)),
+                        ("Entity", importedEntity.Name),
+                        ("Rows", importedRows.Count.ToString()));
 
                     return 0;
                 default:

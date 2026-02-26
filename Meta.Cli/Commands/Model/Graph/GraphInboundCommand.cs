@@ -32,20 +32,7 @@ internal sealed partial class CliRuntime
                 .ThenBy(item => item.ToEntity, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             var inbound = inboundAll.Take(options.Top).ToList();
-    
-            if (globalJson)
-            {
-                WriteJson(new
-                {
-                    command = "graph.inbound",
-                    entity = targetEntityName,
-                    count = inboundAll.Count,
-                    top = options.Top,
-                    relationships = inbound,
-                });
-                return 0;
-            }
-    
+
             presenter.WriteInfo($"Inbound relationships: {targetEntityName} ({inboundAll.Count.ToString(CultureInfo.InvariantCulture)})");
             presenter.WriteTable(
                 new[] { "FromEntity", "ToEntity" },

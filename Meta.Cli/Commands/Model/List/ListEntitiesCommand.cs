@@ -22,18 +22,7 @@ internal sealed partial class CliRuntime
                 Rows = rowsByEntity.TryGetValue(entity.Name, out var rows) ? rows.Count : 0,
             })
             .ToList();
-    
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                command = "list.entities",
-                count = entities.Count,
-                entities,
-            });
-            return 0;
-        }
-    
+
         presenter.WriteInfo($"Entities ({entities.Count}):");
         presenter.WriteTable(
             new[] { "Name", "Rows", "Properties", "Relationships" },

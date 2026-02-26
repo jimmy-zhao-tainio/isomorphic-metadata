@@ -1,6 +1,6 @@
 # Meta CLI Output Grammar (Human Mode)
 
-This spec defines deterministic plain-text output for `meta` in non-`--json` mode.
+This spec defines deterministic plain-text output for `meta`.
 
 ## Success
 - First line: `OK: <summary>`
@@ -21,15 +21,6 @@ This spec defines deterministic plain-text output for `meta` in non-`--json` mod
 - Optional follow-up lines:
   - concrete blocker evidence
   - `Next: <specific command>` (at most one)
-
-## JSON Failure (`--json`)
-- Structured diagnostics stay in JSON only:
-  - `status=error`
-  - `code`
-  - `message`
-  - optional `where`
-  - optional `hints`
-  - optional detailed `issues` payload
 
 ## Determinism
 - Stable ordering for entities/rows/blockers.

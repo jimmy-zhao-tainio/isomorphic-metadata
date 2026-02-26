@@ -5,7 +5,7 @@ internal sealed partial class CliRuntime
         if (commandArgs.Length < 2)
         {
             return PrintUsageError(
-                "Usage: bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]");
+                "Usage: bulk-insert <Entity> [--from tsv|csv] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]");
         }
     
         var entityName = commandArgs[1];
@@ -17,11 +17,10 @@ internal sealed partial class CliRuntime
     
         if (!string.IsNullOrWhiteSpace(parseResult.Format) &&
             !string.Equals(parseResult.Format, "tsv", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(parseResult.Format, "csv", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(parseResult.Format, "jsonl", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(parseResult.Format, "csv", StringComparison.OrdinalIgnoreCase))
         {
             return PrintDataError("E_FORMAT",
-                $"unsupported --from '{parseResult.Format}'. Supported values are tsv, csv, or jsonl.");
+                $"unsupported --from '{parseResult.Format}'. Supported values are tsv or csv.");
         }
     
         var hasFile = !string.IsNullOrWhiteSpace(parseResult.FilePath);

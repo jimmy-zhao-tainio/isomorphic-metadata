@@ -289,13 +289,6 @@ public sealed class WorkspaceService : IWorkspaceService
             return normalizedFromXml;
         }
 
-        var workspaceJsonPath = Path.Combine(metadataRootPath, "workspace.json");
-        if (File.Exists(workspaceJsonPath))
-        {
-            throw new InvalidDataException(
-                $"Workspace config '{workspaceXmlPath}' is required. Legacy '{workspaceJsonPath}' is not supported.");
-        }
-
         return MetaWorkspaceGenerated.CreateDefault();
     }
 

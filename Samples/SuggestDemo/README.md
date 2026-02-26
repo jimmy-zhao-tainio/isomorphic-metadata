@@ -40,4 +40,4 @@ or
 
 - `model suggest` lists candidate business keys such as `Warehouse.WarehouseCode`, `Product.ProductCode`, and `Supplier.SupplierCode`.
 - `model suggest` lists candidate relationship refactors such as `Order.WarehouseCode -> Warehouse.WarehouseCode`.
-- Output is read-only and text-only (no JSON for suggest).
+- Output is read-only and text-only.

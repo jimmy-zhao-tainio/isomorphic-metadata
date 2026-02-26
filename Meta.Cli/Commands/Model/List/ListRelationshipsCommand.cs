@@ -31,19 +31,7 @@ internal sealed partial class CliRuntime
                 Target = relationship.Entity,
             })
             .ToList();
-    
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                command = "list.relationships",
-                entity = entity.Name,
-                count = refs.Count,
-                relationships = refs,
-            });
-            return 0;
-        }
-    
+
         presenter.WriteInfo($"Relationships: {entity.Name} ({refs.Count})");
         presenter.WriteInfo("Required: (n/a)");
         presenter.WriteTable(
@@ -68,24 +56,13 @@ internal sealed partial class CliRuntime
         var filesystemContext = ResolveWorkspaceFilesystemContext(options.WorkspacePath);
         var tasksRoot = Path.Combine(filesystemContext.MetadataRootPath, "tasks");
         var taskFiles = Directory.Exists(tasksRoot)
-            ? Directory.GetFiles(tasksRoot, "*.json", SearchOption.TopDirectoryOnly)
+            ? Directory.GetFiles(tasksRoot, "*.task", SearchOption.TopDirectoryOnly)
                 .Select(file => Path.GetFileNameWithoutExtension(file) ?? string.Empty)
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                 .ToList()
             : new List<string>();
-    
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                command = "list.tasks",
-                count = taskFiles.Count,
-                tasks = taskFiles,
-            });
-            return Task.FromResult(0);
-        }
-    
+
         presenter.WriteInfo($"Tasks ({taskFiles.Count}):");
         if (taskFiles.Count == 0)
         {

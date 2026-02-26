@@ -38,19 +38,7 @@ internal sealed partial class CliRuntime
             Required = true,
             Type = "string",
         });
-    
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                command = "list.properties",
-                entity = entity.Name,
-                count = properties.Count,
-                properties,
-            });
-            return 0;
-        }
-    
+
         presenter.WriteInfo($"Properties: {entity.Name}");
         presenter.WriteTable(
             new[] { "Name", "Type", "Required" },

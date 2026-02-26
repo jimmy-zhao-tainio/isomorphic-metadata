@@ -34,22 +34,7 @@ internal sealed partial class CliRuntime
             isRequired = true,
             dataType = "string",
         });
-    
-        if (globalJson)
-        {
-            WriteJson(new
-            {
-                command = "view.entity",
-                entity = entity.Name,
-                rowCount,
-                properties,
-                relationships = entity.Relationships
-                    .OrderBy(item => item.Entity, StringComparer.OrdinalIgnoreCase)
-                    .Select(item => item.Entity),
-            });
-            return 0;
-        }
-    
+
         presenter.WriteInfo($"Entity: {entity.Name}");
         presenter.WriteInfo($"Rows: {rowCount.ToString(CultureInfo.InvariantCulture)}");
 

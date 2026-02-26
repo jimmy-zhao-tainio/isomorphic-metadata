@@ -503,11 +503,11 @@ internal static class HelpTopics
             case "bulk-insert":
                 document = BuildTopicDocument(
                     title: "Command: bulk-insert",
-                    summary: "Bulk insert instances from tsv/csv/jsonl input with optional auto-generated numeric Ids.",
-                    usage: "meta bulk-insert <Entity> [--from tsv|csv|jsonl] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]",
+                    summary: "Bulk insert instances from tsv/csv input with optional auto-generated numeric Ids.",
+                    usage: "meta bulk-insert <Entity> [--from tsv|csv] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]",
                     options: new[]
                     {
-                        ("--from tsv|csv|jsonl", "Input format."),
+                        ("--from tsv|csv", "Input format."),
                         ("--file <path>", "Input file."),
                         ("--stdin", "Read input from stdin."),
                         ("--key Field[,Field2...]", "Match key fields."),
