@@ -458,11 +458,8 @@ Eligible means the promotion satisfies 100% referential integrity (RI) before an
 If any rule fails, the item is not printed as a default suggestion.
 
 ```cmd
-cd /d C:\Users\jimmy\Desktop\Metadata
-rmdir /s /q C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
-
-meta import csv C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
-cd /d C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+meta import csv .\Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace .\Samples\SuggestDemo\Workspace
+cd .\Samples\SuggestDemo\Workspace
 meta import csv ..\demo-csv\suppliers.csv --entity Supplier
 meta import csv ..\demo-csv\categories.csv --entity Category
 meta import csv ..\demo-csv\warehouses.csv --entity Warehouse
@@ -483,7 +480,7 @@ meta check
 
 ```text
 OK: model suggest
-Workspace: C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+Workspace: .\Samples\SuggestDemo\Workspace
 Model: ProductModel
 Suggestions: 3
 
@@ -497,7 +494,7 @@ Relationship suggestions
 
 ```text
 OK: model suggest
-Workspace: C:\Users\jimmy\Desktop\Metadata\Samples\SuggestDemo\Workspace
+Workspace: .\Samples\SuggestDemo\Workspace
 Model: ProductModel
 Suggestions: 0
 
