@@ -24,17 +24,6 @@ Core terms:
 - `Instance`: one row/record of an entity, identified by `Id`.
 - `Workspace`: on-disk unit that contains model + instance + workspace config.
 
-### Why we need metadata
-
-For BI/data-platform teams, semantics change constantly (new systems, new mappings, new rules). If semantics are hardcoded in application code only, change velocity and reviewability collapse.
-
-Metadata gives you:
-
-- explicit schema/instance contracts you can inspect and validate.
-- deterministic refactors (model + instance rewritten together).
-- SQL/C#/SSDT consumables from one authoritative model.
-- repeatable onboarding: team members can inspect the model and instance graph directly.
-
 ### Why isomorphic metadata
 
 Isomorphic means the **same semantics** can live in multiple forms without translation drift.
