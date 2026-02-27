@@ -173,7 +173,7 @@ public static class DataBatchParser
         var tokens = input
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace('\r', '\n')
-            .Split(['\n', ',', ';', '\t'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Split(new[] { '\n', ',', ';', '\t' }, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .ToList();
         if (tokens.Count == 0)
         {
