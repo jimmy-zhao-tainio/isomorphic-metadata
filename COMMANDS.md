@@ -100,7 +100,7 @@ Exit codes:
 - `0` success
 - `1` usage/argument error, diff has differences, or merge precondition conflict
 - `2` integrity check failure
-- `3` fingerprint mismatch
+- `3` reserved
 - `4` workspace/data/model/operation error
 - `5` generation failure
 - `6` internal error

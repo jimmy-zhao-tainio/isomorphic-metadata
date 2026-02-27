@@ -3,9 +3,17 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>meta</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <UpdateRepoMetaExe Condition="'$(UpdateRepoMetaExe)' == ''">true</UpdateRepoMetaExe>
+    <RepoRootPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</RepoRootPath>
+    <RepoMetaPublishDir>$(RepoRootPath)artifacts\meta-publish\</RepoMetaPublishDir>
+    <RepoMetaExePath>$(RepoRootPath)meta.exe</RepoMetaExePath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,5 +26,15 @@
     <EmbeddedResource Include="Templates\InstanceDiffModel.Alignment.xml" />
     <EmbeddedResource Include="Templates\InstanceDiffModel.Aligned.xml" />
   </ItemGroup>
+
+  <Target
+    Name="UpdateRepoMetaExeAfterBuild"
+    AfterTargets="Build"
+    Condition="'$(OS)' == 'Windows_NT' and '$(UpdateRepoMetaExe)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <Message Importance="High" Text="Publishing repo-root meta.exe to $(RepoMetaExePath)" />
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; --configuration $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:UpdateRepoMetaExe=false -o &quot;$(RepoMetaPublishDir)&quot;" />
+    <Copy SourceFiles="$(RepoMetaPublishDir)meta.exe" DestinationFiles="$(RepoMetaExePath)" OverwriteReadOnlyFiles="true" />
+  </Target>
 
 </Project>

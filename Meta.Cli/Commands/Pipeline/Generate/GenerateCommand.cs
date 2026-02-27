@@ -43,8 +43,7 @@ internal sealed partial class CliRuntime
                     presenter.WriteOk(
                         "generated sql",
                         ("Out", Path.GetFullPath(options.OutputDirectory)),
-                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
-                        ("Hash", manifest.CombinedHash));
+                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)));
     
                     return 0;
                 case "csharp":
@@ -53,8 +52,7 @@ internal sealed partial class CliRuntime
                         "generated csharp",
                         ("Out", Path.GetFullPath(options.OutputDirectory)),
                         ("Tooling", options.IncludeTooling ? "yes" : "no"),
-                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
-                        ("Hash", manifest.CombinedHash));
+                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)));
     
                     return 0;
                 case "ssdt":
@@ -62,8 +60,7 @@ internal sealed partial class CliRuntime
                     presenter.WriteOk(
                         "generated ssdt",
                         ("Out", Path.GetFullPath(options.OutputDirectory)),
-                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)),
-                        ("Hash", manifest.CombinedHash));
+                        ("Files", manifest.FileHashes.Count.ToString(CultureInfo.InvariantCulture)));
     
                     return 0;
                 default:

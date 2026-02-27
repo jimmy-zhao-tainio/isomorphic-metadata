@@ -443,7 +443,6 @@ internal sealed partial class CliRuntime
     {
         var entityCount = workspace.Model.Entities.Count;
         var rowCount = workspace.Instance.RecordsByEntity.Values.Sum(records => records.Count);
-        var hash = services.WorkspaceService.CalculateHash(workspace);
         var dataSizes = CalculateWorkspaceDataSizes(workspace);
         presenter.WriteInfo("Status: ok");
         presenter.WriteKeyValueBlock(
@@ -473,7 +472,6 @@ internal sealed partial class CliRuntime
             new[]
             {
                 ("Version", MetaWorkspaceConfig.GetContractVersion(workspace.WorkspaceConfig)),
-                ("WorkspaceFingerprint", hash),
             });
     }
     

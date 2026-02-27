@@ -26,7 +26,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 8.0.x
 
       - name: Restore
         run: dotnet restore Metadata.Framework.sln
@@ -35,7 +35,7 @@ jobs:
         run: dotnet build Metadata.Framework.sln --configuration Release --no-restore
 
       - name: Test (core correctness)
-        run: dotnet test MetadataStudio.Core.Tests/MetadataStudio.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName!~DeterminismGoldenTests&FullyQualifiedName!~LargeWorkspacePerformanceTests"
+        run: dotnet test Meta.Core.Tests/Meta.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName!~DeterminismGoldenTests&FullyQualifiedName!~LargeWorkspacePerformanceTests"
 
   determinism:
     runs-on: windows-latest
@@ -47,7 +47,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 8.0.x
 
       - name: Restore
         run: dotnet restore Metadata.Framework.sln
@@ -56,7 +56,7 @@ jobs:
         run: dotnet build Metadata.Framework.sln --configuration Release --no-restore
 
       - name: Test (determinism golden)
-        run: dotnet test MetadataStudio.Core.Tests/MetadataStudio.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~DeterminismGoldenTests"
+        run: dotnet test Meta.Core.Tests/Meta.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~DeterminismGoldenTests"
 
   perf_100k:
     runs-on: windows-latest
@@ -68,7 +68,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 8.0.x
 
       - name: Restore
         run: dotnet restore Metadata.Framework.sln
@@ -82,7 +82,7 @@ jobs:
           METADATASTUDIO_PERF_MAX_SAVE_MS: 45000
           METADATASTUDIO_PERF_MAX_LOAD_MS: 45000
           METADATASTUDIO_PERF_MAX_ALLOCATED_MB: 2048
-        run: dotnet test MetadataStudio.Core.Tests/MetadataStudio.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~LargeWorkspacePerformanceTests.SaveAndLoad_100kRows_WithinConfiguredBudgets"
+        run: dotnet test Meta.Core.Tests/Meta.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~LargeWorkspacePerformanceTests.SaveAndLoad_100kRows_WithinConfiguredBudgets"
 
   perf_1m_optional:
     runs-on: windows-latest
@@ -95,7 +95,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 8.0.x
 
       - name: Restore
         run: dotnet restore Metadata.Framework.sln
@@ -109,4 +109,4 @@ jobs:
           METADATASTUDIO_PERF_1M_MAX_SAVE_MS: 300000
           METADATASTUDIO_PERF_1M_MAX_LOAD_MS: 300000
           METADATASTUDIO_PERF_1M_MAX_ALLOCATED_MB: 6144
-        run: dotnet test MetadataStudio.Core.Tests/MetadataStudio.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~LargeWorkspacePerformanceTests.SaveAndLoad_1MRows_WithinConfiguredBudgets_WhenEnabled"
+        run: dotnet test Meta.Core.Tests/Meta.Core.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~LargeWorkspacePerformanceTests.SaveAndLoad_1MRows_WithinConfiguredBudgets_WhenEnabled"

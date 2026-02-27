@@ -43,8 +43,9 @@ public static class GenerationService
 
         var outputRoot = PrepareOutputDirectory(outputDirectory);
         var modelTypeName = ResolveModelTypeName(workspace.Model.Name);
+        var namespaceName = modelTypeName;
         var modelFileName = modelTypeName + ".cs";
-        WriteText(Path.Combine(outputRoot, modelFileName), BuildCSharpModel(workspace, modelTypeName));
+        WriteText(Path.Combine(outputRoot, modelFileName), BuildCSharpModel(workspace, modelTypeName, namespaceName));
         var emittedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             modelFileName,
@@ -59,7 +60,7 @@ public static class GenerationService
                     $"Cannot generate C# tooling output because file name collides on '{toolingFileName}'.");
             }
 
-            WriteText(Path.Combine(outputRoot, toolingFileName), BuildCSharpTooling(modelTypeName));
+            WriteText(Path.Combine(outputRoot, toolingFileName), BuildCSharpTooling(modelTypeName, namespaceName));
         }
 
         foreach (var entity in workspace.Model.Entities
@@ -73,13 +74,13 @@ public static class GenerationService
                     $"Cannot generate C# output because model and entity file names collide on '{entityFileName}'.");
             }
 
-            WriteText(Path.Combine(outputRoot, entityFileName), BuildCSharpEntity(entity));
+            WriteText(Path.Combine(outputRoot, entityFileName), BuildCSharpEntity(entity, namespaceName));
         }
 
         return BuildManifest(outputRoot);
     }
 
-    private static string BuildCSharpTooling(string modelTypeName)
+    private static string BuildCSharpTooling(string modelTypeName, string namespaceName)
     {
         var builder = new StringBuilder();
         builder.AppendLine("using System.Threading;");
@@ -88,7 +89,7 @@ public static class GenerationService
         builder.AppendLine("using Meta.Core.Domain;");
         builder.AppendLine("using Meta.Core.Services;");
         builder.AppendLine();
-        builder.AppendLine("namespace GeneratedMetadata");
+        builder.AppendLine($"namespace {namespaceName}");
         builder.AppendLine("{");
         builder.AppendLine($"    public static class {modelTypeName}Tooling");
         builder.AppendLine("    {");
@@ -354,12 +355,12 @@ public static class GenerationService
         return NormalizeNewlines(builder.ToString());
     }
 
-    private static string BuildCSharpModel(Workspace workspace, string modelTypeName)
+    private static string BuildCSharpModel(Workspace workspace, string modelTypeName, string namespaceName)
     {
         var builder = new StringBuilder();
         builder.AppendLine("using System.Collections.Generic;");
         builder.AppendLine();
-        builder.AppendLine("namespace GeneratedMetadata");
+        builder.AppendLine($"namespace {namespaceName}");
         builder.AppendLine("{");
         builder.AppendLine($"    public sealed class {modelTypeName}");
         builder.AppendLine("    {");
@@ -377,10 +378,10 @@ public static class GenerationService
         return NormalizeNewlines(builder.ToString());
     }
 
-    private static string BuildCSharpEntity(GenericEntity entity)
+    private static string BuildCSharpEntity(GenericEntity entity, string namespaceName)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("namespace GeneratedMetadata");
+        builder.AppendLine($"namespace {namespaceName}");
         builder.AppendLine("{");
         builder.AppendLine($"    public sealed class {entity.Name}");
         builder.AppendLine("    {");

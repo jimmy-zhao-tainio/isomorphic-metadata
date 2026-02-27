@@ -1,4 +1,4 @@
-# Meta CLI Real Command Examples
+﻿# Meta CLI Real Command Examples
 
 All examples below were executed against local workspaces in this repository. Each section includes one successful run and one failing run with captured output and exit code.
 
@@ -6,7 +6,7 @@ All examples below were executed against local workspaces in this repository. Ea
 
 Success:
 ```powershell
-> .\\meta.cmd help
+> meta help
 [exit 0]
 Workspace is discovered from current directory; use --workspace to override.
 
@@ -55,7 +55,7 @@ Next: meta <command> help
 
 Failure:
 ```powershell
-> .\\meta.cmd help unknown-topic
+> meta help unknown-topic
 [exit 1]
 Error: unknown help topic 'unknown-topic'.
 
@@ -68,7 +68,7 @@ Next: meta help
 
 Success:
 ```powershell
-> .\\meta.cmd model --help
+> meta model --help
 [exit 0]
 Edit model entities, properties, and relationships.
 
@@ -101,7 +101,7 @@ Next: meta model <subcommand> help
 
 Failure:
 ```powershell
-> .\\meta.cmd model add-entity
+> meta model add-entity
 [exit 1]
 Error: missing required argument <Name>.
 
@@ -114,7 +114,7 @@ Next: meta model add-entity help
 
 Success:
 ```powershell
-> .\\meta.cmd init Samples\CommandExamplesInit
+> meta init Samples\CommandExamplesInit
 [exit 0]
 OK: workspace initialized
 Path: <repo>\Samples\CommandExamplesInit
@@ -122,7 +122,7 @@ Path: <repo>\Samples\CommandExamplesInit
 
 Failure:
 ```powershell
-> .\\meta.cmd init "Samples\Bad|Path"
+> meta init "Samples\Bad|Path"
 [exit 4]
 Error: Path is invalid for Windows.
 
@@ -135,7 +135,7 @@ Next: use a valid Windows path and retry.
 
 Success:
 ```powershell
-> .\\meta.cmd status --workspace Samples\CommandExamples
+> meta status --workspace Samples\CommandExamples
 [exit 0]
 Status: ok
 Workspace:
@@ -150,12 +150,11 @@ Data:
   Instance: 3.2 KB (3281 B)
 Contract:
   Version: 1.0
-  WorkspaceFingerprint: 8d95c4d962796946070e52c452d0f0deee79b9b3ceacc36a8b3384c49ff2735b
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd status --workspace Samples\CommandExamplesBroken
+> meta status --workspace Samples\CommandExamplesBroken
 [exit 4]
 Error: Cannot parse metadata/model.xml.
 
@@ -168,7 +167,7 @@ Next: meta check
 
 Success:
 ```powershell
-> .\\meta.cmd instance diff Samples\CommandExamplesDiffLeft Samples\CommandExamplesDiffRight
+> meta instance diff Samples\CommandExamplesDiffLeft Samples\CommandExamplesDiffRight
 [exit 1]
 Instance diff: differences found.
 DiffWorkspace: <repo>\Samples\CommandExamplesDiffRight.instance-diff
@@ -178,7 +177,7 @@ NotIn: left-not-in-right=0, right-not-in-left=0
 
 Failure:
 ```powershell
-> .\\meta.cmd instance diff Samples\CommandExamplesDiffLeft Samples\MissingWorkspace
+> meta instance diff Samples\CommandExamplesDiffLeft Samples\MissingWorkspace
 [exit 4]
 Error: Workspace was not found.
 
@@ -189,7 +188,7 @@ Next: meta init .
 
 Success:
 ```powershell
-> .\\meta.cmd list entities --workspace Samples\CommandExamples
+> meta list entities --workspace Samples\CommandExamples
 [exit 0]
 Entities (9):
   Name             Rows  Properties  Relationships
@@ -206,7 +205,7 @@ Entities (9):
 
 Failure:
 ```powershell
-> .\\meta.cmd list entities --workspace Samples\CommandExamplesBroken
+> meta list entities --workspace Samples\CommandExamplesBroken
 [exit 4]
 Error: Cannot parse metadata/model.xml.
 
@@ -219,7 +218,7 @@ Next: meta check
 
 Success:
 ```powershell
-> .\\meta.cmd list properties Cube --workspace Samples\CommandExamples
+> meta list properties Cube --workspace Samples\CommandExamples
 [exit 0]
 Properties: Cube
   Name         Type    Required
@@ -231,7 +230,7 @@ Properties: Cube
 
 Failure:
 ```powershell
-> .\\meta.cmd list properties MissingEntity --workspace Samples\CommandExamples
+> meta list properties MissingEntity --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingEntity' was not found.
 
@@ -242,7 +241,7 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd list relationships Measure --workspace Samples\CommandExamples
+> meta list relationships Measure --workspace Samples\CommandExamples
 [exit 0]
 Relationships: Measure (1)
 Required: (n/a)
@@ -252,7 +251,7 @@ Required: (n/a)
 
 Failure:
 ```powershell
-> .\\meta.cmd list relationships MissingEntity --workspace Samples\CommandExamples
+> meta list relationships MissingEntity --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingEntity' was not found.
 
@@ -263,14 +262,14 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd check --workspace Samples\CommandExamples
+> meta check --workspace Samples\CommandExamples
 [exit 0]
 OK: check (0 errors, 0 warnings)
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd check --workspace Samples\CommandExamplesBroken
+> meta check --workspace Samples\CommandExamplesBroken
 [exit 4]
 Error: Cannot parse metadata/model.xml.
 
@@ -283,7 +282,7 @@ Next: meta check
 
 Success:
 ```powershell
-> .\\meta.cmd view entity Cube --workspace Samples\CommandExamples
+> meta view entity Cube --workspace Samples\CommandExamples
 [exit 0]
 Entity: Cube
 Rows: 2
@@ -300,7 +299,7 @@ RelationshipTargets:
 
 Failure:
 ```powershell
-> .\\meta.cmd view entity MissingEntity --workspace Samples\CommandExamples
+> meta view entity MissingEntity --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingEntity' was not found.
 
@@ -311,7 +310,7 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd view instance Cube 1 --workspace Samples\CommandExamples
+> meta view instance Cube 1 --workspace Samples\CommandExamples
 [exit 0]
 Instance: Cube 1
   Field        Value
@@ -322,7 +321,7 @@ Instance: Cube 1
 
 Failure:
 ```powershell
-> .\\meta.cmd view instance Cube 999 --workspace Samples\CommandExamples
+> meta view instance Cube 999 --workspace Samples\CommandExamples
 [exit 4]
 Error: Instance 'Cube 999' was not found.
 
@@ -333,7 +332,7 @@ Next: meta query Cube --contains Id 999
 
 Success:
 ```powershell
-> .\\meta.cmd query Cube --workspace Samples\CommandExamples --contains CubeName Sales
+> meta query Cube --workspace Samples\CommandExamples --contains CubeName Sales
 [exit 0]
 Query: Cube
 Filter: CubeName contains Sales
@@ -344,7 +343,7 @@ Matches: 1
 
 Failure:
 ```powershell
-> .\\meta.cmd query Cube --workspace Samples\CommandExamples --contains MissingField Value
+> meta query Cube --workspace Samples\CommandExamples --contains MissingField Value
 [exit 4]
 Error: Property 'Cube.MissingField' was not found.
 
@@ -355,7 +354,7 @@ Next: meta list properties Cube
 
 Success:
 ```powershell
-> .\\meta.cmd graph stats --workspace Samples\CommandExamples --top 3 --cycles 3
+> meta graph stats --workspace Samples\CommandExamples --top 3 --cycles 3
 [exit 0]
 Graph: EnterpriseBIPlatform
 Nodes: 9
@@ -377,7 +376,7 @@ Top in-degree (3):
 
 Failure:
 ```powershell
-> .\\meta.cmd graph stats --workspace Samples\CommandExamplesBroken --top 3 --cycles 3
+> meta graph stats --workspace Samples\CommandExamplesBroken --top 3 --cycles 3
 [exit 4]
 Error: Cannot parse metadata/model.xml.
 
@@ -390,7 +389,7 @@ Next: meta check
 
 Success:
 ```powershell
-> .\\meta.cmd graph inbound Cube --workspace Samples\CommandExamples --top 10
+> meta graph inbound Cube --workspace Samples\CommandExamples --top 10
 [exit 0]
 Inbound relationships: Cube (2)
   FromEntity  ToEntity
@@ -400,7 +399,7 @@ Inbound relationships: Cube (2)
 
 Failure:
 ```powershell
-> .\\meta.cmd graph inbound MissingEntity --workspace Samples\CommandExamples
+> meta graph inbound MissingEntity --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingEntity' was not found.
 
@@ -411,7 +410,7 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd model add-entity CmdEntity --workspace Samples\CommandExamples
+> meta model add-entity CmdEntity --workspace Samples\CommandExamples
 [exit 0]
 OK: entity created
 Entity: CmdEntity
@@ -419,7 +418,7 @@ Entity: CmdEntity
 
 Failure:
 ```powershell
-> .\\meta.cmd model add-entity Cube --workspace Samples\CommandExamples
+> meta model add-entity Cube --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'Cube' already exists.
 
@@ -430,7 +429,7 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd model rename-entity CmdEntity CmdEntityRenamed --workspace Samples\CommandExamples
+> meta model rename-entity CmdEntity CmdEntityRenamed --workspace Samples\CommandExamples
 [exit 0]
 OK: entity renamed
 From: CmdEntity
@@ -439,7 +438,7 @@ To: CmdEntityRenamed
 
 Failure:
 ```powershell
-> .\\meta.cmd model rename-entity MissingEntity Anything --workspace Samples\CommandExamples
+> meta model rename-entity MissingEntity Anything --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingEntity' was not found.
 
@@ -450,7 +449,7 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd model add-property CmdEntityRenamed Label --required true --default-value Unknown --workspace Samples\CommandExamples
+> meta model add-property CmdEntityRenamed Label --required true --default-value Unknown --workspace Samples\CommandExamples
 [exit 0]
 OK: property added
 Entity: CmdEntityRenamed
@@ -460,7 +459,7 @@ DefaultValue: Unknown
 
 Failure:
 ```powershell
-> .\\meta.cmd model add-property MissingEntity Label --workspace Samples\CommandExamples
+> meta model add-property MissingEntity Label --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingEntity' was not found.
 
@@ -471,7 +470,7 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd model rename-property CmdEntityRenamed Label LabelText --workspace Samples\CommandExamples
+> meta model rename-property CmdEntityRenamed Label LabelText --workspace Samples\CommandExamples
 [exit 0]
 OK: property renamed
 Entity: CmdEntityRenamed
@@ -481,7 +480,7 @@ To: LabelText
 
 Failure:
 ```powershell
-> .\\meta.cmd model rename-property CmdEntityRenamed MissingProp Anything --workspace Samples\CommandExamples
+> meta model rename-property CmdEntityRenamed MissingProp Anything --workspace Samples\CommandExamples
 [exit 4]
 Error: Property 'CmdEntityRenamed.MissingProp' was not found.
 
@@ -492,7 +491,7 @@ Next: meta list properties CmdEntityRenamed
 
 Success:
 ```powershell
-> .\\meta.cmd model add-relationship CmdEntityRenamed Cube --default-id 1 --workspace Samples\CommandExamples
+> meta model add-relationship CmdEntityRenamed Cube --default-id 1 --workspace Samples\CommandExamples
 [exit 0]
 OK: relationship added
 From: CmdEntityRenamed
@@ -503,7 +502,7 @@ DefaultId: 1
 
 Failure:
 ```powershell
-> .\\meta.cmd model add-relationship CmdEntityRenamed MissingTarget --default-id 1 --workspace Samples\CommandExamples
+> meta model add-relationship CmdEntityRenamed MissingTarget --default-id 1 --workspace Samples\CommandExamples
 [exit 4]
 Error: Entity 'MissingTarget' was not found.
 
@@ -514,7 +513,7 @@ Next: meta list entities
 
 Success:
 ```powershell
-> .\\meta.cmd model drop-relationship CmdEntityRenamed Cube --workspace Samples\CommandExamples
+> meta model drop-relationship CmdEntityRenamed Cube --workspace Samples\CommandExamples
 [exit 0]
 OK: relationship removed
 From: CmdEntityRenamed
@@ -524,7 +523,7 @@ Name: Cube
 
 Failure:
 ```powershell
-> .\\meta.cmd model drop-relationship Measure Cube --workspace Samples\CommandExamples
+> meta model drop-relationship Measure Cube --workspace Samples\CommandExamples
 [exit 4]
 Error: Relationship 'Measure->Cube' is in use.
 
@@ -541,7 +540,7 @@ Next: meta instance relationship set Measure 1 --to Cube <ToId>
 
 Success:
 ```powershell
-> .\\meta.cmd model drop-property CmdEntityRenamed LabelText --workspace Samples\CommandExamples
+> meta model drop-property CmdEntityRenamed LabelText --workspace Samples\CommandExamples
 [exit 0]
 OK: property removed
 Entity: CmdEntityRenamed
@@ -550,7 +549,7 @@ Property: LabelText
 
 Failure:
 ```powershell
-> .\\meta.cmd model drop-property CmdEntityRenamed MissingProp --workspace Samples\CommandExamples
+> meta model drop-property CmdEntityRenamed MissingProp --workspace Samples\CommandExamples
 [exit 4]
 Error: Property 'CmdEntityRenamed.MissingProp' was not found.
 
@@ -561,7 +560,7 @@ Next: meta list properties CmdEntityRenamed
 
 Success:
 ```powershell
-> .\\meta.cmd model drop-entity CmdEntityRenamed --workspace Samples\CommandExamples
+> meta model drop-entity CmdEntityRenamed --workspace Samples\CommandExamples
 [exit 0]
 OK: entity removed
 Entity: CmdEntityRenamed
@@ -569,7 +568,7 @@ Entity: CmdEntityRenamed
 
 Failure:
 ```powershell
-> .\\meta.cmd model drop-entity Cube --workspace Samples\CommandExamples
+> meta model drop-entity Cube --workspace Samples\CommandExamples
 [exit 4]
 Error: Cannot drop entity Cube
 
@@ -582,7 +581,7 @@ Next: meta view instance Cube 1
 
 Success:
 ```powershell
-> .\\meta.cmd insert Cube 10 --set "CubeName=Ops Cube" --set "Purpose=Operational reporting" --set RefreshMode=Scheduled --workspace Samples\CommandExamples
+> meta insert Cube 10 --set "CubeName=Ops Cube" --set "Purpose=Operational reporting" --set RefreshMode=Scheduled --workspace Samples\CommandExamples
 [exit 0]
 OK: created Cube 10
 CubeName: Ops Cube
@@ -590,7 +589,7 @@ CubeName: Ops Cube
 
 Failure:
 ```powershell
-> .\\meta.cmd insert Cube 10 --set CubeName=Duplicate --workspace Samples\CommandExamples
+> meta insert Cube 10 --set CubeName=Duplicate --workspace Samples\CommandExamples
 [exit 4]
 Error: Instance 'Cube 10' already exists.
 
@@ -601,7 +600,7 @@ Next: meta instance update Cube 10 --set <Field>=<Value>
 
 Success:
 ```powershell
-> .\\meta.cmd insert Cube --auto-id --set "CubeName=Auto Id Cube" --set "Purpose=Autogenerated id sample" --set RefreshMode=Manual --workspace Samples\CommandExamples
+> meta insert Cube --auto-id --set "CubeName=Auto Id Cube" --set "Purpose=Autogenerated id sample" --set RefreshMode=Manual --workspace Samples\CommandExamples
 [exit 0]
 OK: created Cube 11
 CubeName: Auto Id Cube
@@ -609,7 +608,7 @@ CubeName: Auto Id Cube
 
 Failure:
 ```powershell
-> .\\meta.cmd insert Cube 11 --auto-id --set CubeName=Conflict --workspace Samples\CommandExamples
+> meta insert Cube 11 --auto-id --set CubeName=Conflict --workspace Samples\CommandExamples
 [exit 1]
 Error: --auto-id cannot be combined with positional <Id>.
 
@@ -622,14 +621,14 @@ Next: meta insert help
 
 Success:
 ```powershell
-> .\\meta.cmd instance update Cube 10 --set RefreshMode=Manual --workspace Samples\CommandExamples
+> meta instance update Cube 10 --set RefreshMode=Manual --workspace Samples\CommandExamples
 [exit 0]
 OK: updated Cube 10
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd instance update Cube 1 --set MissingField=BadValue --workspace Samples\CommandExamples
+> meta instance update Cube 1 --set MissingField=BadValue --workspace Samples\CommandExamples
 [exit 4]
 Error: Property 'Cube.MissingField' was not found.
 
@@ -640,7 +639,7 @@ Next: meta list properties Cube
 
 Success:
 ```powershell
-> .\\meta.cmd instance relationship set Measure 1 --to Cube 2 --workspace Samples\CommandExamples
+> meta instance relationship set Measure 1 --to Cube 2 --workspace Samples\CommandExamples
 [exit 0]
 OK: relationship usage updated
 FromInstance: Measure 1
@@ -649,7 +648,7 @@ ToInstance: Cube 2
 
 Failure:
 ```powershell
-> .\\meta.cmd instance relationship set Measure 1 --to Cube 999 --workspace Samples\CommandExamples
+> meta instance relationship set Measure 1 --to Cube 999 --workspace Samples\CommandExamples
 [exit 4]
 Error: Instance 'Cube 999' was not found.
 
@@ -660,7 +659,7 @@ Next: meta query Cube --contains Id 999
 
 Success:
 ```powershell
-> .\\meta.cmd instance relationship list Measure 1 --workspace Samples\CommandExamples
+> meta instance relationship list Measure 1 --workspace Samples\CommandExamples
 [exit 0]
 Relationships:
   FromInstance: Measure 1
@@ -670,7 +669,7 @@ Relationships:
 
 Failure:
 ```powershell
-> .\\meta.cmd instance relationship list Measure 999 --workspace Samples\CommandExamples
+> meta instance relationship list Measure 999 --workspace Samples\CommandExamples
 [exit 4]
 Error: Instance 'Measure 999' was not found.
 
@@ -681,7 +680,7 @@ Next: meta query Measure --contains Id 999
 
 Success:
 ```powershell
-> .\\meta.cmd bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert.tsv --key Id --workspace Samples\CommandExamples
+> meta bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert.tsv --key Id --workspace Samples\CommandExamples
 [exit 0]
 OK: bulk insert Cube
 Inserted: 1
@@ -691,7 +690,7 @@ Total: 2
 
 Failure:
 ```powershell
-> .\\meta.cmd bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert-invalid.tsv --key Id --workspace Samples\CommandExamples
+> meta bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert-invalid.tsv --key Id --workspace Samples\CommandExamples
 [exit 4]
 Error: Property 'Cube.UnknownColumn' was not found.
 
@@ -702,7 +701,7 @@ Next: meta list properties Cube
 
 Success:
 ```powershell
-> .\\meta.cmd bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert-auto-id.tsv --auto-id --workspace Samples\CommandExamples
+> meta bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert-auto-id.tsv --auto-id --workspace Samples\CommandExamples
 [exit 0]
 OK: bulk insert Cube
 Inserted: 2
@@ -712,7 +711,7 @@ Total: 2
 
 Failure:
 ```powershell
-> .\\meta.cmd bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert-auto-id.tsv --auto-id --key Id --workspace Samples\CommandExamples
+> meta bulk-insert Cube --from tsv --file Samples\CommandExamples\input\cube-bulk-insert-auto-id.tsv --auto-id --key Id --workspace Samples\CommandExamples
 [exit 1]
 Error: --auto-id cannot be combined with --key.
 
@@ -725,14 +724,14 @@ Next: meta bulk-insert help
 
 Success:
 ```powershell
-> .\\meta.cmd delete Cube 10 --workspace Samples\CommandExamples
+> meta delete Cube 10 --workspace Samples\CommandExamples
 [exit 0]
 OK: deleted Cube 10
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd delete Cube 2 --workspace Samples\CommandExamples
+> meta delete Cube 2 --workspace Samples\CommandExamples
 [exit 4]
 Error: Cannot delete Cube 2
 
@@ -747,17 +746,16 @@ Next: meta delete help
 
 Success:
 ```powershell
-> .\\meta.cmd generate sql --out Samples\CommandExamplesOut\sql --workspace Samples\CommandExamples
+> meta generate sql --out Samples\CommandExamplesOut\sql --workspace Samples\CommandExamples
 [exit 0]
 OK: generated sql
 Out: <repo>\Samples\CommandExamplesOut\sql
 Files: 2
-Hash: 4ae15ccab6ae62a58dfc163218dc8539854f7fbd5c282709e15478c5e7eef4a3
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd generate sql --out Samples\CommandExamplesOut\sql-broken --workspace Samples\CommandExamplesBroken
+> meta generate sql --out Samples\CommandExamplesOut\sql-broken --workspace Samples\CommandExamplesBroken
 [exit 4]
 Error: Cannot parse metadata/model.xml.
 
@@ -770,17 +768,16 @@ Next: meta check
 
 Success:
 ```powershell
-> .\\meta.cmd generate csharp --out Samples\CommandExamplesOut\csharp --workspace Samples\CommandExamples
+> meta generate csharp --out Samples\CommandExamplesOut\csharp --workspace Samples\CommandExamples
 [exit 0]
 OK: generated csharp
 Out: <repo>\Samples\CommandExamplesOut\csharp
 Files: 10
-Hash: ec772cf5df25aff0113850a2c25e2e0ed56fc40cf97314aa82c9dd78b8a1f754
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd generate csharp --out Samples\CommandExamplesOut\csharp-broken --workspace Samples\CommandExamplesBroken
+> meta generate csharp --out Samples\CommandExamplesOut\csharp-broken --workspace Samples\CommandExamplesBroken
 [exit 4]
 Error: Cannot parse metadata/model.xml.
 
@@ -793,17 +790,16 @@ Next: meta check
 
 Success:
 ```powershell
-> .\\meta.cmd generate ssdt --out Samples\CommandExamplesOut\ssdt --workspace Samples\CommandExamples
+> meta generate ssdt --out Samples\CommandExamplesOut\ssdt --workspace Samples\CommandExamples
 [exit 0]
 OK: generated ssdt
 Out: <repo>\Samples\CommandExamplesOut\ssdt
 Files: 4
-Hash: 24339ca36656bea252e71eb59e923d3a270f3107cdb793301d9520494c9172f4
 ```
 
 Failure:
 ```powershell
-> .\\meta.cmd generate ssdt --out Samples\CommandExamplesOut\ssdt-broken --workspace Samples\CommandExamplesBroken
+> meta generate ssdt --out Samples\CommandExamplesOut\ssdt-broken --workspace Samples\CommandExamplesBroken
 [exit 4]
 Error: Cannot parse metadata/model.xml.
 
@@ -816,7 +812,7 @@ Next: meta check
 
 Success:
 ```powershell
-> .\\meta.cmd import xml Samples\SampleModel.xml Samples\SampleInstance.xml --new-workspace Samples\CommandExamplesImportedXml
+> meta import xml Samples\SampleModel.xml Samples\SampleInstance.xml --new-workspace Samples\CommandExamplesImportedXml
 [exit 0]
 OK: imported xml
 Workspace: <repo>\Samples\CommandExamplesImportedXml
@@ -824,7 +820,7 @@ Workspace: <repo>\Samples\CommandExamplesImportedXml
 
 Failure:
 ```powershell
-> .\\meta.cmd import xml Samples\SampleModel.xml Samples\SampleInstance.xml --new-workspace Samples\CommandExamples
+> meta import xml Samples\SampleModel.xml Samples\SampleInstance.xml --new-workspace Samples\CommandExamples
 [exit 4]
 Error: new workspace target directory must be empty.
 
@@ -837,7 +833,7 @@ Next: choose a new folder path, for example: --new-workspace .\ImportedWorkspace
 
 Success:
 ```powershell
-> .\\meta.cmd instance merge Samples\CommandExamplesDiffLeft <repo>\Samples\CommandExamplesDiffRight.instance-diff
+> meta instance merge Samples\CommandExamplesDiffLeft <repo>\Samples\CommandExamplesDiffRight.instance-diff
 [exit 0]
 OK: instance merge applied
 Target: <repo>\Samples\CommandExamplesDiffLeft
@@ -845,11 +841,13 @@ Target: <repo>\Samples\CommandExamplesDiffLeft
 
 Failure:
 ```powershell
-> .\\meta.cmd instance merge Samples\CommandExamplesDiffLeft <repo>\Samples\CommandExamplesDiffRight.instance-diff
+> meta instance merge Samples\CommandExamplesDiffLeft <repo>\Samples\CommandExamplesDiffRight.instance-diff
 [exit 1]
 Error: instance merge precondition failed: target does not match the diff left snapshot.
 
 Next: re-run meta instance diff on the current target and intended right workspace.
 ```
+
+
 
 

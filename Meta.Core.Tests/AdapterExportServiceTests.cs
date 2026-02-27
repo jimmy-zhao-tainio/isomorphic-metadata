@@ -52,7 +52,7 @@ public sealed class AdapterExportServiceTests
             Assert.True(File.Exists(entityPath));
 
             var modelText = await File.ReadAllTextAsync(modelPath);
-            Assert.Contains("namespace GeneratedMetadata", modelText, StringComparison.Ordinal);
+            Assert.Contains($"namespace {workspace.Model.Name}", modelText, StringComparison.Ordinal);
         }
         finally
         {

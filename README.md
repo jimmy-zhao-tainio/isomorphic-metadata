@@ -226,14 +226,14 @@ FOREIGN KEY ([SystemId]) REFERENCES [dbo].[System]([Id]);
 
 #### What gets emitted
 
-`meta generate csharp` emits dependency-free consumer types in `GeneratedMetadata`:
+`meta generate csharp` emits dependency-free consumer types in a namespace that matches the model name (for example `namespace EnterpriseBIPlatform`):
 - `<ModelName>.cs` (static model facade / container, e.g. `EnterpriseBIPlatform`)
 - `<Entity>.cs` (one file per entity, POCOs)
 
 #### Consumer usage (dependency-free)
 
 ```csharp
-using GeneratedMetadata;
+using EnterpriseBIPlatform;
 using System;
 using System.Linq;
 
@@ -256,7 +256,7 @@ foreach (var measure in EnterpriseBIPlatform.Measures)
 
 #### Optional tooling surface (`--tooling`)
 
-If you also run `meta generate csharp --tooling`, `meta` emits `<ModelName>.Tooling.cs` with workspace load/save helpers backed by Meta runtime services. Keep this separate from dependency-free consumer usage.
+If you also run `meta generate csharp --tooling`, `meta` emits `<ModelName>.Tooling.cs` in the same model-name namespace, with workspace load/save helpers backed by Meta runtime services. Keep this separate from dependency-free consumer usage.
 
 ## Install and run
 
@@ -266,13 +266,21 @@ Build:
 dotnet build Metadata.Framework.sln
 ```
 
+On Windows, building `Metadata.Framework.sln` refreshes the repo-root `meta.exe`.
+
 Run directly:
 
 ```powershell
 dotnet run --project Meta.Cli/Meta.Cli.csproj -- help
 ```
 
-Or use the executable in repo root:
+If `meta.exe` is on your `PATH`:
+
+```powershell
+meta help
+```
+
+Or run the executable in repo root directly:
 
 ```powershell
 .\meta.exe help
