@@ -1,6 +1,6 @@
 # isomorphic-metadata
 
-`isomorphic-metadata` is a deterministic metadata backend. The canonical representation is an XML workspace on disk (git-friendly), but you can round-trip: materialize a workspace from SQL, generate SQL/C#/SSDT, and load/save model instances via generated C# APIs for tooling.
+`isomorphic-metadata` is a deterministic metadata backend. The canonical representation is an XML workspace on disk (git-friendly), but you can round-trip: materialize a workspace from SQL, emit SQL/C#/SSDT representations, and load/save model instances via C# consumables for tooling.
 
 This repo ships two CLI tools:
 
@@ -32,7 +32,7 @@ Metadata gives you:
 
 - explicit schema/instance contracts you can inspect and validate.
 - deterministic refactors (model + instance rewritten together).
-- generation targets (SQL/C#/SSDT) from one authoritative model.
+- SQL/C#/SSDT consumables from one authoritative model.
 - repeatable onboarding: team members can inspect the model and instance graph directly.
 
 ### Why isomorphic metadata
@@ -48,8 +48,8 @@ Think of it as one model with three "native surfaces", each optimized for a diff
 Because the semantics are the same, multiple producers and consumers can collaborate without rewriting the model for each layer:
 
 - analysts/modelers edit model + instance in workspace form,
-- platform engineers generate SQL/SSDT,
-- application/tooling engineers consume the generated C# API.
+- platform engineers consume SQL/SSDT outputs in their pipelines,
+- application/tooling engineers consume emitted C# APIs.
 
 ### Why git matters for metadata
 
@@ -78,7 +78,9 @@ Workspace operations: create and inspect workspaces (`init`, `status`).
 Validation and inspection: check integrity and explore model/instance (`check`, `list`, `view`, `query`, `graph`).  
 Edits: mutate models and instance data (`model ...`, `insert`, `delete`, `bulk-insert`, `instance update`, `instance relationship set|list`, `instance diff`, `instance merge`).  
 Model analysis and guided refactor: read-only relationship inference (`model suggest`) and atomic promotion command (`model refactor property-to-relationship`).  
-Pipelines: import and generate (`import ...`, `generate ...`).
+Pipelines: import and emit representations (`import ...`, `generate ...`).
+
+Workflow: model + instance workspace -> `meta` emits C#/SQL consumables -> your patterns/generators produce organization-specific artifacts.
 
 ## One sample across XML, SQL, and C#
 
@@ -176,9 +178,9 @@ Pipelines: import and generate (`import ...`, `generate ...`).
 </EnterpriseBIPlatform>
 ```
 
-### Generated SQL (`meta generate sql`)
+### SQL representation (`meta generate sql`)
 
-`meta generate sql` writes `schema.sql` and `data.sql` (deterministic DDL and INSERT scripts).
+`meta generate sql` emits `schema.sql` and `data.sql` as deterministic SQL consumables (DDL and INSERT scripts).
 
 ```sql
 CREATE TABLE [dbo].[Cube] (
@@ -231,9 +233,9 @@ ADD CONSTRAINT [FK_SystemCube_System_SystemId]
 FOREIGN KEY ([SystemId]) REFERENCES [dbo].[System]([Id]);
 ```
 
-### Generated C# (`meta generate csharp`)
+### C# representation (`meta generate csharp`)
 
-#### What gets generated
+#### What gets emitted
 
 `meta generate csharp` emits dependency-free consumer types in `GeneratedMetadata`:
 - `<ModelName>.cs` (static model facade / container, e.g. `EnterpriseBIPlatform`)
@@ -265,7 +267,7 @@ foreach (var measure in EnterpriseBIPlatform.Measures)
 
 #### Optional tooling surface (`--tooling`)
 
-If you also run `meta generate csharp --tooling`, the generator emits `<ModelName>.Tooling.cs` with workspace load/save helpers backed by Meta runtime services. Keep this separate from dependency-free consumer usage.
+If you also run `meta generate csharp --tooling`, `meta` emits `<ModelName>.Tooling.cs` with workspace load/save helpers backed by Meta runtime services. Keep this separate from dependency-free consumer usage.
 
 ## Install and run
 
@@ -303,7 +305,7 @@ A model has one root `<Model name="...">` and then:
 
 - `<Entity>` defines a record type (like a table).
 - `name="Cube"` is the singular name.
-- `plural="Cubes"` controls how instances are grouped in instance XML (and exposed in generated APIs). If omitted, plural defaults to `<EntityName>s`.
+- `plural="Cubes"` controls how instances are grouped in instance XML (and exposed in emitted C# APIs). If omitted, plural defaults to `<EntityName>s`.
 - `<Properties>` lists scalar fields for the entity. `dataType="string"` is the default and omitted; properties are required by default (`isRequired="true"`), and optional fields use `isRequired="false"`.
 - `<Relationships>` lists required foreign-key style references to other entities. A relationship points to a target entity and is required by default. In instance XML it becomes `${TargetEntity}Id` by default. If you need multiple relationships to the same target, specify `role="..."` and it becomes `${Role}Id`.
 - `Id` is implicit on every entity, so `Property name="Id"` is not written.
@@ -429,17 +431,17 @@ Global behavior:
 | `meta instance diff-aligned <left> <right> <alignment>` | Diff two workspaces using explicit alignment mappings. | `meta instance diff-aligned .\\LeftWorkspace .\\RightWorkspace .\\AlignmentWorkspace` |
 | `meta instance merge-aligned <target> <diffWorkspace>` | Apply aligned diff artifact to target workspace. | `meta instance merge-aligned .\\TargetWorkspace .\\RightWorkspace.instance-diff-aligned` |
 
-### Import and generate
+### Import and emit representations
 
 | Command | What it is for | Example |
 |---|---|---|
 | `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Create new workspace from XML model+instance files. | `meta import xml .\\Samples\\SampleModel.xml .\\Samples\\SampleInstance.xml --new-workspace .\\Samples\\ImportedXml` |
 | `meta import sql <connectionString> <schema> --new-workspace <path>` | Create a new workspace by importing a SQL schema into workspace form (model + instance). | `meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\\Samples\\ImportedSql` |
 | `meta import csv <csvFile> --entity <EntityName> (--new-workspace <path> or --workspace <path>)` | Landing import: one CSV to one entity + rows in new or existing workspace. | `meta import csv .\\Samples\\landing.csv --entity Landing --new-workspace .\\Samples\\ImportedCsv` |
-| `meta generate sql --out <dir>` | Generate deterministic SQL schema + data scripts. | `meta generate sql --out .\\out\\sql` |
-| `meta generate csharp --out <dir>` | Generate dependency-free consumer C# API. | `meta generate csharp --out .\\out\\csharp` |
-| `meta generate csharp --out <dir> --tooling` | Generate optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
-| `meta generate ssdt --out <dir>` | Generate SSDT project artifacts. | `meta generate ssdt --out .\\out\\ssdt` |
+| `meta generate sql --out <dir>` | Emit deterministic SQL schema + data consumables. | `meta generate sql --out .\\out\\sql` |
+| `meta generate csharp --out <dir>` | Emit dependency-free consumer C# API consumables. | `meta generate csharp --out .\\out\\csharp` |
+| `meta generate csharp --out <dir> --tooling` | Emit optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
+| `meta generate ssdt --out <dir>` | Emit SSDT project consumables. | `meta generate ssdt --out .\\out\\ssdt` |
 
 ### Suggest workflow
 
@@ -674,7 +676,7 @@ Sanctioned model references are kept as XML on disk and loaded by core runtime c
 - `MetaSchema.Core/Models/SchemaCatalog.model.xml`
 - `MetaSchema.Catalogs/TypeConversionCatalog/metadata/model.xml`
 
-To regenerate sanctioned model C# APIs through the same public CLI surface, run:
+To re-emit sanctioned model C# APIs through the same public CLI surface, run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Generate-SanctionedModelApis.ps1
