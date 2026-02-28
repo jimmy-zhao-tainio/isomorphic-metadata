@@ -82,6 +82,7 @@ Writers are byte-stable for identical logical state.
 - Use `--plural <PluralName>` when a landed entity needs an explicit container name such as `Category -> Categories`.
 - Landing relationship candidates should stay as scalar `...Id` fields until promoted.
 - `meta model refactor property-to-relationship` preserves row identities and only rewrites fields.
+- `meta model refactor relationship-to-property` preserves row identities and only rewrites fields.
 - `--auto-id` is only for creating new rows when the source does not already carry an external identity.
 - `meta instance merge` and `meta instance merge-aligned` preserve ids from their diff artifacts.
 
@@ -155,6 +156,7 @@ Modify:
   - `--explain` includes Evidence/Stats/Why detail blocks
   - `--print-commands` prints copy/paste `meta model refactor property-to-relationship ...` commands for eligible suggestions
   - `refactor` usage: `meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]`
+  - inverse refactor: `meta model refactor relationship-to-property --source <Entity> --target <Entity> [--role <Role>] [--property <PropertyName>] [--workspace <path>]`
   - refactor is atomic (model + instance): if any precondition fails, nothing is written.
   - `add-property` usage: `meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]`
   - `--default-value` is required when adding a required property to an entity that already has rows (used for backfill).
@@ -207,6 +209,7 @@ Model mutation and refactor:
 | `meta model suggest` | You need read-only eligible relationship promotions. | `meta model suggest` |
 | `meta model suggest --print-commands` | You need copy/paste refactor commands for eligible suggestions. | `meta model suggest --print-commands` |
 | `meta model refactor property-to-relationship ...` | You need atomic model+instance promotion from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.ProductId --target Product --lookup Id --drop-source-property` |
+| `meta model refactor relationship-to-property ...` | You need atomic model+instance demotion from required relationship back to scalar Id property. | `meta model refactor relationship-to-property --source Order --target Product` |
 | `meta model add-entity <Name>` | You need a new entity definition. | `meta model add-entity SourceSystem` |
 | `meta model rename-entity <Old> <New>` | You need to rename an entity. | `meta model rename-entity SourceSystem Source` |
 | `meta model drop-entity <Entity>` | You need to remove an entity (when not blocked by data/references). | `meta model drop-entity SourceSystem` |

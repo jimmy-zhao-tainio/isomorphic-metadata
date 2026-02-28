@@ -239,6 +239,45 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
+    public async Task InvalidInstanceMissingRequiredRelationship_FailsAtLoad_ForCheckAndRelationshipToProperty()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithMissingRequiredRelationship();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-invalid-load-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var check = await RunCliAsync("check", "--workspace", workspaceRoot);
+            Assert.Equal(4, check.ExitCode);
+            Assert.Contains("Error: Entity 'Order' row 'ORD-001' is missing required relationship 'WarehouseId'.", check.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Unhandled exception", check.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Stack trace", check.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(4, refactor.ExitCode);
+            Assert.Contains("Error: Entity 'Order' row 'ORD-001' is missing required relationship 'WarehouseId'.", refactor.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Unhandled exception", refactor.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Stack trace", refactor.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
     public async Task Help_OverviewAndCommandHelp_AreAvailable()
     {
         var overview = await RunCliAsync("help");
@@ -282,6 +321,15 @@ public sealed class CliStrictModeTests
         Assert.Contains("--lookup <Property>", refactorHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--drop-source-property", refactorHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--workspace <path>", refactorHelp.StdOut, StringComparison.Ordinal);
+
+        var inverseRefactorHelp = await RunCliAsync("model", "refactor", "relationship-to-property", "--help");
+        Assert.Equal(0, inverseRefactorHelp.ExitCode);
+        Assert.Contains("meta model refactor relationship-to-property", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--source <Entity>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--target <Entity>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--role <Role>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--property <PropertyName>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace <path>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2038,6 +2086,248 @@ public sealed class CliStrictModeTests
                 "Source does not show reuse; lookup direction is ambiguous.",
                 result.CombinedOutput,
                 StringComparison.OrdinalIgnoreCase);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_RoundTripsBackToLandingShape()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+
+            var demote = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, demote.ExitCode);
+            Assert.Contains("OK: refactor relationship-to-property", demote.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Source: Order", demote.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Target: Warehouse", demote.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Role: (none)", demote.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Property: WarehouseId", demote.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Rows rewritten: 5", demote.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Relationship removed: yes", demote.StdOut, StringComparison.Ordinal);
+
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenRelationshipMissing_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Relationship 'Order->Warehouse' was not found.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenPropertyAlreadyExists_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--property",
+                "StatusText",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Property 'Order.StatusText' already exists.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenAnyRowHasMissingFk_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+
+            var orderPath = Path.Combine(workspaceRoot, "metadata", "instance", "Order.xml");
+            var orderDocument = XDocument.Load(orderPath);
+            var firstOrder = orderDocument.Descendants("Order")
+                .First(element => string.Equals((string?)element.Attribute("Id"), "ORD-001", StringComparison.Ordinal));
+            firstOrder.Attribute("WarehouseId")?.Remove();
+            orderDocument.Save(orderPath);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Entity 'Order' row 'ORD-001' is missing required relationship 'WarehouseId'.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenPropertyNameCollidesWithExistingRowAttribute_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.SupplierId",
+                "--target",
+                "Supplier",
+                "--lookup",
+                "Id",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--property",
+                "SupplierId",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Cannot demote relationship 'Order.WarehouseId' to property 'SupplierId' because row 'ORD-001' already contains 'SupplierId'.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
             AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
         }
         finally
@@ -4263,6 +4553,94 @@ public sealed class CliStrictModeTests
         Assert.Equal(0, (await RunCliAsync("model", "add-relationship", "A", "B", "--default-id", "1", "--workspace", root)).ExitCode);
         Assert.Equal(0, (await RunCliAsync("insert", "A", "1", "--set", "Code=A1", "--set", "BId=1", "--workspace", root)).ExitCode);
         Assert.Equal(0, (await RunCliAsync("check", "--workspace", root)).ExitCode);
+
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithMissingRequiredRelationship()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "metadata-invalid-load-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "metadata", "instance"));
+
+        File.WriteAllText(
+            Path.Combine(root, "workspace.xml"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <MetaWorkspace>
+              <Workspaces>
+                <Workspace Id="1" WorkspaceLayoutId="1" EncodingId="1" NewlinesId="1" EntitiesOrderId="1" PropertiesOrderId="1" RelationshipsOrderId="1" RowsOrderId="2" AttributesOrderId="3">
+                  <Name>Workspace</Name>
+                  <FormatVersion>1.0</FormatVersion>
+                </Workspace>
+              </Workspaces>
+              <WorkspaceLayouts>
+                <WorkspaceLayout Id="1">
+                  <ModelFilePath>metadata/model.xml</ModelFilePath>
+                  <InstanceDirPath>metadata/instance</InstanceDirPath>
+                </WorkspaceLayout>
+              </WorkspaceLayouts>
+              <Encodings>
+                <Encoding Id="1">
+                  <Name>utf-8-no-bom</Name>
+                </Encoding>
+              </Encodings>
+              <NewlinesValues>
+                <Newlines Id="1">
+                  <Name>lf</Name>
+                </Newlines>
+              </NewlinesValues>
+              <CanonicalOrders>
+                <CanonicalOrder Id="1">
+                  <Name>name-ordinal</Name>
+                </CanonicalOrder>
+                <CanonicalOrder Id="2">
+                  <Name>id-ordinal</Name>
+                </CanonicalOrder>
+                <CanonicalOrder Id="3">
+                  <Name>id-first-then-name-ordinal</Name>
+                </CanonicalOrder>
+              </CanonicalOrders>
+              <EntityStorages />
+            </MetaWorkspace>
+            """);
+
+        File.WriteAllText(
+            Path.Combine(root, "metadata", "model.xml"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Model name="Mini">
+              <Entities>
+                <Entity name="Warehouse" plural="Warehouses" />
+                <Entity name="Order" plural="Orders">
+                  <Relationships>
+                    <Relationship entity="Warehouse" />
+                  </Relationships>
+                </Entity>
+              </Entities>
+            </Model>
+            """);
+
+        File.WriteAllText(
+            Path.Combine(root, "metadata", "instance", "Warehouse.xml"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Mini>
+              <Warehouses>
+                <Warehouse Id="WH-001" />
+              </Warehouses>
+            </Mini>
+            """);
+
+        File.WriteAllText(
+            Path.Combine(root, "metadata", "instance", "Order.xml"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Mini>
+              <Orders>
+                <Order Id="ORD-001" />
+              </Orders>
+            </Mini>
+            """);
 
         return root;
     }

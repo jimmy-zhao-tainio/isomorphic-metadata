@@ -66,7 +66,7 @@ Instance data may be sharded: multiple instance files can contain rows for the s
 Workspace operations: create and inspect workspaces (`init`, `status`).  
 Validation and inspection: check integrity and explore model/instance (`check`, `list`, `view`, `query`, `graph`).  
 Edits: mutate models and instance data (`model ...`, `insert`, `delete`, `bulk-insert`, `instance update`, `instance relationship set|list`, `instance diff`, `instance merge`).  
-Model analysis and guided refactor: read-only relationship inference (`model suggest`) and atomic promotion command (`model refactor property-to-relationship`).  
+Model analysis and guided refactor: read-only relationship inference (`model suggest`) and atomic model+instance refactors (`model refactor property-to-relationship`, `model refactor relationship-to-property`).  
 Pipelines: import and emit representations (`import ...`, `generate ...`).
 
 Workflow: model + instance workspace -> `meta` emits C#/SQL consumables -> your patterns/generators produce organization-specific artifacts.
@@ -398,6 +398,7 @@ Global behavior:
 | `meta model suggest --print-commands` | Print copy/paste refactor commands for eligible suggestions. | `meta model suggest --print-commands` |
 | `meta model suggest --show-keys --explain` | Include candidate key diagnostics and explain blocks. | `meta model suggest --show-keys --explain` |
 | `meta model refactor property-to-relationship ...` | Atomic model+instance rewrite from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.WarehouseId --target Warehouse --lookup Id --drop-source-property` |
+| `meta model refactor relationship-to-property ...` | Atomic model+instance rewrite from required relationship back to scalar Id property. | `meta model refactor relationship-to-property --source Order --target Warehouse` |
 | `meta model add-entity <Name>` | Add a new entity definition. | `meta model add-entity SourceSystem` |
 | `meta model rename-entity <Old> <New>` | Rename an entity definition. | `meta model rename-entity SourceSystem Source` |
 | `meta model drop-entity <Entity>` | Drop entity definition (blocked if instances or inbound refs exist). | `meta model drop-entity SourceSystem` |
@@ -426,6 +427,7 @@ Id policy:
 - Scalar landing fields that point at other entities should stay as `...Id` until promoted.
 - `--auto-id` is only for creating brand-new rows when no external identity exists.
 - `meta model refactor property-to-relationship` preserves row identities; it only rewrites fields.
+- `meta model refactor relationship-to-property` preserves row identities; it only rewrites fields.
 - `meta instance merge` and `meta instance merge-aligned` preserve ids from the diff artifact and never remap existing rows.
 
 ### Instance diff and merge (quick index)

@@ -68,6 +68,7 @@ internal sealed partial class CliRuntime
                     "refactor" when args.Length >= 3 => args[2].Trim().ToLowerInvariant() switch
                     {
                         "property-to-relationship" => "meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]",
+                        "relationship-to-property" => "meta model refactor relationship-to-property --source <Entity> --target <Entity> [--role <Role>] [--property <PropertyName>] [--workspace <path>]",
                         _ => "meta model refactor <subcommand> [arguments] [--workspace <path>]",
                     },
                     "refactor" => "meta model refactor <subcommand> [arguments] [--workspace <path>]",

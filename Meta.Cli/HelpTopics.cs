@@ -434,6 +434,7 @@ internal static class HelpTopics
                     subcommands: new[]
                     {
                         ("property-to-relationship", "Promote scalar property to required relationship using lookup key."),
+                        ("relationship-to-property", "Demote required relationship to scalar Id property."),
                     });
                 return true;
 
@@ -457,6 +458,27 @@ internal static class HelpTopics
                         "meta model refactor property-to-relationship --source Order.ProductId --target Product --lookup Id --role ProductRef --drop-source-property",
                     },
                     next: "meta model suggest --print-commands");
+                return true;
+
+            case "model refactor relationship-to-property":
+                document = BuildTopicDocument(
+                    title: "Command: model refactor relationship-to-property",
+                    summary: "Atomically convert a required relationship back to a required scalar Id property.",
+                    usage: "meta model refactor relationship-to-property --source <Entity> --target <Entity> [--role <Role>] [--property <PropertyName>] [--workspace <path>]",
+                    options: new[]
+                    {
+                        ("--source <Entity>", "Required source entity that owns the relationship."),
+                        ("--target <Entity>", "Required target entity referenced by the relationship."),
+                        ("--role <Role>", "Optional relationship role when multiple edges target the same entity."),
+                        ("--property <PropertyName>", "Optional replacement scalar property name (default: <RoleOrTarget>Id)."),
+                        ("--workspace <path>", "Override workspace root."),
+                    },
+                    examples: new[]
+                    {
+                        "meta model refactor relationship-to-property --source Order --target Warehouse",
+                        "meta model refactor relationship-to-property --source Order --target Product --role ProductRef --property ProductId",
+                    },
+                    next: "meta model refactor relationship-to-property help");
                 return true;
 
             case "model drop-property":
