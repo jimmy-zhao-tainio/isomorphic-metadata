@@ -703,7 +703,7 @@ internal static class HelpTopics
             case "generate ssdt":
                 document = BuildTopicDocument(
                     title: "Command: generate ssdt",
-                    summary: "Generate SSDT project artifacts.",
+                    summary: "Generate Schema.sql, Data.sql, PostDeploy.sql, and Metadata.sqlproj.",
                     usage: "meta generate ssdt --out <dir> [--workspace <path>]",
                     options: new[]
                     {

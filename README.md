@@ -1,6 +1,6 @@
 # isomorphic-metadata
 
-`isomorphic-metadata` is a deterministic metadata backend. The canonical representation is an XML workspace on disk (git-friendly), but you can round-trip: materialize a workspace from SQL, emit SQL/C#/SSDT representations, and load/save model instances via C# consumables for tooling.
+`isomorphic-metadata` is a deterministic metadata backend. The canonical representation is an XML workspace on disk (git-friendly), but you can round-trip: materialize a workspace from SQL, emit SQL/C# representations and SQL-project consumables, and load/save model instances via C# consumables for tooling.
 
 This repo ships two CLI tools:
 
@@ -37,7 +37,7 @@ Think of it as one model with three "native surfaces", each optimized for a diff
 Because the semantics are the same, multiple producers and consumers can collaborate without rewriting the model for each layer:
 
 - analysts/modelers edit model + instance in workspace form,
-- platform engineers consume SQL/SSDT outputs in their pipelines,
+- platform engineers consume SQL outputs and SQL-project consumables in their pipelines,
 - application/tooling engineers consume emitted C# APIs.
 
 ### Why git matters for metadata
@@ -449,7 +449,7 @@ Id policy:
 | `meta generate sql --out <dir>` | Emit deterministic SQL schema + data consumables. | `meta generate sql --out .\\out\\sql` |
 | `meta generate csharp --out <dir>` | Emit dependency-free consumer C# API consumables. | `meta generate csharp --out .\\out\\csharp` |
 | `meta generate csharp --out <dir> --tooling` | Emit optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
-| `meta generate ssdt --out <dir>` | Emit SSDT project consumables. | `meta generate ssdt --out .\\out\\ssdt` |
+| `meta generate ssdt --out <dir>` | Emit `Schema.sql`, `Data.sql`, `PostDeploy.sql`, and `Metadata.sqlproj`. | `meta generate ssdt --out .\\out\\ssdt` |
 
 `meta import csv` is Id-first: the file must contain a column named `Id` (case-insensitive header match). On re-import into an existing entity, matching Id updates the row, new Id inserts the row, and rows missing from the CSV are preserved. Use `--plural <PluralName>` when an entity needs an explicit container name such as `Category -> Categories`. There is no alternate id-column mapping and no best-effort reconciliation.
 

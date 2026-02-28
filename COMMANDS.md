@@ -4,10 +4,10 @@ This spec defines the canonical `meta` command surface.
 
 ## Purpose
 
-`meta` manages metadata model + instance data in git and generates SQL/C#/SSDT artifacts.
+`meta` manages metadata model + instance data in git and emits SQL/C# outputs plus SQL-project consumables.
 
 - Developer flow: pull -> edit metadata -> commit.
-- CI/CD flow: build SSDT artifact -> drop metadata DB -> recreate metadata DB.
+- CI/CD flow: build the emitted SQL project artifact -> drop metadata DB -> recreate metadata DB.
 - Out of scope: reconcile/merge/migration engine.
 
 ## Workspace contract
@@ -250,7 +250,7 @@ Import and generate:
 | `meta generate sql --out <dir>` | You need deterministic SQL schema/data scripts. | `meta generate sql --out .\\out\\sql` |
 | `meta generate csharp --out <dir>` | You need dependency-free generated consumer C# API. | `meta generate csharp --out .\\out\\csharp` |
 | `meta generate csharp --out <dir> --tooling` | You need optional generated tooling helpers for workspace/io. | `meta generate csharp --out .\\out\\csharp --tooling` |
-| `meta generate ssdt --out <dir>` | You need SSDT project output. | `meta generate ssdt --out .\\out\\ssdt` |
+| `meta generate ssdt --out <dir>` | You need `Schema.sql`, `Data.sql`, `PostDeploy.sql`, and `Metadata.sqlproj`. | `meta generate ssdt --out .\\out\\ssdt` |
 
 ## Diff/merge example
 
