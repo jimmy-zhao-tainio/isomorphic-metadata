@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ProductModel>
-  <Categorys>
+  <Categories>
     <Category Id="1">
       <CategoryCode>CAT-001</CategoryCode>
       <CategoryName>Cycles</CategoryName>
@@ -13,5 +13,5 @@
       <CategoryCode>CAT-003</CategoryCode>
       <CategoryName>Maintenance</CategoryName>
     </Category>
-  </Categorys>
+  </Categories>
 </ProductModel>

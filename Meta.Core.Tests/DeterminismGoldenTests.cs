@@ -43,19 +43,19 @@ public sealed class DeterminismGoldenTests
     private static readonly IReadOnlyDictionary<string, string> ExpectedCSharpHashes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Cube.cs"] = "78296c0e11515bd68a49320632a98b3129f985b2bd830368cd151e15f14ab4ff",
-            ["Dimension.cs"] = "9bc09e08bd078d0393c892bdfb24dbd06fb1e6899955a84f368df02cbeabaee7",
-            ["EnterpriseBIPlatform.cs"] = "506911d4ca17102113054d28366a68e2046d911d3516c1221a48eaf9b82da9d4",
-            ["Fact.cs"] = "3ac17b963c93fbd4f56e566dc5c8006f02a4ccdad1f17c4da9602f14ab02c760",
-            ["Measure.cs"] = "77eed83ec53063bcef21ad8e11ff79a85ecf30a39179b1e51010ac9712342ade",
-            ["System.cs"] = "aacf31c6cff5225fbe816da482d650ab2a48934e1a3926dec2326371677a2572",
-            ["SystemCube.cs"] = "5e5fec0ccf027690461d4913eddbd78628479aafbd116322c2285710dda7ef83",
-            ["SystemDimension.cs"] = "4834676f07bff9f1e02089f0b93a3c499d380fdc4b94f0f7c89d36e3c3325edc",
-            ["SystemFact.cs"] = "7faad743945ce43057243112175f4276d499b1048b45ac12e50ae147b5a06e77",
-            ["SystemType.cs"] = "a3b54fbdfd2d315b7f3d2501f6f3ffd457dcb320f52f5606fb53c9d1549d8f9a",
+            ["Cube.cs"] = "104a7e96a4a39449b8c36910b4b6f797294dd59cc68048444a7c621bd77002dc",
+            ["Dimension.cs"] = "ed7690d13eeb3b04d382dabca4cce880252cb3fce28aac211e7a0059be49428a",
+            ["EnterpriseBIPlatform.cs"] = "62ec8ba6105d0154b1a4a222f6eba837657fdec8a5171f57e719c86b685b65c8",
+            ["Fact.cs"] = "d0c027e86e831b5eaf4726cb63e8f87b740a2b2151c857f25562e983870c9369",
+            ["Measure.cs"] = "b742056a6fd8da73e94a844d13781c21a01066da8f5e7cfc9eede041a7065825",
+            ["System.cs"] = "bee9f521db049ba82a239474f0d3d5eedc65425378423a557e764632acc21680",
+            ["SystemCube.cs"] = "97623acb4a0880e323c64fe8e878812d6e7e5da12431a43339f68274ae1c3e7c",
+            ["SystemDimension.cs"] = "2052823cadd5914f41be95e5dc663a9922cb13eae90318a6cbde156ae393c7d8",
+            ["SystemFact.cs"] = "707388c0154a1e56130b7e13b6d35f51db69a16c74f5e6eef8dc58872b4630e6",
+            ["SystemType.cs"] = "98f63c550d044451a04f9322072c15e35915520585242bf0ab22bbe9cbee95bf",
         };
 
-    private const string ExpectedCSharpCombinedHash = "49040a8397dae33e630f33652097aa8febf321f384ee622769fc968472a86854";
+    private const string ExpectedCSharpCombinedHash = "58abdfb7991abfebba8e455c682dc7f9a5c773a4dde5224fd66d06b38f3b6dba";
 
     [Fact]
     public async Task XmlCanonicalOutput_MatchesGoldenHashes()

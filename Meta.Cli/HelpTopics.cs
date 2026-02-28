@@ -492,12 +492,11 @@ internal static class HelpTopics
             case "model suggest":
                 document = BuildTopicDocument(
                     title: "Command: model suggest",
-                    summary: "Read-only relationship inference from model + instance data (actionable output by default).",
-                    usage: "meta model suggest [--show-keys] [--show-blocked] [--explain] [--print-commands] [--workspace <path>]",
+                    summary: "Read-only relationship inference from model + instance data. Exact-name match alone is not enough; only fully resolvable many-to-one promotions are printed.",
+                    usage: "meta model suggest [--show-keys] [--explain] [--print-commands] [--workspace <path>]",
                     options: new[]
                     {
                         ("--show-keys", "Also print candidate business keys."),
-                        ("--show-blocked", "Also print blocked relationship candidates."),
                         ("--explain", "Include Evidence/Stats/Why detail blocks."),
                         ("--print-commands", "Print copy/paste refactor commands for eligible relationship suggestions."),
                         ("--workspace <path>", "Override workspace root."),
@@ -506,7 +505,6 @@ internal static class HelpTopics
                     {
                         "meta model suggest --workspace Samples",
                         "meta model suggest --show-keys --explain --workspace Samples",
-                        "meta model suggest --show-blocked --explain --workspace Samples",
                         "meta model suggest --print-commands --workspace Samples",
                     },
                     next: "meta model suggest --help");

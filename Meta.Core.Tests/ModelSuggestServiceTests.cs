@@ -39,7 +39,8 @@ public sealed class ModelSuggestServiceTests
         var report = ModelSuggestService.Analyze(workspace);
 
         AssertNotEligible(report, "Order", "ProductCode", "Product", "ProductCode");
-        var blocked = AssertBlocked(report, "Order", "ProductCode", "Product", "ProductCode");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductCode", "Product", "ProductCode");
+        Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Source values not fully resolvable against target key.", blocked.Blockers);
         Assert.Contains("PRD-404", blocked.UnmatchedDistinctValuesSample);
     }
@@ -53,7 +54,8 @@ public sealed class ModelSuggestServiceTests
         var report = ModelSuggestService.Analyze(workspace);
 
         AssertNotEligible(report, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
-        var blocked = AssertBlocked(report, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
+        Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Target lookup key is not unique.", blocked.Blockers);
     }
 
@@ -71,7 +73,8 @@ public sealed class ModelSuggestServiceTests
         var report = ModelSuggestService.Analyze(workspace);
 
         AssertNotEligible(report, "Order", "ProductCode", "Product", "ProductCode");
-        var blocked = AssertBlocked(report, "Order", "ProductCode", "Product", "ProductCode");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductCode", "Product", "ProductCode");
+        Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Source contains null/blank; required relationship cannot be created.", blocked.Blockers);
     }
 
@@ -84,8 +87,52 @@ public sealed class ModelSuggestServiceTests
         var report = ModelSuggestService.Analyze(workspace);
 
         AssertNotEligible(report, "Order", "ProductCode", "Product", "ProductCode");
-        var blocked = AssertBlocked(report, "Order", "ProductCode", "Product", "ProductCode");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductCode", "Product", "ProductCode");
+        Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Target lookup key has null/blank values.", blocked.Blockers);
+    }
+
+    [Fact]
+    public void Analyze_ExistingRelationship_IsBlockedAndNotEligible()
+    {
+        var workspace = BuildDemoWorkspace();
+        workspace.Model.FindEntity("Order")!.Relationships.Add(new GenericRelationship
+        {
+            Entity = "Warehouse",
+        });
+
+        var report = ModelSuggestService.Analyze(workspace);
+
+        AssertNotEligible(report, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
+        Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
+        Assert.Contains("Relationship 'Order.WarehouseId' already exists.", blocked.Blockers);
+    }
+
+    [Fact]
+    public void Analyze_SymmetricPeerKeys_AreBlockedAsAmbiguous()
+    {
+        var workspace = CreateWorkspaceSkeleton();
+        AddEntity(workspace.Model, "Left", "Code");
+        AddEntity(workspace.Model, "Right", "Code");
+
+        AddRow(workspace.Instance, "Left", "1", ("Code", "A1"));
+        AddRow(workspace.Instance, "Left", "2", ("Code", "A2"));
+        AddRow(workspace.Instance, "Right", "1", ("Code", "A1"));
+        AddRow(workspace.Instance, "Right", "2", ("Code", "A2"));
+
+        var report = ModelSuggestService.Analyze(workspace);
+
+        AssertNotEligible(report, "Left", "Code", "Right", "Code");
+        AssertNotEligible(report, "Right", "Code", "Left", "Code");
+
+        var leftBlocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Left", "Code", "Right", "Code");
+        Assert.Equal(LookupCandidateStatus.Blocked, leftBlocked.Status);
+        Assert.Contains("Source does not show reuse; lookup direction is ambiguous.", leftBlocked.Blockers);
+
+        var rightBlocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Right", "Code", "Left", "Code");
+        Assert.Equal(LookupCandidateStatus.Blocked, rightBlocked.Status);
+        Assert.Contains("Source does not show reuse; lookup direction is ambiguous.", rightBlocked.Blockers);
     }
 
     [Fact]
@@ -103,14 +150,6 @@ public sealed class ModelSuggestServiceTests
             .Select(ToProjection)
             .ToArray();
         Assert.Equal(firstEligible, secondEligible);
-
-        var firstBlocked = first.BlockedRelationshipCandidates
-            .Select(ToProjection)
-            .ToArray();
-        var secondBlocked = second.BlockedRelationshipCandidates
-            .Select(ToProjection)
-            .ToArray();
-        Assert.Equal(firstBlocked, secondBlocked);
     }
 
     private static string ToProjection(LookupRelationshipSuggestion suggestion)
@@ -154,18 +193,6 @@ public sealed class ModelSuggestServiceTests
     {
         Assert.DoesNotContain(
             report.EligibleRelationshipSuggestions,
-            item => Matches(item, sourceEntity, sourceProperty, targetEntity, targetProperty));
-    }
-
-    private static LookupRelationshipSuggestion AssertBlocked(
-        ModelSuggestReport report,
-        string sourceEntity,
-        string sourceProperty,
-        string targetEntity,
-        string targetProperty)
-    {
-        return Assert.Single(
-            report.BlockedRelationshipCandidates,
             item => Matches(item, sourceEntity, sourceProperty, targetEntity, targetProperty));
     }
 

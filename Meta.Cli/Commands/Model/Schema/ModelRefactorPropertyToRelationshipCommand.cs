@@ -137,7 +137,8 @@ internal sealed partial class CliRuntime
             sourceEntity.Name,
             sourceProperty.Name,
             targetEntity.Name,
-            targetLookupProperty.Name);
+            targetLookupProperty.Name,
+            options.Role);
         if (relationshipAssessment.Status != LookupCandidateStatus.Eligible)
         {
             var blockerMessage = string.Join(" ", relationshipAssessment.Blockers);

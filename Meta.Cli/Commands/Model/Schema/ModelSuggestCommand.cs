@@ -21,18 +21,16 @@ internal sealed partial class CliRuntime
         PrintModelSuggestReport(
             report,
             options.ShowKeys,
-            options.ShowBlocked,
             options.Explain,
             options.PrintCommands);
         return 0;
     }
 
-    (bool Ok, string WorkspacePath, bool ShowKeys, bool ShowBlocked, bool Explain, bool PrintCommands, string ErrorMessage)
+    (bool Ok, string WorkspacePath, bool ShowKeys, bool Explain, bool PrintCommands, string ErrorMessage)
         ParseModelSuggestOptions(string[] commandArgs, int startIndex)
     {
         var workspacePath = DefaultWorkspacePath();
         var showKeys = false;
-        var showBlocked = false;
         var explain = false;
         var printCommands = false;
 
@@ -43,7 +41,7 @@ internal sealed partial class CliRuntime
             {
                 if (i + 1 >= commandArgs.Length)
                 {
-                    return (false, workspacePath, showKeys, showBlocked, explain, printCommands, "Error: --workspace requires a path.");
+                    return (false, workspacePath, showKeys, explain, printCommands, "Error: --workspace requires a path.");
                 }
 
                 workspacePath = commandArgs[++i];
@@ -53,12 +51,6 @@ internal sealed partial class CliRuntime
             if (string.Equals(arg, "--show-keys", StringComparison.OrdinalIgnoreCase))
             {
                 showKeys = true;
-                continue;
-            }
-
-            if (string.Equals(arg, "--show-blocked", StringComparison.OrdinalIgnoreCase))
-            {
-                showBlocked = true;
                 continue;
             }
 
@@ -74,16 +66,15 @@ internal sealed partial class CliRuntime
                 continue;
             }
 
-            return (false, workspacePath, showKeys, showBlocked, explain, printCommands, $"Error: unknown option '{arg}'.");
+            return (false, workspacePath, showKeys, explain, printCommands, $"Error: unknown option '{arg}'.");
         }
 
-        return (true, workspacePath, showKeys, showBlocked, explain, printCommands, string.Empty);
+        return (true, workspacePath, showKeys, explain, printCommands, string.Empty);
     }
 
     void PrintModelSuggestReport(
         ModelSuggestReport report,
         bool showKeys,
-        bool showBlocked,
         bool explain,
         bool printCommands)
     {
@@ -105,12 +96,6 @@ internal sealed partial class CliRuntime
         {
             presenter.WriteInfo(string.Empty);
             PrintKeySection(report.BusinessKeys, explain);
-        }
-
-        if (showBlocked)
-        {
-            presenter.WriteInfo(string.Empty);
-            PrintBlockedSection(report.BlockedRelationshipCandidates, explain);
         }
     }
 
@@ -202,38 +187,4 @@ internal sealed partial class CliRuntime
         return path.Contains(' ', StringComparison.Ordinal) ? "\"" + path + "\"" : path;
     }
 
-    void PrintBlockedSection(IReadOnlyList<LookupRelationshipSuggestion> blockedCandidates, bool explain)
-    {
-        presenter.WriteInfo("Blocked relationship candidates");
-        if (blockedCandidates.Count == 0)
-        {
-            presenter.WriteInfo("  (none)");
-            presenter.WriteInfo(string.Empty);
-            return;
-        }
-
-        for (var index = 0; index < blockedCandidates.Count; index++)
-        {
-            var suggestion = blockedCandidates[index];
-            presenter.WriteInfo(
-                $"  {(index + 1).ToString(CultureInfo.InvariantCulture)}) {suggestion.Source.EntityName}.{suggestion.Source.PropertyName} -> {suggestion.TargetLookup.EntityName} (lookup: {suggestion.TargetLookup.EntityName}.{suggestion.TargetLookup.PropertyName})");
-
-            if (!explain)
-            {
-                continue;
-            }
-
-            presenter.WriteInfo("     Blockers:");
-            foreach (var blocker in suggestion.Blockers)
-            {
-                presenter.WriteInfo("       - " + blocker);
-            }
-
-            if (suggestion.UnmatchedDistinctValueCount > 0)
-            {
-                presenter.WriteInfo(
-                    $"       - Unmatched value sample: {string.Join(", ", suggestion.UnmatchedDistinctValuesSample)}");
-            }
-        }
-    }
 }

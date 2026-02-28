@@ -129,10 +129,10 @@ Inspect:
 
 Modify:
 - `meta model <suggest|refactor|add-entity|rename-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
-  - `suggest` usage: `meta model suggest [--show-keys] [--show-blocked] [--explain] [--print-commands] [--workspace <path>]`
-  - default suggest output is actionable-only (eligible relationship suggestions + compact summary)
+  - `suggest` usage: `meta model suggest [--show-keys] [--explain] [--print-commands] [--workspace <path>]`
+  - default suggest output is actionable-only (eligible many-to-one relationship suggestions + compact summary)
+  - exact property-name match alone is not enough; source values must be reused and fully resolvable against a unique, complete target key
   - `--show-keys` includes candidate business keys
-  - `--show-blocked` includes blocked relationship candidates
   - `--explain` includes Evidence/Stats/Why detail blocks
   - `--print-commands` prints copy/paste `meta model refactor property-to-relationship ...` commands for eligible suggestions
   - `refactor` usage: `meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]`

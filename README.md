@@ -227,7 +227,7 @@ FOREIGN KEY ([SystemId]) REFERENCES [dbo].[System]([Id]);
 #### What gets emitted
 
 `meta generate csharp` emits dependency-free consumer types in a namespace that matches the model name (for example `namespace EnterpriseBIPlatform`):
-- `<ModelName>.cs` (static model facade / container, e.g. `EnterpriseBIPlatform`)
+- `<ModelName>.cs` (static model facade with a built-in instantiated snapshot, e.g. `EnterpriseBIPlatform`)
 - `<Entity>.cs` (one file per entity, POCOs)
 
 #### Consumer usage (dependency-free)
@@ -244,7 +244,8 @@ foreach (var system in EnterpriseBIPlatform.Systems)
 
     foreach (var link in EnterpriseBIPlatform.SystemCubes.Where(x => x.SystemId == system.Id))
     {
-        Console.WriteLine($"  Cube: {link.Cube.CubeName} (mode: {link.ProcessingMode ?? "n/a" })");
+        var mode = string.IsNullOrEmpty(link.ProcessingMode) ? "n/a" : link.ProcessingMode;
+        Console.WriteLine($"  Cube: {link.Cube.CubeName} (mode: {mode})");
     }
 }
 
@@ -393,10 +394,9 @@ Global behavior:
 
 | Command | What it is for | Example |
 |---|---|---|
-| `meta model suggest` | Read-only key/reference inference (eligible relationship suggestions by default). | `meta model suggest` |
+| `meta model suggest` | Read-only relationship inference; only fully resolvable many-to-one promotions are printed by default. | `meta model suggest` |
 | `meta model suggest --print-commands` | Print copy/paste refactor commands for eligible suggestions. | `meta model suggest --print-commands` |
 | `meta model suggest --show-keys --explain` | Include candidate key diagnostics and explain blocks. | `meta model suggest --show-keys --explain` |
-| `meta model suggest --show-blocked --explain` | Include blocked relationship candidates and blockers. | `meta model suggest --show-blocked --explain` |
 | `meta model refactor property-to-relationship ...` | Atomic model+instance rewrite from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property` |
 | `meta model add-entity <Name>` | Add a new entity definition. | `meta model add-entity SourceSystem` |
 | `meta model rename-entity <Old> <New>` | Rename an entity definition. | `meta model rename-entity SourceSystem Source` |
@@ -453,8 +453,9 @@ Eligible means the promotion satisfies 100% referential integrity (RI) before an
 - source property is complete (no null/blank values)
 - every source value resolves to an existing target lookup value (full coverage, no unmatched values)
 - source and target scalar types are compatible under strict rules (no implicit casting)
+- source values are reused, so the source behaves like a reference and the direction is structurally evidenced as many-to-one
 
-If any rule fails, the item is not printed as a default suggestion.
+Exact-name match alone is not enough. If any rule fails, the item is not printed.
 
 ```cmd
 meta import csv .\Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace .\Samples\SuggestDemo\Workspace

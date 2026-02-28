@@ -268,7 +268,6 @@ public sealed class CliStrictModeTests
         Assert.Equal(0, suggestHelp.ExitCode);
         Assert.Contains("meta model suggest", suggestHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--show-keys", suggestHelp.StdOut, StringComparison.Ordinal);
-        Assert.Contains("--show-blocked", suggestHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--explain", suggestHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--print-commands", suggestHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--workspace", suggestHelp.StdOut, StringComparison.Ordinal);
@@ -321,7 +320,7 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task ModelSuggest_ShowKeysAndShowBlockedFlags_AreOptIn()
+    public async Task ModelSuggest_ShowKeysFlag_IsOptIn()
     {
         var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
         try
@@ -329,10 +328,6 @@ public sealed class CliStrictModeTests
             var showKeys = await RunCliAsync("model", "suggest", "--show-keys", "--workspace", workspaceRoot);
             Assert.Equal(0, showKeys.ExitCode);
             Assert.Contains("Candidate business keys", showKeys.StdOut, StringComparison.Ordinal);
-
-            var showBlocked = await RunCliAsync("model", "suggest", "--show-blocked", "--workspace", workspaceRoot);
-            Assert.Equal(0, showBlocked.ExitCode);
-            Assert.Contains("Blocked relationship candidates", showBlocked.StdOut, StringComparison.Ordinal);
         }
         finally
         {
@@ -364,17 +359,6 @@ public sealed class CliStrictModeTests
             Assert.Equal(0, explainKeys.ExitCode);
             Assert.Contains("Candidate business keys", explainKeys.StdOut, StringComparison.Ordinal);
             Assert.Contains("Details:", explainKeys.StdOut, StringComparison.Ordinal);
-
-            var explainBlocked = await RunCliAsync(
-                "model",
-                "suggest",
-                "--show-blocked",
-                "--explain",
-                "--workspace",
-                workspaceRoot);
-            Assert.Equal(0, explainBlocked.ExitCode);
-            Assert.Contains("Blocked relationship candidates", explainBlocked.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Blockers:", explainBlocked.StdOut, StringComparison.Ordinal);
         }
         finally
         {
@@ -415,6 +399,36 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
+    public async Task ModelSuggest_ExistingRelationship_IsNotPrintedAsEligible()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var addRelationship = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Order",
+                "Warehouse",
+                "--default-id",
+                "1",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, addRelationship.ExitCode);
+
+            var result = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
+            Assert.Equal(0, result.ExitCode);
+            Assert.DoesNotContain(
+                "Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)",
+                result.StdOut,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
     public async Task ModelSuggest_Output_IsDeterministic_PerMode()
     {
         var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
@@ -422,7 +436,6 @@ public sealed class CliStrictModeTests
         {
             await AssertModeDeterministic("model", "suggest", "--workspace", workspaceRoot);
             await AssertModeDeterministic("model", "suggest", "--show-keys", "--workspace", workspaceRoot);
-            await AssertModeDeterministic("model", "suggest", "--show-blocked", "--workspace", workspaceRoot);
             await AssertModeDeterministic("model", "suggest", "--explain", "--workspace", workspaceRoot);
             await AssertModeDeterministic("model", "suggest", "--print-commands", "--workspace", workspaceRoot);
         }
@@ -1704,7 +1717,7 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task ModelRefactorPropertyToRelationship_ValidationFailureRollsBackAndDoesNotWrite()
+    public async Task ModelRefactorPropertyToRelationship_PreconditionFailureRollsBackAndDoesNotWrite()
     {
         var workspaceRoot = await CreateTempRefactorCycleWorkspaceAsync();
         var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
@@ -1727,7 +1740,10 @@ public sealed class CliStrictModeTests
                 workspaceRoot);
 
             Assert.Equal(4, result.ExitCode);
-            Assert.Contains("Cycle detected", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                "Source does not show reuse; lookup direction is ambiguous.",
+                result.CombinedOutput,
+                StringComparison.OrdinalIgnoreCase);
             AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
         }
         finally

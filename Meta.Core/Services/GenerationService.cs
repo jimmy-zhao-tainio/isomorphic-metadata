@@ -358,21 +358,174 @@ public static class GenerationService
     private static string BuildCSharpModel(Workspace workspace, string modelTypeName, string namespaceName)
     {
         var builder = new StringBuilder();
+        var entities = workspace.Model.Entities
+            .Where(entity => !string.IsNullOrWhiteSpace(entity.Name))
+            .OrderBy(entity => entity.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(entity => entity.Name, StringComparer.Ordinal)
+            .ToList();
+
         builder.AppendLine("using System.Collections.Generic;");
+        builder.AppendLine("using System.Collections.ObjectModel;");
         builder.AppendLine();
         builder.AppendLine($"namespace {namespaceName}");
         builder.AppendLine("{");
-        builder.AppendLine($"    public sealed class {modelTypeName}");
+        builder.AppendLine($"    public static class {modelTypeName}");
         builder.AppendLine("    {");
-
-        foreach (var entity in workspace.Model.Entities
-                     .Where(entity => !string.IsNullOrWhiteSpace(entity.Name))
-                     .OrderBy(entity => entity.Name, StringComparer.OrdinalIgnoreCase))
+        builder.AppendLine($"        private static readonly {modelTypeName}Instance _builtIn = {modelTypeName}BuiltInFactory.Create();");
+        builder.AppendLine();
+        builder.AppendLine($"        public static {modelTypeName}Instance BuiltIn => _builtIn;");
+        foreach (var entity in entities)
         {
-            builder.AppendLine(
-                $"        public List<{entity.Name}> {entity.Name} {{ get; set; }} = new List<{entity.Name}>();");
+            builder.AppendLine($"        public static IReadOnlyList<{entity.Name}> {entity.GetPluralName()} => _builtIn.{entity.GetPluralName()};");
         }
 
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine($"    public sealed class {modelTypeName}Instance");
+        builder.AppendLine("    {");
+        builder.AppendLine($"        internal {modelTypeName}Instance(");
+        for (var index = 0; index < entities.Count; index++)
+        {
+            var entity = entities[index];
+            var suffix = index == entities.Count - 1 ? string.Empty : ",";
+            builder.AppendLine($"            IReadOnlyList<{entity.Name}> {ToCamelIdentifier(entity.GetPluralName())}{suffix}");
+        }
+
+        builder.AppendLine("        )");
+        builder.AppendLine("        {");
+        foreach (var entity in entities)
+        {
+            builder.AppendLine($"            {entity.GetPluralName()} = {ToCamelIdentifier(entity.GetPluralName())};");
+        }
+
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        foreach (var entity in entities)
+        {
+            builder.AppendLine($"        public IReadOnlyList<{entity.Name}> {entity.GetPluralName()} {{ get; }}");
+        }
+
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine($"    internal static class {modelTypeName}BuiltInFactory");
+        builder.AppendLine("    {");
+        builder.AppendLine($"        internal static {modelTypeName}Instance Create()");
+        builder.AppendLine("        {");
+
+        foreach (var entity in entities)
+        {
+            var records = workspace.Instance.RecordsByEntity.TryGetValue(entity.Name, out var entityRecords)
+                ? entityRecords
+                    .OrderBy(record => record.Id, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(record => record.Id, StringComparer.Ordinal)
+                    .ToList()
+                : new List<GenericRecord>();
+
+            var rowsVar = ToCamelIdentifier(entity.GetPluralName());
+            builder.AppendLine($"            var {rowsVar} = new List<{entity.Name}>");
+            builder.AppendLine("            {");
+            foreach (var record in records)
+            {
+                builder.AppendLine($"                new {entity.Name}");
+                builder.AppendLine("                {");
+                builder.AppendLine($"                    Id = {ToCSharpStringLiteral(record.Id)},");
+
+                foreach (var property in entity.Properties
+                             .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
+                             .OrderBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                             .ThenBy(property => property.Name, StringComparer.Ordinal))
+                {
+                    var value = record.Values.TryGetValue(property.Name, out var propertyValue)
+                        ? propertyValue ?? string.Empty
+                        : string.Empty;
+                    builder.AppendLine($"                    {property.Name} = {ToCSharpStringLiteral(value)},");
+                }
+
+                foreach (var relationship in entity.Relationships
+                             .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
+                             .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
+                             .ThenBy(relationship => relationship.GetColumnName(), StringComparer.Ordinal))
+                {
+                    var relationshipValue = record.RelationshipIds.TryGetValue(relationship.GetColumnName(), out var relationshipId)
+                        ? relationshipId ?? string.Empty
+                        : string.Empty;
+                    builder.AppendLine($"                    {relationship.GetColumnName()} = {ToCSharpStringLiteral(relationshipValue)},");
+                }
+
+                builder.AppendLine("                },");
+            }
+
+            builder.AppendLine("            };");
+            builder.AppendLine();
+        }
+
+        foreach (var entity in entities)
+        {
+            var rowsVar = ToCamelIdentifier(entity.GetPluralName());
+            builder.AppendLine($"            var {rowsVar}ById = new Dictionary<string, {entity.Name}>(global::System.StringComparer.Ordinal);");
+            builder.AppendLine($"            foreach (var row in {rowsVar})");
+            builder.AppendLine("            {");
+            builder.AppendLine($"                {rowsVar}ById[row.Id] = row;");
+            builder.AppendLine("            }");
+            builder.AppendLine();
+        }
+
+        foreach (var entity in entities)
+        {
+            var rowsVar = ToCamelIdentifier(entity.GetPluralName());
+            foreach (var relationship in entity.Relationships
+                         .OrderBy(relationship => relationship.GetColumnName(), StringComparer.OrdinalIgnoreCase)
+                         .ThenBy(relationship => relationship.Entity, StringComparer.OrdinalIgnoreCase)
+                         .ThenBy(relationship => relationship.GetColumnName(), StringComparer.Ordinal))
+            {
+                var targetEntity = entities.First(target => string.Equals(target.Name, relationship.Entity, StringComparison.OrdinalIgnoreCase));
+                var targetVar = ToCamelIdentifier(targetEntity.GetPluralName());
+                builder.AppendLine($"            foreach (var row in {rowsVar})");
+                builder.AppendLine("            {");
+                builder.AppendLine($"                row.{relationship.GetNavigationName()} = RequireTarget(");
+                builder.AppendLine($"                    {targetVar}ById,");
+                builder.AppendLine($"                    row.{relationship.GetColumnName()},");
+                builder.AppendLine($"                    {ToCSharpStringLiteral(entity.Name)},");
+                builder.AppendLine("                    row.Id,");
+                builder.AppendLine($"                    {ToCSharpStringLiteral(relationship.GetColumnName())});");
+                builder.AppendLine("            }");
+                builder.AppendLine();
+            }
+        }
+
+        builder.AppendLine($"            return new {modelTypeName}Instance(");
+        for (var index = 0; index < entities.Count; index++)
+        {
+            var entity = entities[index];
+            var suffix = index == entities.Count - 1 ? string.Empty : ",";
+            builder.AppendLine($"                new ReadOnlyCollection<{entity.Name}>({ToCamelIdentifier(entity.GetPluralName())}){suffix}");
+        }
+
+        builder.AppendLine("            );");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        private static T RequireTarget<T>(");
+        builder.AppendLine("            Dictionary<string, T> rowsById,");
+        builder.AppendLine("            string targetId,");
+        builder.AppendLine("            string sourceEntityName,");
+        builder.AppendLine("            string sourceId,");
+        builder.AppendLine("            string relationshipName)");
+        builder.AppendLine("            where T : class");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (string.IsNullOrEmpty(targetId))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new global::System.InvalidOperationException(");
+        builder.AppendLine("                    $\"Relationship '{sourceEntityName}.{relationshipName}' on row '{sourceEntityName}:{sourceId}' is empty.\");");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            if (!rowsById.TryGetValue(targetId, out var target))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new global::System.InvalidOperationException(");
+        builder.AppendLine("                    $\"Relationship '{sourceEntityName}.{relationshipName}' on row '{sourceEntityName}:{sourceId}' points to missing Id '{targetId}'.\");");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            return target;");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
         builder.AppendLine("}");
         return NormalizeNewlines(builder.ToString());
@@ -385,13 +538,13 @@ public static class GenerationService
         builder.AppendLine("{");
         builder.AppendLine($"    public sealed class {entity.Name}");
         builder.AppendLine("    {");
-        builder.AppendLine("        public string Id { get; set; } = string.Empty;");
+        builder.AppendLine("        public string Id { get; internal set; } = string.Empty;");
 
         foreach (var property in entity.Properties
                      .Where(property => !string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase))
                      .OrderBy(property => property.Name, StringComparer.OrdinalIgnoreCase))
         {
-            builder.AppendLine($"        public string {property.Name} {{ get; set; }} = string.Empty;");
+            builder.AppendLine($"        public string {property.Name} {{ get; internal set; }} = string.Empty;");
         }
 
         foreach (var relationship in entity.Relationships
@@ -400,8 +553,8 @@ public static class GenerationService
         {
             var relationshipName = relationship.GetColumnName();
             var navigationName = relationship.GetNavigationName();
-            builder.AppendLine($"        public string {relationshipName} {{ get; set; }} = string.Empty;");
-            builder.AppendLine($"        public {relationship.Entity} {navigationName} {{ get; set; }} = new {relationship.Entity}();");
+            builder.AppendLine($"        public string {relationshipName} {{ get; internal set; }} = string.Empty;");
+            builder.AppendLine($"        public {relationship.Entity} {navigationName} {{ get; internal set; }} = new {relationship.Entity}();");
         }
 
         builder.AppendLine("    }");
@@ -412,6 +565,59 @@ public static class GenerationService
     private static string ResolveModelTypeName(string? modelName)
     {
         return string.IsNullOrWhiteSpace(modelName) ? "MetadataModel" : modelName.Trim();
+    }
+
+    private static string ToCSharpStringLiteral(string? value)
+    {
+        if (value == null)
+        {
+            return "\"\"";
+        }
+
+        var builder = new StringBuilder(value.Length + 2);
+        builder.Append('"');
+        foreach (var character in value)
+        {
+            switch (character)
+            {
+                case '\\':
+                    builder.Append("\\\\");
+                    break;
+                case '"':
+                    builder.Append("\\\"");
+                    break;
+                case '\r':
+                    builder.Append("\\r");
+                    break;
+                case '\n':
+                    builder.Append("\\n");
+                    break;
+                case '\t':
+                    builder.Append("\\t");
+                    break;
+                default:
+                    builder.Append(character);
+                    break;
+            }
+        }
+
+        builder.Append('"');
+        return builder.ToString();
+    }
+
+    private static string ToCamelIdentifier(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "value";
+        }
+
+        if (name.Length == 1)
+        {
+            return char.ToLowerInvariant(name[0]).ToString();
+        }
+
+        return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
     private static string BuildPostDeployScript()

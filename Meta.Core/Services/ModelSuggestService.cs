@@ -13,7 +13,6 @@ public sealed class ModelSuggestReport
     public string ModelName { get; set; } = string.Empty;
     public List<BusinessKeyCandidate> BusinessKeys { get; } = new();
     public List<LookupRelationshipSuggestion> EligibleRelationshipSuggestions { get; } = new();
-    public List<LookupRelationshipSuggestion> BlockedRelationshipCandidates { get; } = new();
 }
 
 public enum LookupCandidateStatus
@@ -91,12 +90,9 @@ public static class ModelSuggestService
         var profiles = BuildPropertyProfiles(workspace);
 
         var businessKeys = BuildBusinessKeyCandidates(profiles);
-        var relationshipCandidates = BuildLookupRelationshipCandidates(profiles);
+        var relationshipCandidates = BuildLookupRelationshipCandidates(workspace, profiles);
         var eligible = relationshipCandidates
             .Where(item => item.Status == LookupCandidateStatus.Eligible)
-            .ToList();
-        var blocked = relationshipCandidates
-            .Where(item => item.Status == LookupCandidateStatus.Blocked)
             .ToList();
 
         AttachBusinessKeyUsage(businessKeys, eligible);
@@ -108,7 +104,6 @@ public static class ModelSuggestService
         };
         report.BusinessKeys.AddRange(businessKeys);
         report.EligibleRelationshipSuggestions.AddRange(eligible);
-        report.BlockedRelationshipCandidates.AddRange(blocked);
         return report;
     }
 
@@ -117,7 +112,8 @@ public static class ModelSuggestService
         string sourceEntityName,
         string sourcePropertyName,
         string targetEntityName,
-        string targetPropertyName)
+        string targetPropertyName,
+        string? role = null)
     {
         ArgumentNullException.ThrowIfNull(workspace);
 
@@ -160,7 +156,7 @@ public static class ModelSuggestService
                 $"Property '{targetEntityName}.{targetPropertyName}' does not exist.");
         }
 
-        return BuildLookupRelationshipSuggestion(source, target);
+        return BuildLookupRelationshipSuggestion(workspace, source, target, role);
     }
 
     private static List<PropertyProfile> BuildPropertyProfiles(Workspace workspace)
@@ -308,7 +304,9 @@ public static class ModelSuggestService
             .ToList();
     }
 
-    private static List<LookupRelationshipSuggestion> BuildLookupRelationshipCandidates(IReadOnlyList<PropertyProfile> profiles)
+    private static List<LookupRelationshipSuggestion> BuildLookupRelationshipCandidates(
+        Workspace workspace,
+        IReadOnlyList<PropertyProfile> profiles)
     {
         var profilesByPropertyName = profiles
             .GroupBy(item => item.Stats.PropertyName, StringComparer.OrdinalIgnoreCase)
@@ -351,7 +349,7 @@ public static class ModelSuggestService
                     continue;
                 }
 
-                candidates.Add(BuildLookupRelationshipSuggestion(source, target));
+                candidates.Add(BuildLookupRelationshipSuggestion(workspace, source, target, role: null));
             }
         }
 
@@ -368,13 +366,27 @@ public static class ModelSuggestService
             .ToList();
     }
 
-    private static LookupRelationshipSuggestion BuildLookupRelationshipSuggestion(PropertyProfile source, PropertyProfile target)
+    private static LookupRelationshipSuggestion BuildLookupRelationshipSuggestion(
+        Workspace workspace,
+        PropertyProfile source,
+        PropertyProfile target,
+        string? role)
     {
+        var model = workspace.Model ?? throw new InvalidDataException("Workspace model is missing.");
         var sourceStats = source.Stats;
         var targetStats = target.Stats;
+        var sourceEntity = model.FindEntity(sourceStats.EntityName)
+            ?? throw new InvalidOperationException($"Entity '{sourceStats.EntityName}' does not exist.");
         var typeCompatible = IsTypeCompatibleStrict(sourceStats.DataType, targetStats.DataType);
         var coverage = BuildCoverageMetrics(source, target);
-        var blockers = BuildRelationshipBlockers(sourceStats, targetStats, coverage, typeCompatible, target.ComparableValueCounts);
+        var blockers = BuildRelationshipBlockers(
+            sourceStats,
+            targetStats,
+            coverage,
+            typeCompatible,
+            target.ComparableValueCounts,
+            BuildModelShapeBlockers(sourceEntity, targetStats.EntityName, role),
+            SourceShowsClearLookupReuse(sourceStats));
 
         var suggestion = new LookupRelationshipSuggestion
         {
@@ -418,9 +430,12 @@ public static class ModelSuggestService
         PropertyProfileStats target,
         CoverageMetrics coverage,
         bool typeCompatible,
-        IReadOnlyDictionary<string, int> targetComparableCounts)
+        IReadOnlyDictionary<string, int> targetComparableCounts,
+        IReadOnlyList<string> modelShapeBlockers,
+        bool sourceShowsClearLookupReuse)
     {
         var blockers = new List<string>();
+        blockers.AddRange(modelShapeBlockers);
 
         if (!typeCompatible)
         {
@@ -445,6 +460,50 @@ public static class ModelSuggestService
         if (coverage.UnmatchedDistinctCount > 0)
         {
             blockers.Add("Source values not fully resolvable against target key.");
+        }
+
+        if (!sourceShowsClearLookupReuse)
+        {
+            blockers.Add("Source does not show reuse; lookup direction is ambiguous.");
+        }
+
+        return blockers;
+    }
+
+    private static IReadOnlyList<string> BuildModelShapeBlockers(
+        GenericEntity sourceEntity,
+        string targetEntityName,
+        string? role)
+    {
+        var relationship = new GenericRelationship
+        {
+            Entity = targetEntityName,
+            Role = role ?? string.Empty,
+        };
+        var relationshipUsageName = relationship.GetColumnName();
+        var blockers = new List<string>();
+
+        var sameEdgeExists = sourceEntity.Relationships.Any(item =>
+            string.Equals(item.Entity, relationship.Entity, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.GetRoleOrDefault(), relationship.GetRoleOrDefault(), StringComparison.OrdinalIgnoreCase));
+        if (sameEdgeExists)
+        {
+            blockers.Add($"Relationship '{sourceEntity.Name}.{relationshipUsageName}' already exists.");
+        }
+
+        var usageCollision = sourceEntity.Relationships.Any(item =>
+            string.Equals(item.GetColumnName(), relationshipUsageName, StringComparison.OrdinalIgnoreCase));
+        if (usageCollision && !sameEdgeExists)
+        {
+            blockers.Add($"Relationship name '{sourceEntity.Name}.{relationshipUsageName}' already exists.");
+        }
+
+        var propertyCollision = sourceEntity.Properties.Any(item =>
+            string.Equals(item.Name, relationshipUsageName, StringComparison.OrdinalIgnoreCase));
+        if (propertyCollision)
+        {
+            blockers.Add(
+                $"Cannot add relationship '{sourceEntity.Name}.{relationshipUsageName}' because property '{sourceEntity.Name}.{relationshipUsageName}' already exists.");
         }
 
         return blockers;
@@ -633,6 +692,11 @@ public static class ModelSuggestService
     private static bool IsStringLike(string dataType)
     {
         return string.Equals(dataType, "string", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool SourceShowsClearLookupReuse(PropertyProfileStats source)
+    {
+        return source.NonBlankCount > source.DistinctNonBlankCount;
     }
 
     private static bool IsBlank(string value)

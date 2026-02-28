@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Model name="ProductModel">
   <Entities>
-    <Entity name="Category">
+    <Entity name="Category" plural="Categories">
       <Properties>
         <Property name="CategoryCode" />
         <Property name="CategoryName" />
@@ -10,11 +10,13 @@
     <Entity name="Order">
       <Properties>
         <Property name="OrderNumber" />
-        <Property name="ProductCode" />
         <Property name="StatusText" />
-        <Property name="SupplierCode" />
-        <Property name="WarehouseCode" />
       </Properties>
+      <Relationships>
+        <Relationship entity="Product" />
+        <Relationship entity="Supplier" />
+        <Relationship entity="Warehouse" />
+      </Relationships>
     </Entity>
     <Entity name="Product">
       <Properties>
