@@ -51,3 +51,14 @@ public interface IOperationService
     void ApplyWithoutHistory(Workspace workspace, WorkspaceOp operation);
     IReadOnlyCollection<WorkspaceOp> GetUndoOperations(Workspace workspace);
 }
+
+public interface IModelRefactorService
+{
+    PropertyToRelationshipRefactorResult RefactorPropertyToRelationship(
+        Workspace workspace,
+        PropertyToRelationshipRefactorOptions options);
+
+    RelationshipToPropertyRefactorResult RefactorRelationshipToProperty(
+        Workspace workspace,
+        RelationshipToPropertyRefactorOptions options);
+}

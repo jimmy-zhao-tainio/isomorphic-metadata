@@ -1,5 +1,6 @@
 using Meta.Core.Domain;
 using Meta.Core.Operations;
+using Meta.Core.Services;
 
 internal sealed partial class CliRuntime
 {
@@ -11,17 +12,18 @@ internal sealed partial class CliRuntime
             return PrintArgumentError(options.ErrorMessage);
         }
 
-        var refactorOptions = options.Options;
+        var commandOptions = options.Options;
+        var refactorOptions = commandOptions.Refactor;
 
         Workspace? workspace = null;
         WorkspaceSnapshot? before = null;
         try
         {
-            workspace = await LoadWorkspaceForCommandAsync(refactorOptions.WorkspacePath).ConfigureAwait(false);
+            workspace = await LoadWorkspaceForCommandAsync(commandOptions.WorkspacePath).ConfigureAwait(false);
             PrintContractCompatibilityWarning(workspace.WorkspaceConfig);
             before = WorkspaceSnapshotCloner.Capture(workspace);
 
-            var result = ApplyRelationshipToPropertyRefactor(workspace, refactorOptions);
+            var result = services.ModelRefactorService.RefactorRelationshipToProperty(workspace, refactorOptions);
             ApplyImplicitNormalization(workspace);
 
             var diagnostics = services.ValidationService.Validate(workspace);
@@ -69,88 +71,7 @@ internal sealed partial class CliRuntime
         }
     }
 
-    RelationshipToPropertyRefactorResult ApplyRelationshipToPropertyRefactor(
-        Workspace workspace,
-        RelationshipToPropertyRefactorOptions options)
-    {
-        var sourceEntity = RequireEntity(workspace, options.SourceEntityName);
-        RequireEntity(workspace, options.TargetEntityName);
-
-        var relationship = sourceEntity.Relationships.FirstOrDefault(item =>
-            string.Equals(item.Entity, options.TargetEntityName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(item.Role ?? string.Empty, options.Role ?? string.Empty, StringComparison.OrdinalIgnoreCase));
-        if (relationship == null)
-        {
-            throw new InvalidOperationException(
-                $"Relationship '{options.SourceEntityName}->{options.TargetEntityName}' was not found.");
-        }
-
-        var relationshipFieldName = relationship.GetColumnName();
-        var propertyName = string.IsNullOrWhiteSpace(options.PropertyName)
-            ? relationshipFieldName
-            : options.PropertyName.Trim();
-        if (!ModelNamePattern.IsMatch(propertyName))
-        {
-            throw new InvalidOperationException(
-                $"Property '{propertyName}' is invalid. Use identifier pattern [A-Za-z_][A-Za-z0-9_]*.");
-        }
-
-        var propertyExists = sourceEntity.Properties.Any(item =>
-            string.Equals(item.Name, propertyName, StringComparison.OrdinalIgnoreCase));
-        if (propertyExists)
-        {
-            throw new InvalidOperationException(
-                $"Property '{sourceEntity.Name}.{propertyName}' already exists.");
-        }
-
-        var sourceRows = workspace.Instance.GetOrCreateEntityRecords(sourceEntity.Name)
-            .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(item => item.Id, StringComparer.Ordinal)
-            .ToList();
-
-        foreach (var sourceRow in sourceRows)
-        {
-            if (!sourceRow.RelationshipIds.TryGetValue(relationshipFieldName, out var fkValue) ||
-                string.IsNullOrWhiteSpace(fkValue))
-            {
-                throw new InvalidOperationException(
-                    $"Relationship '{sourceEntity.Name}.{relationshipFieldName}' is missing required value. (Id={sourceRow.Id})");
-            }
-
-            if (!string.Equals(propertyName, relationshipFieldName, StringComparison.OrdinalIgnoreCase))
-            {
-                if (sourceRow.Values.ContainsKey(propertyName) || sourceRow.RelationshipIds.ContainsKey(propertyName))
-                {
-                    throw new InvalidOperationException(
-                        $"Cannot demote relationship '{sourceEntity.Name}.{relationshipFieldName}' to property '{propertyName}' because row '{sourceRow.Id}' already contains '{propertyName}'.");
-                }
-            }
-        }
-
-        sourceEntity.Relationships.Remove(relationship);
-        sourceEntity.Properties.Add(new GenericProperty
-        {
-            Name = propertyName,
-            DataType = "string",
-            IsNullable = false,
-        });
-
-        foreach (var sourceRow in sourceRows)
-        {
-            var fkValue = sourceRow.RelationshipIds[relationshipFieldName];
-            sourceRow.RelationshipIds.Remove(relationshipFieldName);
-            sourceRow.Values[propertyName] = fkValue;
-        }
-
-        return new RelationshipToPropertyRefactorResult(
-            RowsRewritten: sourceRows.Count,
-            SourceEntityName: sourceEntity.Name,
-            TargetEntityName: options.TargetEntityName,
-            Role: relationship.Role,
-            PropertyName: propertyName);
-    }
-
-    (bool Ok, RelationshipToPropertyRefactorOptions Options, string ErrorMessage)
+    (bool Ok, RelationshipToPropertyCommandOptions Options, string ErrorMessage)
         ParseModelRefactorRelationshipToPropertyOptions(string[] commandArgs, int startIndex)
     {
         var workspacePath = DefaultWorkspacePath();
@@ -240,27 +161,18 @@ internal sealed partial class CliRuntime
             return (false, default, "Error: --property must use identifier pattern [A-Za-z_][A-Za-z0-9_]*.");
         }
 
-        var options = new RelationshipToPropertyRefactorOptions(
+        var options = new RelationshipToPropertyCommandOptions(
             WorkspacePath: workspacePath,
-            SourceEntityName: source,
-            TargetEntityName: target,
-            Role: role,
-            PropertyName: propertyName);
+            Refactor: new RelationshipToPropertyRefactorOptions(
+                SourceEntityName: source,
+                TargetEntityName: target,
+                Role: role,
+                PropertyName: propertyName));
 
         return (true, options, string.Empty);
     }
 
-    readonly record struct RelationshipToPropertyRefactorOptions(
+    readonly record struct RelationshipToPropertyCommandOptions(
         string WorkspacePath,
-        string SourceEntityName,
-        string TargetEntityName,
-        string Role,
-        string PropertyName);
-
-    readonly record struct RelationshipToPropertyRefactorResult(
-        int RowsRewritten,
-        string SourceEntityName,
-        string TargetEntityName,
-        string Role,
-        string PropertyName);
+        RelationshipToPropertyRefactorOptions Refactor);
 }
