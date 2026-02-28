@@ -9,13 +9,11 @@
     <Entity name="Order">
       <Properties>
         <Property name="OrderNumber" />
+        <Property name="ProductId" />
+        <Property name="SupplierId" />
+        <Property name="WarehouseId" />
         <Property name="StatusText" />
       </Properties>
-      <Relationships>
-        <Relationship entity="Product" />
-        <Relationship entity="Supplier" />
-        <Relationship entity="Warehouse" />
-      </Relationships>
     </Entity>
     <Entity name="Product">
       <Properties>
