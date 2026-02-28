@@ -13,7 +13,7 @@ In this project, metadata is not "extra comments about data". Metadata is the pr
 
 - `metadata/model.xml`: the schema contract (entities, scalar properties, required relationships).
 - `metadata/instance/*.xml`: the instance graph for that model (rows + relationship usages).
-- `metadata/workspace.xml`: workspace-level configuration for layout/encoding/order and storage.
+- `workspace.xml`: workspace-level configuration for layout/encoding/order and storage.
 
 Core terms:
 
@@ -30,7 +30,7 @@ Isomorphic means the **same semantics** can live in multiple forms without trans
 
 Think of it as one model with three "native surfaces", each optimized for a different kind of work:
 
-- **XML workspace**: canonical, deterministic, and **git-first** (clean diffs, reviewable history, mergeable refactors).
+- **XML workspace**: canonical, deterministic, and git-friendly (clean diffs, reviewable history, mergeable refactors).
 - **SQL**: **data-first** and database-native (easy to inspect/query/validate at scale; good interchange format when your source of truth starts in a database).
 - **C#**: **application-first** (strongly typed objects for tools and apps; no XML parsing in consumer code; easy to integrate into pipelines/services).
 
@@ -53,7 +53,7 @@ The workspace is designed for version control:
 
 A workspace is a directory containing:
 
-`metadata/workspace.xml`  
+`workspace.xml`  
 `metadata/model.xml`  
 `metadata/instance/...`
 
@@ -397,7 +397,7 @@ Global behavior:
 | `meta model suggest` | Read-only relationship inference; only fully resolvable many-to-one promotions are printed by default. | `meta model suggest` |
 | `meta model suggest --print-commands` | Print copy/paste refactor commands for eligible suggestions. | `meta model suggest --print-commands` |
 | `meta model suggest --show-keys --explain` | Include candidate key diagnostics and explain blocks. | `meta model suggest --show-keys --explain` |
-| `meta model refactor property-to-relationship ...` | Atomic model+instance rewrite from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property` |
+| `meta model refactor property-to-relationship ...` | Atomic model+instance rewrite from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.WarehouseId --target Warehouse --lookup Id --drop-source-property` |
 | `meta model add-entity <Name>` | Add a new entity definition. | `meta model add-entity SourceSystem` |
 | `meta model rename-entity <Old> <New>` | Rename an entity definition. | `meta model rename-entity SourceSystem Source` |
 | `meta model drop-entity <Entity>` | Drop entity definition (blocked if instances or inbound refs exist). | `meta model drop-entity SourceSystem` |
@@ -412,12 +412,21 @@ Global behavior:
 | Command | What it is for | Example |
 |---|---|---|
 | `meta insert <Entity> <Id> --set ...` | Insert one row with explicit Id. | `meta insert Cube 10 --set "CubeName=Ops Cube"` |
-| `meta insert <Entity> --auto-id --set ...` | Insert one row with generated numeric Id. | `meta insert Cube --auto-id --set "CubeName=Auto Cube"` |
+| `meta insert <Entity> --auto-id --set ...` | Insert one brand-new row with generated numeric Id when no external identity exists. | `meta insert Cube --auto-id --set "CubeName=Auto Cube"` |
 | `meta bulk-insert <Entity> ...` | Insert many rows from tsv/csv file or stdin. | `meta bulk-insert Cube --from tsv --file .\\cube.tsv --key Id` |
 | `meta instance update <Entity> <Id> --set ...` | Update fields on one row by Id. | `meta instance update Cube 10 --set "Purpose=Operations reporting"` |
 | `meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId>` | Set exact-one relationship usage to target row. | `meta instance relationship set Measure 1 --to Cube 10` |
 | `meta instance relationship list <FromEntity> <FromId>` | List relationship usages for one row. | `meta instance relationship list Measure 1` |
 | `meta delete <Entity> <Id>` | Delete one row by Id. | `meta delete Cube 10` |
+
+Id policy:
+- Row `Id` values are stable strings; they do not need to be numeric.
+- Use explicit stable `Id` values whenever the source system already has identity.
+- `meta import csv` requires a column named `Id` (case-insensitive header match).
+- Scalar landing fields that point at other entities should stay as `...Id` until promoted.
+- `--auto-id` is only for creating brand-new rows when no external identity exists.
+- `meta model refactor property-to-relationship` preserves row identities; it only rewrites fields.
+- `meta instance merge` and `meta instance merge-aligned` preserve ids from the diff artifact and never remap existing rows.
 
 ### Instance diff and merge (quick index)
 
@@ -432,45 +441,48 @@ Global behavior:
 
 | Command | What it is for | Example |
 |---|---|---|
-| `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Create new workspace from XML model+instance files. | `meta import xml .\\Samples\\SampleModel.xml .\\Samples\\SampleInstance.xml --new-workspace .\\Samples\\ImportedXml` |
-| `meta import sql <connectionString> <schema> --new-workspace <path>` | Create a new workspace by importing a SQL schema into workspace form (model + instance). | `meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\\Samples\\ImportedSql` |
-| `meta import csv <csvFile> --entity <EntityName> (--new-workspace <path> or --workspace <path>)` | Landing import: one CSV to one entity + rows in new or existing workspace. | `meta import csv .\\Samples\\landing.csv --entity Landing --new-workspace .\\Samples\\ImportedCsv` |
+| `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Create new workspace from XML model+instance files. | `meta import xml .\\Samples\\Contracts\\SampleModel.xml .\\Samples\\Contracts\\SampleInstance.xml --new-workspace .\\Samples\\Fixtures\\ImportedXml` |
+| `meta import sql <connectionString> <schema> --new-workspace <path>` | Create a new workspace by importing a SQL schema into workspace form (model + instance). | `meta import sql "Server=.;Database=EnterpriseBIPlatform;Trusted_Connection=True;TrustServerCertificate=True;" dbo --new-workspace .\\Samples\\Fixtures\\ImportedSql` |
+| `meta import csv <csvFile> --entity <EntityName> [--plural <PluralName>] (--new-workspace <path> or --workspace <path>)` | Landing import: one CSV to one entity + rows in new or existing workspace, requiring a CSV column named `Id` and using those values as instance identities. | `meta import csv .\\Samples\\landing.csv --entity Landing --new-workspace .\\Samples\\Fixtures\\ImportedCsv` |
 | `meta generate sql --out <dir>` | Emit deterministic SQL schema + data consumables. | `meta generate sql --out .\\out\\sql` |
 | `meta generate csharp --out <dir>` | Emit dependency-free consumer C# API consumables. | `meta generate csharp --out .\\out\\csharp` |
 | `meta generate csharp --out <dir> --tooling` | Emit optional tooling helpers for load/save/import flows. | `meta generate csharp --out .\\out\\csharp --tooling` |
 | `meta generate ssdt --out <dir>` | Emit SSDT project consumables. | `meta generate ssdt --out .\\out\\ssdt` |
 
+`meta import csv` is Id-first: the file must contain a column named `Id` (case-insensitive header match). On re-import into an existing entity, matching Id updates the row, new Id inserts the row, and rows missing from the CSV are preserved. Use `--plural <PluralName>` when an entity needs an explicit container name such as `Category -> Categories`. There is no alternate id-column mapping and no best-effort reconciliation.
+
 ### Suggest workflow
 
 #### Full example: CSV import -> suggest -> refactor
 
-This is the intended landing workflow: import flat CSVs, run suggest, then apply an atomic model+instance refactor.
+This is the intended landing workflow: import flat CSVs with stable row Ids, run suggest, then apply an atomic model+instance refactor.
 
 `meta model suggest` is structural and deterministic. It scans model+instance data and only prints eligible relationship promotions by default.
 
 Eligible means the promotion satisfies 100% referential integrity (RI) before any mutation:
+- source lands first as a scalar `...Id` field (for example `WarehouseId`)
 - target lookup property is complete and unambiguous (no null/blank values, no duplicates)
 - source property is complete (no null/blank values)
 - every source value resolves to an existing target lookup value (full coverage, no unmatched values)
 - source and target scalar types are compatible under strict rules (no implicit casting)
 - source values are reused, so the source behaves like a reference and the direction is structurally evidenced as many-to-one
 
-Exact-name match alone is not enough. If any rule fails, the item is not printed.
+For Id-first landing, the sanctioned structural rule is `ProductId -> Product.Id`, `SupplierId -> Supplier.Id`, and so on. `meta model suggest` does not rely on `Code` fields for this workflow. If any rule fails, the item is not printed.
 
 ```cmd
-meta import csv .\Samples\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace .\Samples\SuggestDemo\Workspace
-cd .\Samples\SuggestDemo\Workspace
+meta import csv .\Samples\Demos\SuggestDemo\demo-csv\products.csv --entity Product --new-workspace .\Samples\Demos\SuggestDemo\Workspace
+cd .\Samples\Demos\SuggestDemo\Workspace
 meta import csv ..\demo-csv\suppliers.csv --entity Supplier
-meta import csv ..\demo-csv\categories.csv --entity Category
+meta import csv ..\demo-csv\categories.csv --entity Category --plural Categories
 meta import csv ..\demo-csv\warehouses.csv --entity Warehouse
 meta import csv ..\demo-csv\orders.csv --entity Order
 
 meta model suggest
 meta model suggest --print-commands
 
-meta model refactor property-to-relationship --source Order.ProductCode --target Product --lookup ProductCode --drop-source-property
-meta model refactor property-to-relationship --source Order.SupplierCode --target Supplier --lookup SupplierCode --drop-source-property
-meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property
+meta model refactor property-to-relationship --source Order.ProductId --target Product --lookup Id --drop-source-property
+meta model refactor property-to-relationship --source Order.SupplierId --target Supplier --lookup Id --drop-source-property
+meta model refactor property-to-relationship --source Order.WarehouseId --target Warehouse --lookup Id --drop-source-property
 
 meta model suggest
 meta check
@@ -480,21 +492,21 @@ meta check
 
 ```text
 OK: model suggest
-Workspace: .\Samples\SuggestDemo\Workspace
+Workspace: .\Samples\Demos\SuggestDemo\Workspace
 Model: ProductModel
 Suggestions: 3
 
 Relationship suggestions
-  1) Order.ProductCode -> Product (lookup: Product.ProductCode)
-  2) Order.SupplierCode -> Supplier (lookup: Supplier.SupplierCode)
-  3) Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)
+  1) Order.ProductId -> Product (lookup: Product.Id)
+  2) Order.SupplierId -> Supplier (lookup: Supplier.Id)
+  3) Order.WarehouseId -> Warehouse (lookup: Warehouse.Id)
 ```
 
 `meta model suggest` output after all three refactors:
 
 ```text
 OK: model suggest
-Workspace: .\Samples\SuggestDemo\Workspace
+Workspace: .\Samples\Demos\SuggestDemo\Workspace
 Model: ProductModel
 Suggestions: 0
 
@@ -510,15 +522,15 @@ Before (after CSV import, before refactor):
 <Entity name="Order">
   <Properties>
     <Property name="OrderNumber" />
-    <Property name="ProductCode" />
-    <Property name="SupplierCode" />
-    <Property name="WarehouseCode" />
+    <Property name="ProductId" />
+    <Property name="SupplierId" />
+    <Property name="WarehouseId" />
     <Property name="StatusText" />
   </Properties>
 </Entity>
 ```
 
-After running all three `property-to-relationship` refactors (`ProductCode`, `SupplierCode`, `WarehouseCode`):
+After running all three `property-to-relationship` refactors (`ProductId`, `SupplierId`, `WarehouseId`):
 
 ```xml
 <Entity name="Order">
@@ -534,7 +546,7 @@ After running all three `property-to-relationship` refactors (`ProductCode`, `Su
 </Entity>
 ```
 
-These promotions rewrite each `Order` row from scalar `ProductCode`/`SupplierCode`/`WarehouseCode` values to required relationship usages `ProductId`/`SupplierId`/`WarehouseId`, then remove the source scalar properties when `--drop-source-property` is used.
+These promotions rewrite each `Order` row from scalar `ProductId`/`SupplierId`/`WarehouseId` elements to required relationship usages with the same names as XML attributes, then remove the source scalar properties when `--drop-source-property` is used.
 
 Instance diff/merge can be used to propagate these changes across workspaces (see **Instance diff and merge**).
 
@@ -602,6 +614,8 @@ Atomicity and safety:
 - all changes are applied or none are persisted.
 - any failure restores pre-merge in-memory state and aborts.
 - save is a single workspace write operation after successful validation.
+- rows created by merge keep the `Id` values recorded in the diff artifact.
+- merge never allocates replacement ids or remaps existing ids.
 
 Determinism:
 
@@ -625,6 +639,7 @@ Rows are matched by identity (`Entity`, `Id`), not by value similarity.
 - identity stability is assumed.
 - no fuzzy matching.
 - no business-key reconciliation.
+- if a target workspace has drifted so that an incoming `Id` would collide with different state, merge fails its precondition instead of remapping or guessing.
 
 #### 6. Typical workflow
 
@@ -765,3 +780,4 @@ Transcript-style examples: `COMMANDS-EXAMPLES.md`
 ```powershell
 dotnet test Metadata.Framework.sln
 ```
+

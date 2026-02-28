@@ -1,6 +1,0 @@
-OrderNumber,ProductCode,SupplierCode,WarehouseCode,StatusText
-ORD-1001,PRD-001,SUP-001,WH-001,Released
-ORD-1002,PRD-002,SUP-002,WH-001,Released
-ORD-1003,PRD-003,SUP-003,WH-002,Held
-ORD-1004,PRD-004,SUP-004,WH-003,Closed
-ORD-1005,PRD-001,SUP-002,WH-001,Released

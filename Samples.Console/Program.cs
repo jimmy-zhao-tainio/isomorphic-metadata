@@ -1,5 +1,6 @@
 using System;
-using System.IO;
+using System.Linq;
+using Model = EnterpriseBIPlatform.EnterpriseBIPlatform;
 
 namespace Samples.ConsoleApp
 {
@@ -7,83 +8,38 @@ namespace Samples.ConsoleApp
     {
         private static void Main(string[] args)
         {
-            var workspacePath = ResolveWorkspacePath(args);
-            var modelPath = ResolveModelPath(workspacePath);
-            if (!File.Exists(modelPath))
-            {
-                Console.WriteLine($"Sample model not found at '{modelPath}'.");
-                return;
-            }
-
-            var instancePath = ResolveInstancePath(workspacePath);
-            if (!File.Exists(instancePath) && !Directory.Exists(Path.Combine(workspacePath, "metadata", "instance")))
-            {
-                Console.WriteLine($"Sample instance not found at '{instancePath}'.");
-                return;
-            }
-
-            var model = GeneratedModel.EnterpriseBIPlatformModel.LoadFromXmlWorkspace(workspacePath);
-
             Console.WriteLine("Model: EnterpriseBIPlatform");
             Console.WriteLine();
-            Console.WriteLine("Built-in snapshot:");
-            foreach (var measure in GeneratedModel.EnterpriseBIPlatform.Measures)
+            Console.WriteLine("Systems:");
+            foreach (var system in Model.Systems)
             {
-                Console.WriteLine($"  Measure Id={measure.Id}, Name={measure.Name}, Cube={measure.Cube.Name}");
+                Console.WriteLine($"  {system.SystemName} [{system.SystemType.TypeName}]");
+
+                foreach (var link in Model.SystemCubes.Where(x => x.SystemId == system.Id))
+                {
+                    var mode = string.IsNullOrEmpty(link.ProcessingMode) ? "n/a" : link.ProcessingMode;
+                    Console.WriteLine($"    Cube: {link.Cube.CubeName} (mode: {mode})");
+                }
             }
 
             Console.WriteLine();
             Console.WriteLine("Measures:");
-            foreach (var measure in model.Measures)
+            foreach (var measure in Model.Measures)
             {
-                Console.WriteLine($"  Measure Id={measure.Id}, Name={measure.Name}, Cube={measure.Cube.Name}");
+                Console.WriteLine($"  Measure Id={measure.Id}, Name={measure.MeasureName}, Cube={measure.Cube.CubeName}");
             }
 
             Console.WriteLine();
             Console.WriteLine("Lookup example:");
             try
             {
-                var measure1 = model.Measures.GetId(1);
-                Console.WriteLine($"  Measure 1 cube = {measure1.Cube.Name}");
+                var measure1 = Model.Measures.First(item => string.Equals(item.Id, "1", StringComparison.Ordinal));
+                Console.WriteLine($"  Measure 1 cube = {measure1.Cube.CubeName}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"  Lookup failed: {ex.Message}");
             }
-        }
-
-        private static string ResolveWorkspacePath(string[] args)
-        {
-            if (args != null && args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
-            {
-                var argPath = Path.GetFullPath(args[0]);
-                if (File.Exists(argPath))
-                {
-                    return Path.GetDirectoryName(argPath);
-                }
-
-                return argPath;
-            }
-
-            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            var relativePath = Path.Combine(baseDirectory, "..", "..", "..", "Samples", "SampleModel.xml");
-            var candidate = Path.GetFullPath(relativePath);
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate);
-            }
-
-            return Path.Combine(baseDirectory, "Samples");
-        }
-
-        private static string ResolveModelPath(string workspacePath)
-        {
-            return Path.Combine(workspacePath, "metadata", "model.xml");
-        }
-
-        private static string ResolveInstancePath(string workspacePath)
-        {
-            return Path.Combine(workspacePath, "metadata", "instance", "Measure.xml");
         }
     }
 }

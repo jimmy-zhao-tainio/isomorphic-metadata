@@ -88,9 +88,10 @@ public static class ModelSuggestService
 
         var model = workspace.Model ?? throw new InvalidDataException("Workspace model is missing.");
         var profiles = BuildPropertyProfiles(workspace);
+        var implicitIdProfiles = BuildImplicitIdProfiles(workspace);
 
-        var businessKeys = BuildBusinessKeyCandidates(profiles);
-        var relationshipCandidates = BuildLookupRelationshipCandidates(workspace, profiles);
+        var businessKeys = BuildBusinessKeyCandidates(profiles.Concat(implicitIdProfiles.Values).ToList());
+        var relationshipCandidates = BuildLookupRelationshipCandidates(workspace, profiles, implicitIdProfiles);
         var eligible = relationshipCandidates
             .Where(item => item.Status == LookupCandidateStatus.Eligible)
             .ToList();
@@ -113,7 +114,8 @@ public static class ModelSuggestService
         string sourcePropertyName,
         string targetEntityName,
         string targetPropertyName,
-        string? role = null)
+        string? role = null,
+        bool allowSourcePropertyReplacement = true)
     {
         ArgumentNullException.ThrowIfNull(workspace);
 
@@ -138,6 +140,7 @@ public static class ModelSuggestService
         }
 
         var profiles = BuildPropertyProfiles(workspace);
+        var implicitIdProfiles = BuildImplicitIdProfiles(workspace);
         var source = profiles.FirstOrDefault(item =>
             string.Equals(item.Stats.EntityName, sourceEntityName, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(item.Stats.PropertyName, sourcePropertyName, StringComparison.OrdinalIgnoreCase));
@@ -147,16 +150,25 @@ public static class ModelSuggestService
                 $"Property '{sourceEntityName}.{sourcePropertyName}' does not exist.");
         }
 
-        var target = profiles.FirstOrDefault(item =>
-            string.Equals(item.Stats.EntityName, targetEntityName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(item.Stats.PropertyName, targetPropertyName, StringComparison.OrdinalIgnoreCase));
+        PropertyProfile? target = null;
+        if (string.Equals(targetPropertyName, "Id", StringComparison.OrdinalIgnoreCase))
+        {
+            implicitIdProfiles.TryGetValue(targetEntityName, out target);
+        }
+        else
+        {
+            target = profiles.FirstOrDefault(item =>
+                string.Equals(item.Stats.EntityName, targetEntityName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(item.Stats.PropertyName, targetPropertyName, StringComparison.OrdinalIgnoreCase));
+        }
+
         if (target == null)
         {
             throw new InvalidOperationException(
                 $"Property '{targetEntityName}.{targetPropertyName}' does not exist.");
         }
 
-        return BuildLookupRelationshipSuggestion(workspace, source, target, role);
+        return BuildLookupRelationshipSuggestion(workspace, source, target, role, allowSourcePropertyReplacement);
     }
 
     private static List<PropertyProfile> BuildPropertyProfiles(Workspace workspace)
@@ -183,6 +195,30 @@ public static class ModelSuggestService
             {
                 result.Add(ProfileProperty(entity.Name, property, orderedRows));
             }
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, PropertyProfile> BuildImplicitIdProfiles(Workspace workspace)
+    {
+        var model = workspace.Model ?? throw new InvalidDataException("Workspace model is missing.");
+        var instance = workspace.Instance;
+        var result = new Dictionary<string, PropertyProfile>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entity in model.Entities
+                     .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(item => item.Name, StringComparer.Ordinal))
+        {
+            var rows = instance?.RecordsByEntity.TryGetValue(entity.Name, out var entityRows) == true
+                ? entityRows
+                : new List<GenericRecord>();
+            var orderedRows = rows
+                .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .ToList();
+
+            result[entity.Name] = ProfileImplicitId(entity.Name, orderedRows);
         }
 
         return result;
@@ -233,6 +269,60 @@ public static class ModelSuggestService
                 PropertyName = property.Name,
                 DataType = dataType,
                 IsRequired = !property.IsNullable,
+                IsStringLike = IsStringLike(dataType),
+                RowCount = rowCount,
+                NonNullCount = nonNullCount,
+                NullCount = nullCount,
+                BlankStringCount = blankCount,
+                NonBlankCount = nonBlankCount,
+                DistinctNonNullCount = nonNullDistinct.Count,
+                DistinctNonBlankCount = nonBlankDistinct.Count,
+                IsUniqueOverNonNull = nonNullCount > 0 && nonNullDistinct.Count == nonNullCount,
+                IsUniqueOverNonBlank = nonBlankCount > 0 && nonBlankDistinct.Count == nonBlankCount,
+            },
+            ComparableValueCounts: nonBlankCounts);
+    }
+
+    private static PropertyProfile ProfileImplicitId(
+        string entityName,
+        IReadOnlyList<GenericRecord> rows)
+    {
+        var nonNullCount = 0;
+        var blankCount = 0;
+        var nonNullDistinct = new HashSet<string>(StringComparer.Ordinal);
+        var nonBlankDistinct = new HashSet<string>(StringComparer.Ordinal);
+        var nonBlankCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var observedIds = new List<string>();
+
+        foreach (var row in rows)
+        {
+            var value = row.Id ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                blankCount++;
+                continue;
+            }
+
+            nonNullCount++;
+            observedIds.Add(value);
+            nonNullDistinct.Add(value);
+            nonBlankDistinct.Add(value);
+            nonBlankCounts.TryGetValue(value, out var existing);
+            nonBlankCounts[value] = existing + 1;
+        }
+
+        var rowCount = rows.Count;
+        var nullCount = rowCount - nonNullCount;
+        var nonBlankCount = nonNullCount;
+        var dataType = DetectImplicitIdDataType(observedIds);
+
+        return new PropertyProfile(
+            Stats: new PropertyProfileStats
+            {
+                EntityName = entityName,
+                PropertyName = "Id",
+                DataType = dataType,
+                IsRequired = true,
                 IsStringLike = IsStringLike(dataType),
                 RowCount = rowCount,
                 NonNullCount = nonNullCount,
@@ -306,17 +396,10 @@ public static class ModelSuggestService
 
     private static List<LookupRelationshipSuggestion> BuildLookupRelationshipCandidates(
         Workspace workspace,
-        IReadOnlyList<PropertyProfile> profiles)
+        IReadOnlyList<PropertyProfile> profiles,
+        IReadOnlyDictionary<string, PropertyProfile> implicitIdProfiles)
     {
-        var profilesByPropertyName = profiles
-            .GroupBy(item => item.Stats.PropertyName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderBy(item => item.Stats.EntityName, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(item => item.Stats.EntityName, StringComparer.Ordinal)
-                    .ToList(),
-                StringComparer.OrdinalIgnoreCase);
+        var model = workspace.Model ?? throw new InvalidDataException("Workspace model is missing.");
 
         var candidates = new List<LookupRelationshipSuggestion>();
         foreach (var source in profiles
@@ -326,30 +409,20 @@ public static class ModelSuggestService
                      .ThenBy(item => item.Stats.PropertyName, StringComparer.Ordinal))
         {
             var sourceStats = source.Stats;
-            if (!profilesByPropertyName.TryGetValue(sourceStats.PropertyName, out var sameNameProfiles))
+            if (TryResolveImplicitTargetEntity(model, sourceStats.PropertyName, out var implicitTargetEntityName) &&
+                !string.Equals(sourceStats.EntityName, implicitTargetEntityName, StringComparison.OrdinalIgnoreCase) &&
+                sourceStats.RowCount >= 2 &&
+                sourceStats.DistinctNonBlankCount > 0 &&
+                implicitIdProfiles.TryGetValue(implicitTargetEntityName, out var implicitTargetProfile) &&
+                implicitTargetProfile.Stats.RowCount >= 2 &&
+                implicitTargetProfile.Stats.DistinctNonBlankCount > 0)
             {
-                continue;
-            }
-
-            foreach (var target in sameNameProfiles)
-            {
-                var targetStats = target.Stats;
-                if (string.Equals(sourceStats.EntityName, targetStats.EntityName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (sourceStats.RowCount < 2 || targetStats.RowCount < 2)
-                {
-                    continue;
-                }
-
-                if (sourceStats.DistinctNonBlankCount == 0 || targetStats.DistinctNonBlankCount == 0)
-                {
-                    continue;
-                }
-
-                candidates.Add(BuildLookupRelationshipSuggestion(workspace, source, target, role: null));
+                candidates.Add(BuildLookupRelationshipSuggestion(
+                    workspace,
+                    source,
+                    implicitTargetProfile,
+                    role: null,
+                    allowSourcePropertyReplacement: true));
             }
         }
 
@@ -370,7 +443,8 @@ public static class ModelSuggestService
         Workspace workspace,
         PropertyProfile source,
         PropertyProfile target,
-        string? role)
+        string? role,
+        bool allowSourcePropertyReplacement)
     {
         var model = workspace.Model ?? throw new InvalidDataException("Workspace model is missing.");
         var sourceStats = source.Stats;
@@ -385,7 +459,12 @@ public static class ModelSuggestService
             coverage,
             typeCompatible,
             target.ComparableValueCounts,
-            BuildModelShapeBlockers(sourceEntity, targetStats.EntityName, role),
+            BuildModelShapeBlockers(
+                sourceEntity,
+                sourceStats.PropertyName,
+                targetStats.EntityName,
+                role,
+                allowSourcePropertyReplacement),
             SourceShowsClearLookupReuse(sourceStats));
 
         var suggestion = new LookupRelationshipSuggestion
@@ -472,8 +551,10 @@ public static class ModelSuggestService
 
     private static IReadOnlyList<string> BuildModelShapeBlockers(
         GenericEntity sourceEntity,
+        string sourcePropertyName,
         string targetEntityName,
-        string? role)
+        string? role,
+        bool allowSourcePropertyReplacement)
     {
         var relationship = new GenericRelationship
         {
@@ -500,7 +581,10 @@ public static class ModelSuggestService
 
         var propertyCollision = sourceEntity.Properties.Any(item =>
             string.Equals(item.Name, relationshipUsageName, StringComparison.OrdinalIgnoreCase));
-        if (propertyCollision)
+        var replacesSourceProperty =
+            allowSourcePropertyReplacement &&
+            string.Equals(sourcePropertyName, relationshipUsageName, StringComparison.OrdinalIgnoreCase);
+        if (propertyCollision && !replacesSourceProperty)
         {
             blockers.Add(
                 $"Cannot add relationship '{sourceEntity.Name}.{relationshipUsageName}' because property '{sourceEntity.Name}.{relationshipUsageName}' already exists.");
@@ -697,6 +781,52 @@ public static class ModelSuggestService
     private static bool SourceShowsClearLookupReuse(PropertyProfileStats source)
     {
         return source.NonBlankCount > source.DistinctNonBlankCount;
+    }
+
+    private static bool TryResolveImplicitTargetEntity(
+        GenericModel model,
+        string propertyName,
+        out string targetEntityName)
+    {
+        targetEntityName = string.Empty;
+        if (string.IsNullOrWhiteSpace(propertyName) ||
+            string.Equals(propertyName, "Id", StringComparison.OrdinalIgnoreCase) ||
+            !propertyName.EndsWith("Id", StringComparison.OrdinalIgnoreCase) ||
+            propertyName.Length <= 2)
+        {
+            return false;
+        }
+
+        var candidate = propertyName[..^2];
+        var targetEntity = model.Entities.FirstOrDefault(item =>
+            string.Equals(item.Name, candidate, StringComparison.OrdinalIgnoreCase));
+        if (targetEntity == null)
+        {
+            return false;
+        }
+
+        targetEntityName = targetEntity.Name;
+        return true;
+    }
+
+    private static string DetectImplicitIdDataType(IReadOnlyCollection<string> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return "int";
+        }
+
+        if (ids.All(value => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)))
+        {
+            return "int";
+        }
+
+        if (ids.All(value => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)))
+        {
+            return "long";
+        }
+
+        return "string";
     }
 
     private static bool IsBlank(string value)

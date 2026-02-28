@@ -17,7 +17,7 @@ Workspace discovery:
 - Override: `--workspace <path>`.
 
 Canonical files:
-- `metadata/workspace.xml`
+- `workspace.xml`
 - `metadata/model.xml`
 - `metadata/instance/<Entity>.xml`
 
@@ -26,10 +26,10 @@ Canonical files:
 Every instance element uses one strict shape:
 
 - Entity element name is the model entity name.
-- Mandatory identity attribute: `Id="<positive-integer-string>"`.
+- Mandatory identity attribute: `Id="<non-empty-string>"`.
 - Relationship usage is single-target and stored only as attributes:
   - attribute name: `<TargetEntity>Id`
-  - value: positive integer string
+  - value: non-empty identity string
   - omitted attribute means relationship usage is missing (and fails `meta check` for required relationships)
 - Non-relationship properties are stored only as child elements:
   - `<PropertyName>text</PropertyName>`
@@ -67,6 +67,23 @@ Writers are byte-stable for identical logical state.
   - no packed field formats.
   - set differences are represented by instance presence (`*NotIn*` entities).
   - FK-like references use `<Entity>Id` naming.
+- Merge semantics:
+  - rows are matched by `Entity + Id`.
+  - merge preserves incoming ids from the diff artifact.
+  - merge never remaps ids in the target workspace.
+  - if the target no longer matches the diff left snapshot, merge fails instead of guessing.
+
+## Id policy
+
+- Row identity is `Id` and is treated as stable.
+- `Id` values are opaque strings; they do not need to be numeric.
+- `meta import csv` requires a column named `Id` (case-insensitive header match).
+- Existing-entity CSV import is upsert-by-Id only: matching Id updates, new Id inserts, missing CSV rows are preserved.
+- Use `--plural <PluralName>` when a landed entity needs an explicit container name such as `Category -> Categories`.
+- Landing relationship candidates should stay as scalar `...Id` fields until promoted.
+- `meta model refactor property-to-relationship` preserves row identities and only rewrites fields.
+- `--auto-id` is only for creating new rows when the source does not already carry an external identity.
+- `meta instance merge` and `meta instance merge-aligned` preserve ids from their diff artifacts.
 
 ## Instance and relationship addressing
 
@@ -131,7 +148,9 @@ Modify:
 - `meta model <suggest|refactor|add-entity|rename-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
   - `suggest` usage: `meta model suggest [--show-keys] [--explain] [--print-commands] [--workspace <path>]`
   - default suggest output is actionable-only (eligible many-to-one relationship suggestions + compact summary)
-  - exact property-name match alone is not enough; source values must be reused and fully resolvable against a unique, complete target key
+  - suggest only emits the sanctioned Id-based inference path: `<TargetEntity>Id -> <TargetEntity>.Id`
+  - exact property-name match on non-Id fields is not used by `meta model suggest`
+  - any suggestion still requires reused source values plus full resolvability against a unique, complete target key
   - `--show-keys` includes candidate business keys
   - `--explain` includes Evidence/Stats/Why detail blocks
   - `--print-commands` prints copy/paste `meta model refactor property-to-relationship ...` commands for eligible suggestions
@@ -153,7 +172,10 @@ Generate:
   - `--tooling` emits optional `<ModelName>.Tooling.cs` helpers (C# mode only).
 - `meta import xml <modelXmlPath> <instanceXmlPath> --new-workspace <path>`
 - `meta import sql <connectionString> <schema> --new-workspace <path>`
-- `meta import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]`
+- `meta import csv <csvFile> --entity <EntityName> [--plural <PluralName>] [--workspace <path> | --new-workspace <path>]`
+  - CSV import requires a column named `Id` (case-insensitive header match).
+  - Existing-entity CSV import is upsert-by-Id only: matching Id updates the row, new Id inserts the row, and rows not present in the CSV are preserved.
+  - Use `--plural <PluralName>` when an entity needs an explicit container name such as `Category -> Categories`.
 
 ## Command quick reference (what for + example)
 
@@ -184,7 +206,7 @@ Model mutation and refactor:
 |---|---|---|
 | `meta model suggest` | You need read-only eligible relationship promotions. | `meta model suggest` |
 | `meta model suggest --print-commands` | You need copy/paste refactor commands for eligible suggestions. | `meta model suggest --print-commands` |
-| `meta model refactor property-to-relationship ...` | You need atomic model+instance promotion from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.ProductCode --target Product --lookup ProductCode --drop-source-property` |
+| `meta model refactor property-to-relationship ...` | You need atomic model+instance promotion from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.ProductId --target Product --lookup Id --drop-source-property` |
 | `meta model add-entity <Name>` | You need a new entity definition. | `meta model add-entity SourceSystem` |
 | `meta model rename-entity <Old> <New>` | You need to rename an entity. | `meta model rename-entity SourceSystem Source` |
 | `meta model drop-entity <Entity>` | You need to remove an entity (when not blocked by data/references). | `meta model drop-entity SourceSystem` |
@@ -199,7 +221,7 @@ Instance mutation:
 | Command | Use when | Example |
 |---|---|---|
 | `meta insert <Entity> <Id> --set ...` | You need to insert one row with explicit Id. | `meta insert Cube 10 --set "CubeName=Ops Cube"` |
-| `meta insert <Entity> --auto-id --set ...` | You need to insert one row with generated Id. | `meta insert Cube --auto-id --set "CubeName=Ops Cube"` |
+| `meta insert <Entity> --auto-id --set ...` | You need to create one new row and no external Id exists. | `meta insert Cube --auto-id --set "CubeName=Ops Cube"` |
 | `meta bulk-insert <Entity> ...` | You need to insert many rows from tsv/csv. | `meta bulk-insert Cube --from tsv --file .\\cube.tsv --key Id` |
 | `meta instance update <Entity> <Id> --set ...` | You need to update one row by Id. | `meta instance update Cube 1 --set RefreshMode=Manual` |
 | `meta instance relationship set <FromEntity> <FromId> --to <ToEntity> <ToId>` | You need to set exact-one relationship usage for one row. | `meta instance relationship set Measure 1 --to Cube 2` |
@@ -221,7 +243,7 @@ Import and generate:
 |---|---|---|
 | `meta import xml <modelXml> <instanceXml> --new-workspace <path>` | Source-of-truth is XML model+instance files. | `meta import xml .\\model.xml .\\instance.xml --new-workspace .\\ImportedWorkspace` |
 | `meta import sql <connectionString> <schema> --new-workspace <path>` | Source-of-truth is SQL metadata. | `meta import sql "Server=...;Database=...;..." dbo --new-workspace .\\ImportedWorkspace` |
-| `meta import csv <csvFile> --entity <EntityName> (--new-workspace <path> or --workspace <path>)` | Landing import of one file into one entity + rows. | `meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace` |
+| `meta import csv <csvFile> --entity <EntityName> [--plural <PluralName>] (--new-workspace <path> or --workspace <path>)` | Landing import of one file into one entity + rows, requiring CSV `Id` values as stable instance identities. | `meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace` |
 | `meta generate sql --out <dir>` | You need deterministic SQL schema/data scripts. | `meta generate sql --out .\\out\\sql` |
 | `meta generate csharp --out <dir>` | You need dependency-free generated consumer C# API. | `meta generate csharp --out .\\out\\csharp` |
 | `meta generate csharp --out <dir> --tooling` | You need optional generated tooling helpers for workspace/io. | `meta generate csharp --out .\\out\\csharp --tooling` |
@@ -230,10 +252,11 @@ Import and generate:
 ## Diff/merge example
 
 ```powershell
-meta instance diff .\Samples\CommandExamplesDiffLeft .\Samples\CommandExamplesDiffRight
+meta instance diff .\Samples\\Fixtures\\CommandExamplesDiffLeft .\Samples\\Fixtures\\CommandExamplesDiffRight
 # Output includes: DiffWorkspace: <path>
 
-meta instance merge .\Samples\CommandExamplesDiffLeft "<path from diff output>"
+meta instance merge .\Samples\\Fixtures\\CommandExamplesDiffLeft "<path from diff output>"
 ```
+
 
 

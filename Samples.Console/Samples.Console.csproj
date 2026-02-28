@@ -9,16 +9,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Samples\SampleModel.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\Samples\SampleModel.xml">
-      <Link>Samples\SampleModel.xml</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="..\Samples\SampleInstance.xml">
-      <Link>Samples\SampleInstance.xml</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <ProjectReference Include="..\Samples\ConsumerApi\SampleModel.csproj" />
   </ItemGroup>
 </Project>
+

@@ -141,6 +141,7 @@ public sealed class ValidationService : IValidationService
             ValidateEntityProperties(entity, diagnostics);
             ValidateEntityIdProperty(entity, diagnostics);
             ValidateEntityMemberNameCollisions(entity, diagnostics);
+            ValidatePendingRelationshipPromotion(entity, model, diagnostics);
         }
 
         ValidateRelationships(model, diagnostics, filter);
@@ -237,6 +238,45 @@ public sealed class ValidationService : IValidationService
             Severity = IssueSeverity.Error,
             Location = $"model/entity/{entity.Name}/property/Id",
         });
+    }
+
+    private static void ValidatePendingRelationshipPromotion(
+        GenericEntity entity,
+        GenericModel model,
+        WorkspaceDiagnostics diagnostics)
+    {
+        var relationshipNames = entity.Relationships
+            .Select(item => item.GetColumnName())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var property in entity.Properties)
+        {
+            if (string.IsNullOrWhiteSpace(property.Name) ||
+                string.Equals(property.Name, "Id", StringComparison.OrdinalIgnoreCase) ||
+                !property.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) ||
+                property.Name.Length <= 2 ||
+                relationshipNames.Contains(property.Name))
+            {
+                continue;
+            }
+
+            var targetEntityName = property.Name[..^2];
+            var targetEntityExists = model.Entities.Any(item =>
+                string.Equals(item.Name, targetEntityName, StringComparison.OrdinalIgnoreCase));
+            if (!targetEntityExists)
+            {
+                continue;
+            }
+
+            diagnostics.Issues.Add(new DiagnosticIssue
+            {
+                Code = "property.relationship.pending",
+                Message =
+                    $"Entity '{entity.Name}' has scalar property '{property.Name}' matching entity '{targetEntityName}' without a relationship.",
+                Severity = IssueSeverity.Warning,
+                Location = $"model/entity/{entity.Name}/property/{property.Name}",
+            });
+        }
     }
 
     private static void ValidateRelationships(
@@ -406,7 +446,8 @@ public sealed class ValidationService : IValidationService
 
             foreach (var record in entityRecords.Value)
             {
-                if (string.IsNullOrWhiteSpace(record.Id))
+                var recordId = NormalizeIdentity(record.Id);
+                if (string.IsNullOrWhiteSpace(recordId))
                 {
                     diagnostics.Issues.Add(new DiagnosticIssue
                     {
@@ -416,24 +457,24 @@ public sealed class ValidationService : IValidationService
                         Location = $"instance/{entityName}",
                     });
                 }
-                else if (!IsPositiveIntegerIdentity(record.Id))
+                else if (!IsValidIdentity(recordId))
                 {
                     diagnostics.Issues.Add(new DiagnosticIssue
                     {
                         Code = "instance.id.invalid",
-                        Message = $"Entity '{entityName}' has non-numeric Id '{record.Id}'.",
+                        Message = $"Entity '{entityName}' has invalid Id '{record.Id}'.",
                         Severity = IssueSeverity.Error,
                         Location = $"instance/{entityName}/{record.Id}",
                     });
                 }
-                else if (!ids.Add(record.Id))
+                else if (!ids.Add(recordId))
                 {
                     diagnostics.Issues.Add(new DiagnosticIssue
                     {
                         Code = "instance.id.duplicate",
-                        Message = $"Entity '{entityName}' has duplicate Id '{record.Id}'.",
+                        Message = $"Entity '{entityName}' has duplicate Id '{recordId}'.",
                         Severity = IssueSeverity.Error,
-                        Location = $"instance/{entityName}/{record.Id}",
+                        Location = $"instance/{entityName}/{recordId}",
                     });
                 }
 
@@ -527,7 +568,8 @@ public sealed class ValidationService : IValidationService
                         continue;
                     }
 
-                    if (!IsPositiveIntegerIdentity(relatedId))
+                    var normalizedRelatedId = NormalizeIdentity(relatedId);
+                    if (!IsValidIdentity(normalizedRelatedId))
                     {
                         diagnostics.Issues.Add(new DiagnosticIssue
                         {
@@ -544,13 +586,13 @@ public sealed class ValidationService : IValidationService
                     {
                         targetIds = new HashSet<string>(
                             instance.RecordsByEntity.TryGetValue(relationship.Entity, out var targetRecords)
-                                ? targetRecords.Select(targetRecord => targetRecord.Id)
+                                ? targetRecords.Select(targetRecord => NormalizeIdentity(targetRecord.Id))
                                 : Enumerable.Empty<string>(),
                             StringComparer.OrdinalIgnoreCase);
                         idsByEntity[relationship.Entity] = targetIds;
                     }
 
-                    if (!targetIds.Contains(relatedId))
+                    if (!targetIds.Contains(normalizedRelatedId))
                     {
                         diagnostics.Issues.Add(new DiagnosticIssue
                         {
@@ -565,34 +607,14 @@ public sealed class ValidationService : IValidationService
         }
     }
 
-    private static bool IsPositiveIntegerIdentity(string? value)
+    private static string NormalizeIdentity(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
+        return value?.Trim() ?? string.Empty;
+    }
 
-        var text = value.Trim();
-        if (text.Length == 0 || text[0] == '-')
-        {
-            return false;
-        }
-
-        var hasNonZeroDigit = false;
-        foreach (var ch in text)
-        {
-            if (!char.IsDigit(ch))
-            {
-                return false;
-            }
-
-            if (ch != '0')
-            {
-                hasNonZeroDigit = true;
-            }
-        }
-
-        return hasNonZeroDigit;
+    private static bool IsValidIdentity(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(NormalizeIdentity(value));
     }
 
     private static bool IsStringDataType(string? dataType)

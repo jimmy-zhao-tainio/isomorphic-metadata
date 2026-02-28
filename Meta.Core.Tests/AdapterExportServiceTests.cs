@@ -11,7 +11,7 @@ public sealed class AdapterExportServiceTests
     public async Task ExportSql_WritesSchemaAndDataFiles()
     {
         var services = new ServiceCollection();
-        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples"));
+        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples", "MainWorkspace"));
         var outputRoot = Path.Combine(Path.GetTempPath(), "metadata-adapter-tests", Guid.NewGuid().ToString("N"));
         var schemaPath = Path.Combine(outputRoot, "schema", "model.sql");
         var dataPath = Path.Combine(outputRoot, "data", "instance.sql");
@@ -38,7 +38,7 @@ public sealed class AdapterExportServiceTests
     public async Task ExportCSharp_WritesModelAndEntityFiles()
     {
         var services = new ServiceCollection();
-        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples"));
+        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples", "MainWorkspace"));
         var outputRoot = Path.Combine(Path.GetTempPath(), "metadata-adapter-tests", Guid.NewGuid().ToString("N"));
         var outputDirectory = Path.Combine(outputRoot, "generated");
 
@@ -97,3 +97,4 @@ public sealed class AdapterExportServiceTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+

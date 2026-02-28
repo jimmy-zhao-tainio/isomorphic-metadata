@@ -185,13 +185,14 @@ public static class InstanceXmlCodec
 
         foreach (var record in records.OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase))
         {
-            if (!IsPositiveIntegerIdentity(record.Id))
+            var recordId = NormalizeIdentity(record.Id);
+            if (!IsValidIdentity(recordId))
             {
                 throw new InvalidOperationException(
                     $"Cannot write entity '{entityName}' row with invalid Id '{record.Id}'.");
             }
 
-            var recordElement = new XElement(entityName, new XAttribute("Id", record.Id));
+            var recordElement = new XElement(entityName, new XAttribute("Id", recordId));
 
             foreach (var unknownPropertyName in record.Values.Keys
                          .Where(key => !propertyByName.ContainsKey(key))
@@ -208,16 +209,17 @@ public static class InstanceXmlCodec
                     string.IsNullOrWhiteSpace(relationshipId))
                 {
                     throw new InvalidOperationException(
-                        $"Entity '{entityName}' row '{record.Id}' is missing required relationship '{relationshipName}'.");
+                        $"Entity '{entityName}' row '{recordId}' is missing required relationship '{relationshipName}'.");
                 }
 
-                if (!IsPositiveIntegerIdentity(relationshipId))
+                var normalizedRelationshipId = NormalizeIdentity(relationshipId);
+                if (!IsValidIdentity(normalizedRelationshipId))
                 {
                     throw new InvalidOperationException(
-                        $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationshipName}' value '{relationshipId}'.");
+                        $"Entity '{entityName}' row '{recordId}' has invalid relationship '{relationshipName}' value '{relationshipId}'.");
                 }
 
-                recordElement.Add(new XAttribute(relationshipName, relationshipId));
+                recordElement.Add(new XAttribute(relationshipName, normalizedRelationshipId));
             }
 
             var knownRelationshipNames = orderedRelationships
@@ -264,11 +266,11 @@ public static class InstanceXmlCodec
         XElement rowElement,
         string sourceShardFileName)
     {
-        var id = (string?)rowElement.Attribute("Id");
-        if (!IsPositiveIntegerIdentity(id))
+        var id = NormalizeIdentity((string?)rowElement.Attribute("Id"));
+        if (!IsValidIdentity(id))
         {
             throw new InvalidDataException(
-                $"Entity '{entityName}' row is missing valid numeric Id.");
+                $"Entity '{entityName}' row is missing valid Id.");
         }
 
         var record = new GenericRecord
@@ -293,13 +295,14 @@ public static class InstanceXmlCodec
 
             if (relationshipByName.TryGetValue(attributeName, out var relationship))
             {
-                if (!IsPositiveIntegerIdentity(attribute.Value))
+                var relationshipId = NormalizeIdentity(attribute.Value);
+                if (!IsValidIdentity(relationshipId))
                 {
                     throw new InvalidDataException(
                         $"Entity '{entityName}' row '{record.Id}' has invalid relationship '{relationship.GetColumnName()}' value '{attribute.Value}'.");
                 }
 
-                record.RelationshipIds[relationship.GetColumnName()] = attribute.Value;
+                record.RelationshipIds[relationship.GetColumnName()] = relationshipId;
                 continue;
             }
 
@@ -384,34 +387,14 @@ public static class InstanceXmlCodec
         return leafName;
     }
 
-    private static bool IsPositiveIntegerIdentity(string? value)
+    private static string NormalizeIdentity(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
+        return value?.Trim() ?? string.Empty;
+    }
 
-        var text = value.Trim();
-        if (text.Length == 0 || text[0] == '-')
-        {
-            return false;
-        }
-
-        var hasNonZeroDigit = false;
-        foreach (var ch in text)
-        {
-            if (!char.IsDigit(ch))
-            {
-                return false;
-            }
-
-            if (ch != '0')
-            {
-                hasNonZeroDigit = true;
-            }
-        }
-
-        return hasNonZeroDigit;
+    private static bool IsValidIdentity(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(NormalizeIdentity(value));
     }
 }
 

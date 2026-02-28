@@ -1,5 +1,5 @@
 param(
-    [string]$Root = "Samples"
+    [string]$Root = "Samples/MainWorkspace"
 )
 
 Set-StrictMode -Version Latest
@@ -224,3 +224,4 @@ foreach ($file in $files) {
 }
 
 Write-Host "Converted files: $converted"
+

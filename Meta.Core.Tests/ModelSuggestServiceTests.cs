@@ -9,20 +9,20 @@ namespace Meta.Core.Tests;
 public sealed class ModelSuggestServiceTests
 {
     [Fact]
-    public void Analyze_DemoProducesEligibleRelationshipSuggestions()
+    public void Analyze_DemoProducesEligibleIdBasedRelationshipSuggestions()
     {
         var workspace = BuildDemoWorkspace();
 
         var report = ModelSuggestService.Analyze(workspace);
 
-        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Warehouse", "WarehouseCode"));
-        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Product", "ProductCode"));
-        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Supplier", "SupplierCode"));
-        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Category", "CategoryCode"));
+        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Warehouse", "Id"));
+        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Product", "Id"));
+        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Supplier", "Id"));
+        Assert.Contains(report.BusinessKeys, item => IsTarget(item, "Category", "Id"));
 
-        AssertEligible(report, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
-        AssertEligible(report, "Order", "ProductCode", "Product", "ProductCode");
-        AssertEligible(report, "Order", "SupplierCode", "Supplier", "SupplierCode");
+        AssertEligible(report, "Order", "WarehouseId", "Warehouse", "Id");
+        AssertEligible(report, "Order", "ProductId", "Product", "Id");
+        AssertEligible(report, "Order", "SupplierId", "Supplier", "Id");
     }
 
     [Fact]
@@ -31,30 +31,30 @@ public sealed class ModelSuggestServiceTests
         var workspace = BuildDemoWorkspace();
         AddRow(workspace.Instance, "Order", "6",
             ("OrderNumber", "ORD-1006"),
-            ("ProductCode", "PRD-404"),
-            ("SupplierCode", "SUP-001"),
-            ("WarehouseCode", "WH-001"),
+            ("ProductId", "404"),
+            ("SupplierId", "1"),
+            ("WarehouseId", "1"),
             ("StatusText", "Held"));
 
         var report = ModelSuggestService.Analyze(workspace);
 
-        AssertNotEligible(report, "Order", "ProductCode", "Product", "ProductCode");
-        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductCode", "Product", "ProductCode");
+        AssertNotEligible(report, "Order", "ProductId", "Product", "Id");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductId", "Product", "Id");
         Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Source values not fully resolvable against target key.", blocked.Blockers);
-        Assert.Contains("PRD-404", blocked.UnmatchedDistinctValuesSample);
+        Assert.Contains("404", blocked.UnmatchedDistinctValuesSample);
     }
 
     [Fact]
     public void Analyze_TargetDuplicateLookupKey_IsBlocked()
     {
         var workspace = BuildDemoWorkspace();
-        AddRow(workspace.Instance, "Warehouse", "4", ("WarehouseName", "Seattle Duplicate"), ("WarehouseCode", "WH-001"));
+        AddRow(workspace.Instance, "Warehouse", "WH-001", ("WarehouseName", "Seattle Duplicate"));
 
         var report = ModelSuggestService.Analyze(workspace);
 
-        AssertNotEligible(report, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
-        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
+        AssertNotEligible(report, "Order", "WarehouseId", "Warehouse", "Id");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "WarehouseId", "Warehouse", "Id");
         Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Target lookup key is not unique.", blocked.Blockers);
     }
@@ -65,15 +65,15 @@ public sealed class ModelSuggestServiceTests
         var workspace = BuildDemoWorkspace();
         AddRow(workspace.Instance, "Order", "6",
             ("OrderNumber", "ORD-1006"),
-            ("ProductCode", string.Empty),
-            ("SupplierCode", "SUP-001"),
-            ("WarehouseCode", "WH-001"),
+            ("ProductId", string.Empty),
+            ("SupplierId", "1"),
+            ("WarehouseId", "1"),
             ("StatusText", "Held"));
 
         var report = ModelSuggestService.Analyze(workspace);
 
-        AssertNotEligible(report, "Order", "ProductCode", "Product", "ProductCode");
-        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductCode", "Product", "ProductCode");
+        AssertNotEligible(report, "Order", "ProductId", "Product", "Id");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductId", "Product", "Id");
         Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Source contains null/blank; required relationship cannot be created.", blocked.Blockers);
     }
@@ -82,12 +82,12 @@ public sealed class ModelSuggestServiceTests
     public void Analyze_TargetNullOrBlank_IsBlocked()
     {
         var workspace = BuildDemoWorkspace();
-        AddRow(workspace.Instance, "Product", "5", ("ProductName", "Unknown"), ("ProductCode", string.Empty), ("ProductGroup", "Cycles"));
+        AddRow(workspace.Instance, "Product", string.Empty, ("ProductName", "Unknown"), ("ProductGroup", "Cycles"));
 
         var report = ModelSuggestService.Analyze(workspace);
 
-        AssertNotEligible(report, "Order", "ProductCode", "Product", "ProductCode");
-        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductCode", "Product", "ProductCode");
+        AssertNotEligible(report, "Order", "ProductId", "Product", "Id");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "ProductId", "Product", "Id");
         Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Target lookup key has null/blank values.", blocked.Blockers);
     }
@@ -103,8 +103,8 @@ public sealed class ModelSuggestServiceTests
 
         var report = ModelSuggestService.Analyze(workspace);
 
-        AssertNotEligible(report, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
-        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "WarehouseCode", "Warehouse", "WarehouseCode");
+        AssertNotEligible(report, "Order", "WarehouseId", "Warehouse", "Id");
+        var blocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Order", "WarehouseId", "Warehouse", "Id");
         Assert.Equal(LookupCandidateStatus.Blocked, blocked.Status);
         Assert.Contains("Relationship 'Order.WarehouseId' already exists.", blocked.Blockers);
     }
@@ -113,24 +113,24 @@ public sealed class ModelSuggestServiceTests
     public void Analyze_SymmetricPeerKeys_AreBlockedAsAmbiguous()
     {
         var workspace = CreateWorkspaceSkeleton();
-        AddEntity(workspace.Model, "Left", "Code");
-        AddEntity(workspace.Model, "Right", "Code");
+        AddEntity(workspace.Model, "Left", ("PeerId", "int"));
+        AddEntity(workspace.Model, "Right", ("PeerId", "int"));
 
-        AddRow(workspace.Instance, "Left", "1", ("Code", "A1"));
-        AddRow(workspace.Instance, "Left", "2", ("Code", "A2"));
-        AddRow(workspace.Instance, "Right", "1", ("Code", "A1"));
-        AddRow(workspace.Instance, "Right", "2", ("Code", "A2"));
+        AddRow(workspace.Instance, "Left", "1", ("PeerId", "1"));
+        AddRow(workspace.Instance, "Left", "2", ("PeerId", "2"));
+        AddRow(workspace.Instance, "Right", "1", ("PeerId", "1"));
+        AddRow(workspace.Instance, "Right", "2", ("PeerId", "2"));
 
         var report = ModelSuggestService.Analyze(workspace);
 
-        AssertNotEligible(report, "Left", "Code", "Right", "Code");
-        AssertNotEligible(report, "Right", "Code", "Left", "Code");
+        AssertNotEligible(report, "Left", "PeerId", "Right", "PeerId");
+        AssertNotEligible(report, "Right", "PeerId", "Left", "PeerId");
 
-        var leftBlocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Left", "Code", "Right", "Code");
+        var leftBlocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Left", "PeerId", "Right", "PeerId");
         Assert.Equal(LookupCandidateStatus.Blocked, leftBlocked.Status);
         Assert.Contains("Source does not show reuse; lookup direction is ambiguous.", leftBlocked.Blockers);
 
-        var rightBlocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Right", "Code", "Left", "Code");
+        var rightBlocked = ModelSuggestService.AnalyzeLookupRelationship(workspace, "Right", "PeerId", "Left", "PeerId");
         Assert.Equal(LookupCandidateStatus.Blocked, rightBlocked.Status);
         Assert.Contains("Source does not show reuse; lookup direction is ambiguous.", rightBlocked.Blockers);
     }
@@ -212,35 +212,40 @@ public sealed class ModelSuggestServiceTests
     private static DomainWorkspace BuildDemoWorkspace()
     {
         var workspace = CreateWorkspaceSkeleton();
-        AddEntity(workspace.Model, "Product", "ProductName", "ProductCode", "ProductGroup");
-        AddEntity(workspace.Model, "Supplier", "SupplierName", "SupplierCode");
-        AddEntity(workspace.Model, "Category", "CategoryName", "CategoryCode");
-        AddEntity(workspace.Model, "Warehouse", "WarehouseName", "WarehouseCode");
-        AddEntity(workspace.Model, "Order", "OrderNumber", "ProductCode", "SupplierCode", "WarehouseCode", "StatusText");
+        AddEntity(workspace.Model, "Product", ("ProductName", "string"), ("ProductGroup", "string"));
+        AddEntity(workspace.Model, "Supplier", ("SupplierName", "string"));
+        AddEntity(workspace.Model, "Category", ("CategoryName", "string"));
+        AddEntity(workspace.Model, "Warehouse", ("WarehouseName", "string"));
+        AddEntity(workspace.Model, "Order",
+            ("OrderNumber", "string"),
+            ("ProductId", "string"),
+            ("SupplierId", "string"),
+            ("WarehouseId", "string"),
+            ("StatusText", "string"));
 
-        AddRow(workspace.Instance, "Product", "1", ("ProductName", "Road Bike"), ("ProductCode", "PRD-001"), ("ProductGroup", "Cycles"));
-        AddRow(workspace.Instance, "Product", "2", ("ProductName", "Touring Bike"), ("ProductCode", "PRD-002"), ("ProductGroup", "Cycles"));
-        AddRow(workspace.Instance, "Product", "3", ("ProductName", "Bottle Cage"), ("ProductCode", "PRD-003"), ("ProductGroup", "Accessories"));
-        AddRow(workspace.Instance, "Product", "4", ("ProductName", "Water Bottle"), ("ProductCode", "PRD-004"), ("ProductGroup", "Accessories"));
+        AddRow(workspace.Instance, "Product", "PRD-001", ("ProductName", "Road Bike"), ("ProductGroup", "Cycles"));
+        AddRow(workspace.Instance, "Product", "PRD-002", ("ProductName", "Touring Bike"), ("ProductGroup", "Cycles"));
+        AddRow(workspace.Instance, "Product", "PRD-003", ("ProductName", "Bottle Cage"), ("ProductGroup", "Accessories"));
+        AddRow(workspace.Instance, "Product", "PRD-004", ("ProductName", "Water Bottle"), ("ProductGroup", "Accessories"));
 
-        AddRow(workspace.Instance, "Supplier", "1", ("SupplierName", "Northwind Parts"), ("SupplierCode", "SUP-001"));
-        AddRow(workspace.Instance, "Supplier", "2", ("SupplierName", "Contoso Gear"), ("SupplierCode", "SUP-002"));
-        AddRow(workspace.Instance, "Supplier", "3", ("SupplierName", string.Empty), ("SupplierCode", "SUP-003"));
-        AddRow(workspace.Instance, "Supplier", "4", ("SupplierName", "Adventure Works"), ("SupplierCode", "SUP-004"));
+        AddRow(workspace.Instance, "Supplier", "SUP-001", ("SupplierName", "Northwind Parts"));
+        AddRow(workspace.Instance, "Supplier", "SUP-002", ("SupplierName", "Contoso Gear"));
+        AddRow(workspace.Instance, "Supplier", "SUP-003", ("SupplierName", string.Empty));
+        AddRow(workspace.Instance, "Supplier", "SUP-004", ("SupplierName", "Adventure Works"));
 
-        AddRow(workspace.Instance, "Category", "1", ("CategoryName", "Cycles"), ("CategoryCode", "CAT-001"));
-        AddRow(workspace.Instance, "Category", "2", ("CategoryName", "Accessories"), ("CategoryCode", "CAT-002"));
-        AddRow(workspace.Instance, "Category", "3", ("CategoryName", "Maintenance"), ("CategoryCode", "CAT-003"));
+        AddRow(workspace.Instance, "Category", "CAT-001", ("CategoryName", "Cycles"));
+        AddRow(workspace.Instance, "Category", "CAT-002", ("CategoryName", "Accessories"));
+        AddRow(workspace.Instance, "Category", "CAT-003", ("CategoryName", "Maintenance"));
 
-        AddRow(workspace.Instance, "Warehouse", "1", ("WarehouseName", "Seattle Main"), ("WarehouseCode", "WH-001"));
-        AddRow(workspace.Instance, "Warehouse", "2", ("WarehouseName", "Denver Hub"), ("WarehouseCode", "WH-002"));
-        AddRow(workspace.Instance, "Warehouse", "3", ("WarehouseName", "Dallas Overflow"), ("WarehouseCode", "WH-003"));
+        AddRow(workspace.Instance, "Warehouse", "WH-001", ("WarehouseName", "Seattle Main"));
+        AddRow(workspace.Instance, "Warehouse", "WH-002", ("WarehouseName", "Denver Hub"));
+        AddRow(workspace.Instance, "Warehouse", "WH-003", ("WarehouseName", "Dallas Overflow"));
 
-        AddRow(workspace.Instance, "Order", "1", ("OrderNumber", "ORD-1001"), ("ProductCode", "PRD-001"), ("SupplierCode", "SUP-001"), ("WarehouseCode", "WH-001"), ("StatusText", "Released"));
-        AddRow(workspace.Instance, "Order", "2", ("OrderNumber", "ORD-1002"), ("ProductCode", "PRD-002"), ("SupplierCode", "SUP-002"), ("WarehouseCode", "WH-001"), ("StatusText", "Released"));
-        AddRow(workspace.Instance, "Order", "3", ("OrderNumber", "ORD-1003"), ("ProductCode", "PRD-003"), ("SupplierCode", "SUP-003"), ("WarehouseCode", "WH-002"), ("StatusText", "Held"));
-        AddRow(workspace.Instance, "Order", "4", ("OrderNumber", "ORD-1004"), ("ProductCode", "PRD-004"), ("SupplierCode", "SUP-004"), ("WarehouseCode", "WH-003"), ("StatusText", "Closed"));
-        AddRow(workspace.Instance, "Order", "5", ("OrderNumber", "ORD-1005"), ("ProductCode", "PRD-001"), ("SupplierCode", "SUP-002"), ("WarehouseCode", "WH-001"), ("StatusText", "Released"));
+        AddRow(workspace.Instance, "Order", "ORD-001", ("OrderNumber", "ORD-1001"), ("ProductId", "PRD-001"), ("SupplierId", "SUP-001"), ("WarehouseId", "WH-001"), ("StatusText", "Released"));
+        AddRow(workspace.Instance, "Order", "ORD-002", ("OrderNumber", "ORD-1002"), ("ProductId", "PRD-002"), ("SupplierId", "SUP-002"), ("WarehouseId", "WH-001"), ("StatusText", "Released"));
+        AddRow(workspace.Instance, "Order", "ORD-003", ("OrderNumber", "ORD-1003"), ("ProductId", "PRD-003"), ("SupplierId", "SUP-003"), ("WarehouseId", "WH-002"), ("StatusText", "Held"));
+        AddRow(workspace.Instance, "Order", "ORD-004", ("OrderNumber", "ORD-1004"), ("ProductId", "PRD-004"), ("SupplierId", "SUP-004"), ("WarehouseId", "WH-003"), ("StatusText", "Closed"));
+        AddRow(workspace.Instance, "Order", "ORD-005", ("OrderNumber", "ORD-1005"), ("ProductId", "PRD-001"), ("SupplierId", "SUP-002"), ("WarehouseId", "WH-001"), ("StatusText", "Released"));
 
         return workspace;
     }
@@ -262,19 +267,19 @@ public sealed class ModelSuggestServiceTests
         };
     }
 
-    private static void AddEntity(GenericModel model, string entityName, params string[] propertyNames)
+    private static void AddEntity(GenericModel model, string entityName, params (string Name, string DataType)[] properties)
     {
         var entity = new GenericEntity
         {
             Name = entityName,
         };
 
-        foreach (var propertyName in propertyNames)
+        foreach (var property in properties)
         {
             entity.Properties.Add(new GenericProperty
             {
-                Name = propertyName,
-                DataType = "string",
+                Name = property.Name,
+                DataType = property.DataType,
                 IsNullable = false,
             });
         }

@@ -12,26 +12,31 @@ public sealed class GeneratedSampleApiContractTests
     public void SampleModel_GeneratedApiShape_MatchesStaticFacadeAndInstanceContract()
     {
         var repoRoot = FindRepositoryRoot();
-        var generatedPath = Path.Combine(repoRoot, "Samples", "SampleModel.cs");
-        var code = File.ReadAllText(generatedPath);
+        var generatedDirectory = Path.Combine(repoRoot, "Samples", "ConsumerApi", "Generated");
+        var modelPath = Path.Combine(generatedDirectory, "EnterpriseBIPlatform.cs");
+        var entityPath = Path.Combine(generatedDirectory, "Measure.cs");
+        var modelCode = File.ReadAllText(modelPath);
+        var entityCode = File.ReadAllText(entityPath);
 
-        Assert.Contains("public static class EnterpriseBIPlatform", code, StringComparison.Ordinal);
-        Assert.Contains("private static readonly EnterpriseBIPlatformInstance _builtIn", code, StringComparison.Ordinal);
-        Assert.Contains("public static EnterpriseBIPlatformInstance BuiltIn", code, StringComparison.Ordinal);
-        Assert.Contains("public sealed class EnterpriseBIPlatformInstance", code, StringComparison.Ordinal);
-        Assert.Contains("public static class EnterpriseBIPlatformModel", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("public static EnterpriseBIPlatform Current", code, StringComparison.Ordinal);
-        Assert.Contains("public static EnterpriseBIPlatformInstance LoadFromXmlWorkspace", code, StringComparison.Ordinal);
-        Assert.Contains("public static void SaveToXmlWorkspace(EnterpriseBIPlatformInstance model, string workspacePath)", code, StringComparison.Ordinal);
-        Assert.Contains("public Measures Measures", code, StringComparison.Ordinal);
-        Assert.Contains("public sealed class Measures : IEnumerable<Measure>", code, StringComparison.Ordinal);
-        Assert.Contains("public Measure GetId(int id)", code, StringComparison.Ordinal);
-        Assert.Contains("public bool TryGetId(int id, out Measure row)", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("is not loaded. Call EnterpriseBIPlatformModel.LoadFromXml/LoadFromSql first.", code, StringComparison.Ordinal);
-        Assert.Contains("public int CubeId { get; }", code, StringComparison.Ordinal);
-        Assert.Contains("public Cube Cube { get; internal set; }", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("Cube?.", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("MeasureList", code, StringComparison.Ordinal);
+        Assert.Contains("namespace EnterpriseBIPlatform", modelCode, StringComparison.Ordinal);
+        Assert.Contains("public static class EnterpriseBIPlatform", modelCode, StringComparison.Ordinal);
+        Assert.Contains("private static readonly EnterpriseBIPlatformInstance _builtIn", modelCode, StringComparison.Ordinal);
+        Assert.Contains("public static EnterpriseBIPlatformInstance BuiltIn", modelCode, StringComparison.Ordinal);
+        Assert.Contains("public static IReadOnlyList<Measure> Measures", modelCode, StringComparison.Ordinal);
+        Assert.Contains("public sealed class EnterpriseBIPlatformInstance", modelCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("public static class EnterpriseBIPlatformModel", modelCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadFromXmlWorkspace", modelCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveToXmlWorkspace", modelCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetId(int id)", modelCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryGetId(int id", modelCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("MeasureList", modelCode, StringComparison.Ordinal);
+
+        Assert.Contains("namespace EnterpriseBIPlatform", entityCode, StringComparison.Ordinal);
+        Assert.Contains("public string Id { get; internal set; }", entityCode, StringComparison.Ordinal);
+        Assert.Contains("public string CubeId { get; internal set; }", entityCode, StringComparison.Ordinal);
+        Assert.Contains("public Cube Cube { get; internal set; }", entityCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("public int Id { get; }", entityCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("public int CubeId { get; }", entityCode, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -50,9 +55,6 @@ public sealed class GeneratedSampleApiContractTests
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(Path.Combine(repoRoot, "Samples.Console", "Samples.Console.csproj"));
-        startInfo.ArgumentList.Add("--");
-        startInfo.ArgumentList.Add("Samples");
-
         using var process = new Process { StartInfo = startInfo };
         process.Start();
         var stdOutTask = process.StandardOutput.ReadToEndAsync();
@@ -64,6 +66,8 @@ public sealed class GeneratedSampleApiContractTests
         var stdErr = await stdErrTask;
 
         Assert.True(process.ExitCode == 0, $"Samples.Console failed with exit code {process.ExitCode}.{Environment.NewLine}{stdOut}{Environment.NewLine}{stdErr}");
+        Assert.Contains("Systems:", stdOut, StringComparison.Ordinal);
+        Assert.Contains("Enterprise Analytics Platform [Internal]", stdOut, StringComparison.Ordinal);
         Assert.Contains("Measures:", stdOut, StringComparison.Ordinal);
         Assert.Contains("Measure Id=1", stdOut, StringComparison.Ordinal);
         Assert.Contains("Lookup example:", stdOut, StringComparison.Ordinal);
@@ -92,3 +96,4 @@ public sealed class GeneratedSampleApiContractTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+

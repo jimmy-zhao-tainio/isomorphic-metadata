@@ -64,7 +64,7 @@ public sealed class LargeWorkspacePerformanceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
 
@@ -216,4 +216,5 @@ public sealed class LargeWorkspacePerformanceTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+
 

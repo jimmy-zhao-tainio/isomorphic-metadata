@@ -148,7 +148,11 @@ public sealed class ImportService : IImportService
         return workspace;
     }
 
-    public async Task<Workspace> ImportCsvAsync(string csvPath, string entityName, CancellationToken cancellationToken = default)
+    public async Task<Workspace> ImportCsvAsync(
+        string csvPath,
+        string entityName,
+        string? pluralName = null,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -181,9 +185,15 @@ public sealed class ImportService : IImportService
             throw new InvalidOperationException("CSV header row is empty.");
         }
 
+        const string idColumn = "Id";
+        var idColumnIndex = ResolveIdColumnIndex(header, idColumn);
+
         var entityIdentifier = NormalizeIdentifier(entityName, fallback: "Entity");
+        var pluralIdentifier = string.IsNullOrWhiteSpace(pluralName)
+            ? string.Empty
+            : NormalizeIdentifier(pluralName, fallback: entityIdentifier + "s");
         var modelName = NormalizeIdentifier(entityIdentifier + "Model", fallback: "ImportedModel");
-        var columnPlans = BuildCsvColumnPlans(header);
+        var columnPlans = BuildCsvColumnPlans(header, idColumnIndex);
 
         var dataRows = new List<IReadOnlyList<string>>();
         for (var index = 1; index < parsedRows.Count; index++)
@@ -222,6 +232,7 @@ public sealed class ImportService : IImportService
         var entity = new GenericEntity
         {
             Name = entityIdentifier,
+            Plural = pluralIdentifier,
         };
         workspace.Model.Entities.Add(entity);
 
@@ -240,12 +251,26 @@ public sealed class ImportService : IImportService
         }
 
         var records = workspace.Instance.GetOrCreateEntityRecords(entity.Name);
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var rowIndex = 0; rowIndex < dataRows.Count; rowIndex++)
         {
             var dataRow = dataRows[rowIndex];
+            var recordId = NormalizeIdentity(GetCsvCellValue(dataRow, idColumnIndex));
+            if (string.IsNullOrWhiteSpace(recordId))
+            {
+                throw new InvalidOperationException(
+                    $"CSV row {rowIndex + 2} is missing required Id value from column '{header[idColumnIndex]}'.");
+            }
+
+            if (!ids.Add(recordId))
+            {
+                throw new InvalidOperationException(
+                    $"CSV contains duplicate Id '{recordId}' in column '{header[idColumnIndex]}'.");
+            }
+
             var record = new GenericRecord
             {
-                Id = (rowIndex + 1).ToString(CultureInfo.InvariantCulture),
+                Id = recordId,
             };
 
             foreach (var plan in columnPlans)
@@ -475,14 +500,10 @@ public sealed class ImportService : IImportService
                 throw new InvalidOperationException($"Table '{schema}.{entity.Name}' contains null Id values.");
             }
 
-            var id = Convert.ToString(reader["Id"], CultureInfo.InvariantCulture);
+            var id = NormalizeIdentity(Convert.ToString(reader["Id"], CultureInfo.InvariantCulture));
             if (string.IsNullOrWhiteSpace(id))
             {
                 throw new InvalidOperationException($"Table '{schema}.{entity.Name}' contains empty Id values.");
-            }
-            if (!IsPositiveIntegerIdentity(id))
-            {
-                throw new InvalidOperationException($"Table '{schema}.{entity.Name}' contains non-numeric Id '{id}'.");
             }
 
             if (!seenIds.Add(id))
@@ -534,16 +555,11 @@ public sealed class ImportService : IImportService
                         $"Table '{schema}.{entity.Name}' has null relationship value for '{columnName}' on row '{id}'.");
                 }
 
-                var relationshipId = Convert.ToString(relationshipValue, CultureInfo.InvariantCulture);
+                var relationshipId = NormalizeIdentity(Convert.ToString(relationshipValue, CultureInfo.InvariantCulture));
                 if (string.IsNullOrWhiteSpace(relationshipId))
                 {
                     throw new InvalidOperationException(
                         $"Table '{schema}.{entity.Name}' has empty relationship value for '{columnName}' on row '{id}'.");
-                }
-                if (!IsPositiveIntegerIdentity(relationshipId))
-                {
-                    throw new InvalidOperationException(
-                        $"Table '{schema}.{entity.Name}' has non-numeric relationship value '{relationshipId}' for '{columnName}' on row '{id}'.");
                 }
 
                 record.RelationshipIds[relationship.GetColumnName()] = relationshipId;
@@ -579,42 +595,48 @@ public sealed class ImportService : IImportService
         return value.Replace("]", "]]", StringComparison.Ordinal);
     }
 
-    private static bool IsPositiveIntegerIdentity(string? value)
+    private static string NormalizeIdentity(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var text = value.Trim();
-        if (text.Length == 0 || text[0] == '-')
-        {
-            return false;
-        }
-
-        var hasNonZeroDigit = false;
-        foreach (var ch in text)
-        {
-            if (!char.IsDigit(ch))
-            {
-                return false;
-            }
-
-            if (ch != '0')
-            {
-                hasNonZeroDigit = true;
-            }
-        }
-
-        return hasNonZeroDigit;
+        return value?.Trim() ?? string.Empty;
     }
 
-    private static List<CsvColumnPlan> BuildCsvColumnPlans(IReadOnlyList<string> headerRow)
+    private static int ResolveIdColumnIndex(IReadOnlyList<string> headerRow, string idColumn)
+    {
+        var matches = new List<int>();
+        for (var index = 0; index < headerRow.Count; index++)
+        {
+            if (string.Equals(headerRow[index]?.Trim(), idColumn.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                matches.Add(index);
+            }
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"CSV file must include Id column '{idColumn}'.");
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"CSV file contains duplicate Id column '{idColumn}'.");
+        }
+
+        return matches[0];
+    }
+
+    private static List<CsvColumnPlan> BuildCsvColumnPlans(IReadOnlyList<string> headerRow, int idColumnIndex)
     {
         var usedPropertyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var plans = new List<CsvColumnPlan>();
         for (var index = 0; index < headerRow.Count; index++)
         {
+            if (index == idColumnIndex)
+            {
+                continue;
+            }
+
             var rawHeader = index < headerRow.Count ? headerRow[index] : string.Empty;
             var fallback = "Column" + (index + 1).ToString(CultureInfo.InvariantCulture);
             var normalized = NormalizeIdentifier(rawHeader, fallback);

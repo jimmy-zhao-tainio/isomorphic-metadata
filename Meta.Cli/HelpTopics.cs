@@ -105,7 +105,7 @@ internal static class HelpTopics
                     examples: new[]
                     {
                         "meta init .",
-                        "meta init Samples\\CommandExamplesInit",
+                        "meta init Samples\\Fixtures\\CommandExamplesInit",
                     },
                     next: "meta status");
                 return true;
@@ -122,7 +122,7 @@ internal static class HelpTopics
                     examples: new[]
                     {
                         "meta status",
-                        "meta status --workspace Samples\\CommandExamples",
+                        "meta status --workspace Samples\\Fixtures\\CommandExamples",
                     },
                     next: "meta check");
                 return true;
@@ -428,7 +428,7 @@ internal static class HelpTopics
                     options: new[] { ("--workspace <path>", "Override workspace root."), },
                     examples: new[]
                     {
-                        "meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property",
+                        "meta model refactor property-to-relationship --source Order.WarehouseId --target Warehouse --lookup Id --drop-source-property",
                     },
                     next: "meta model refactor property-to-relationship --help",
                     subcommands: new[]
@@ -453,8 +453,8 @@ internal static class HelpTopics
                     },
                     examples: new[]
                     {
-                        "meta model refactor property-to-relationship --source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property",
-                        "meta model refactor property-to-relationship --source Order.ProductCode --target Product --lookup ProductCode --role Product",
+                        "meta model refactor property-to-relationship --source Order.WarehouseId --target Warehouse --lookup Id --drop-source-property",
+                        "meta model refactor property-to-relationship --source Order.ProductId --target Product --lookup Id --role ProductRef --drop-source-property",
                     },
                     next: "meta model suggest --print-commands");
                 return true;
@@ -492,7 +492,7 @@ internal static class HelpTopics
             case "model suggest":
                 document = BuildTopicDocument(
                     title: "Command: model suggest",
-                    summary: "Read-only relationship inference from model + instance data. Exact-name match alone is not enough; only fully resolvable many-to-one promotions are printed.",
+                    summary: "Read-only relationship inference from model + instance data. Only fully resolvable many-to-one promotions are printed, using the sanctioned Id-based `<TargetEntity>Id -> <TargetEntity>.Id` inference path.",
                     usage: "meta model suggest [--show-keys] [--explain] [--print-commands] [--workspace <path>]",
                     options: new[]
                     {
@@ -503,9 +503,9 @@ internal static class HelpTopics
                     },
                     examples: new[]
                     {
-                        "meta model suggest --workspace Samples",
-                        "meta model suggest --show-keys --explain --workspace Samples",
-                        "meta model suggest --print-commands --workspace Samples",
+                        "meta model suggest --workspace Samples\\Demos\\SuggestDemo\\Workspace",
+                        "meta model suggest --show-keys --explain --workspace Samples\\Demos\\SuggestDemo\\Workspace",
+                        "meta model suggest --print-commands --workspace Samples\\Demos\\SuggestDemo\\Workspace",
                     },
                     next: "meta model suggest --help");
                 return true;
@@ -513,11 +513,11 @@ internal static class HelpTopics
             case "insert":
                 document = BuildTopicDocument(
                     title: "Command: insert",
-                    summary: "Insert one instance by explicit Id or auto-generated numeric Id.",
+                    summary: "Insert one instance by explicit Id or auto-generated numeric Id. Use --auto-id only when creating a brand-new row with no external identity.",
                     usage: "meta insert <Entity> [<Id>|--auto-id] --set Field=Value [--set Field=Value ...] [--workspace <path>]",
                     options: new[]
                     {
-                        ("--auto-id", "Generate next numeric Id from existing instances."),
+                        ("--auto-id", "Generate next numeric Id from existing instances for a new row when no external Id exists."),
                         ("--set Field=Value", "Set property/relationship values."),
                         ("--workspace <path>", "Override workspace root."),
                     },
@@ -532,7 +532,7 @@ internal static class HelpTopics
             case "bulk-insert":
                 document = BuildTopicDocument(
                     title: "Command: bulk-insert",
-                    summary: "Bulk insert instances from tsv/csv input with optional auto-generated numeric Ids.",
+                    summary: "Bulk insert instances from tsv/csv input. Use --auto-id only for new rows whose source data does not carry an external Id.",
                     usage: "meta bulk-insert <Entity> [--from tsv|csv] [--file <path>|--stdin] [--key Field[,Field2...]] [--auto-id] [--workspace <path>]",
                     options: new[]
                     {
@@ -540,7 +540,7 @@ internal static class HelpTopics
                         ("--file <path>", "Input file."),
                         ("--stdin", "Read input from stdin."),
                         ("--key Field[,Field2...]", "Match key fields."),
-                        ("--auto-id", "Generate numeric Id for instances that omit Id."),
+                        ("--auto-id", "Generate numeric Id only for input rows that omit Id and are being created."),
                         ("--workspace <path>", "Override workspace root."),
                     },
                     examples: new[]
@@ -734,18 +734,19 @@ internal static class HelpTopics
             case "import csv":
                 document = BuildTopicDocument(
                     title: "Command: import csv",
-                    summary: "Import one CSV file as one entity + rows.",
-                    usage: "meta import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]",
+                    summary: "Import one CSV file as one entity + rows. The CSV must include a column named Id (case-insensitive match); existing-entity import is deterministic upsert by Id.",
+                    usage: "meta import csv <csvFile> --entity <EntityName> [--plural <PluralName>] [--workspace <path> | --new-workspace <path>]",
                     options: new[]
                     {
                         ("--entity <EntityName>", "Required. Entity name to create (sanitized deterministically)."),
+                        ("--plural <PluralName>", "Optional. Explicit plural/container name for the entity."),
                         ("--workspace <path>", "Optional. Target existing workspace (defaults to current workspace)."),
                         ("--new-workspace <path>", "Target new workspace directory (must be empty)."),
                     },
                     examples: new[]
                     {
                         "meta import csv .\\landing.csv --entity Landing --new-workspace .\\ImportedWorkspace",
-                        "meta import csv .\\landing.csv --entity Landing",
+                        "meta import csv .\\categories.csv --entity Category --plural Categories",
                     },
                     next: "meta check --workspace <path>");
                 return true;
@@ -777,4 +778,5 @@ internal static class HelpTopics
             Next: next);
     }
 }
+
 

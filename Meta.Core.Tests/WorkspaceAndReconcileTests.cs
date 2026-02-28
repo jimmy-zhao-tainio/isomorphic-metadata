@@ -16,7 +16,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var original = await services.WorkspaceService.LoadAsync(samplesPath);
         var originalHash = services.WorkspaceService.CalculateHash(original);
@@ -44,7 +44,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var expectedRows = workspace.Instance.RecordsByEntity.Values.Sum(records => records.Count);
@@ -55,7 +55,7 @@ public sealed class WorkspaceServiceTests
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
 
             var metadataRoot = Path.Combine(tempRoot, "metadata");
-            var workspaceConfigPath = Path.Combine(metadataRoot, "workspace.xml");
+            var workspaceConfigPath = Path.Combine(tempRoot, "workspace.xml");
             var modelPath = Path.Combine(metadataRoot, "model.xml");
             var instanceDir = Path.Combine(metadataRoot, "instance");
             var legacyInstancePath = Path.Combine(metadataRoot, "instance.xml");
@@ -85,7 +85,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -93,7 +93,7 @@ public sealed class WorkspaceServiceTests
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
             var metadataRoot = Path.Combine(tempRoot, "metadata");
-            var workspaceXmlPath = Path.Combine(metadataRoot, "workspace.xml");
+            var workspaceXmlPath = Path.Combine(tempRoot, "workspace.xml");
             Assert.True(File.Exists(workspaceXmlPath));
             File.Delete(workspaceXmlPath);
 
@@ -116,7 +116,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -160,7 +160,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -208,7 +208,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -236,14 +236,14 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var workspaceConfigPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var workspaceConfigPath = Path.Combine(tempRoot, "workspace.xml");
             var workspaceConfig = XDocument.Load(workspaceConfigPath);
             workspaceConfig
                 .Descendants("FormatVersion")
@@ -269,14 +269,14 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var workspaceConfigPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var workspaceConfigPath = Path.Combine(tempRoot, "workspace.xml");
             var workspaceConfig = XDocument.Load(workspaceConfigPath);
             workspaceConfig
                 .Descendants("FormatVersion")
@@ -342,14 +342,14 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
         try
         {
             await services.ExportService.ExportXmlAsync(workspace, tempRoot);
-            var workspaceConfigPath = Path.Combine(tempRoot, "metadata", "workspace.xml");
+            var workspaceConfigPath = Path.Combine(tempRoot, "workspace.xml");
             var workspaceConfig = XDocument.Load(workspaceConfigPath);
             var workspaceLayout = workspaceConfig.Descendants("WorkspaceLayout").Single();
             workspaceLayout.Element("ModelFilePath")!.Value = "../outside-model.xml";
@@ -373,7 +373,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
 
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -468,7 +468,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
 
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -500,7 +500,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
 
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -541,7 +541,7 @@ public sealed class WorkspaceServiceTests
     {
         var services = new ServiceCollection();
         var repositoryRoot = FindRepositoryRoot();
-        var samplesPath = Path.Combine(repositoryRoot, "Samples");
+        var samplesPath = Path.Combine(repositoryRoot, "Samples", "MainWorkspace");
         var workspace = await services.WorkspaceService.LoadAsync(samplesPath);
 
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
@@ -567,7 +567,7 @@ public sealed class WorkspaceServiceTests
             await services.WorkspaceService.SaveAsync(workspace);
 
             Assert.False(File.Exists(lockPath), "Stale lock should be removed after successful save.");
-            Assert.True(File.Exists(Path.Combine(tempRoot, "metadata", "workspace.xml")));
+            Assert.True(File.Exists(Path.Combine(tempRoot, "workspace.xml")));
         }
         finally
         {
@@ -1019,6 +1019,7 @@ public sealed class WorkspaceServiceTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+
 
 
 

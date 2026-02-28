@@ -309,10 +309,11 @@ internal sealed partial class CliRuntime
         return (true, newWorkspacePath, string.Empty);
     }
 
-    (bool Ok, string EntityName, bool UseNewWorkspace, string WorkspacePath, string NewWorkspacePath, string ErrorMessage)
+    (bool Ok, string EntityName, string PluralName, bool UseNewWorkspace, string WorkspacePath, string NewWorkspacePath, string ErrorMessage)
         ParseImportCsvOptions(string[] commandArgs, int startIndex)
     {
         var entityName = string.Empty;
+        var pluralName = string.Empty;
         var workspacePath = DefaultWorkspacePath();
         var workspaceSelected = !string.IsNullOrWhiteSpace(globalWorkspacePath);
         var newWorkspacePath = string.Empty;
@@ -324,18 +325,39 @@ internal sealed partial class CliRuntime
             {
                 if (i + 1 >= commandArgs.Length)
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --entity requires a value.");
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --entity requires a value.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(entityName))
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --entity can only be provided once.");
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --entity can only be provided once.");
                 }
 
                 entityName = commandArgs[++i].Trim();
                 if (string.IsNullOrWhiteSpace(entityName))
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --entity requires a non-empty value.");
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --entity requires a non-empty value.");
+                }
+
+                continue;
+            }
+
+            if (string.Equals(arg, "--plural", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= commandArgs.Length)
+                {
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --plural requires a value.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(pluralName))
+                {
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --plural can only be provided once.");
+                }
+
+                pluralName = commandArgs[++i].Trim();
+                if (string.IsNullOrWhiteSpace(pluralName))
+                {
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --plural requires a non-empty value.");
                 }
 
                 continue;
@@ -345,12 +367,12 @@ internal sealed partial class CliRuntime
             {
                 if (i + 1 >= commandArgs.Length)
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --workspace requires a path.");
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --workspace requires a path.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(newWorkspacePath))
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath,
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath,
                         "Error: use either --workspace <path> or --new-workspace <path>, not both.");
                 }
 
@@ -363,33 +385,33 @@ internal sealed partial class CliRuntime
             {
                 if (i + 1 >= commandArgs.Length)
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --new-workspace requires a path.");
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --new-workspace requires a path.");
                 }
 
                 if (workspaceSelected)
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath,
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath,
                         "Error: use either --workspace <path> or --new-workspace <path>, not both.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(newWorkspacePath))
                 {
-                    return (false, entityName, false, workspacePath, newWorkspacePath, "Error: --new-workspace can only be provided once.");
+                    return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: --new-workspace can only be provided once.");
                 }
 
                 newWorkspacePath = commandArgs[++i];
                 continue;
             }
 
-            return (false, entityName, false, workspacePath, newWorkspacePath, $"Error: unknown option '{arg}'.");
+            return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, $"Error: unknown option '{arg}'.");
         }
 
         if (string.IsNullOrWhiteSpace(entityName))
         {
-            return (false, entityName, false, workspacePath, newWorkspacePath, "Error: import csv requires --entity <EntityName>.");
+            return (false, entityName, pluralName, false, workspacePath, newWorkspacePath, "Error: import csv requires --entity <EntityName>.");
         }
 
-        return (true, entityName, !string.IsNullOrWhiteSpace(newWorkspacePath), workspacePath, newWorkspacePath, string.Empty);
+        return (true, entityName, pluralName, !string.IsNullOrWhiteSpace(newWorkspacePath), workspacePath, newWorkspacePath, string.Empty);
     }
     
     
@@ -970,10 +992,10 @@ internal sealed partial class CliRuntime
         Register("view", "Model", "View entity or instance details.", ViewAsync);
 
         Register("instance", "Instance", "Diff and merge instance artifacts.", InstanceAsync);
-        Register("insert", "Instance", "Insert one instance: <Entity> <Id> or --auto-id.", InsertAsync);
+        Register("insert", "Instance", "Insert one instance: <Entity> <Id> or --auto-id for brand-new rows.", InsertAsync);
         Register("delete", "Instance", "Delete one instance: <Entity> <Id>.", DeleteAsync);
         Register("query", "Instance", "Search instances with equals/contains filters.", QueryAsync);
-        Register("bulk-insert", "Instance", "Insert many instances from tsv/csv input (supports --auto-id).", BulkInsertAsync);
+        Register("bulk-insert", "Instance", "Insert many instances from tsv/csv input (supports --auto-id for new rows only).", BulkInsertAsync);
 
         Register("import", "Pipeline", "Import xml/sql into NEW workspace or csv into NEW/existing workspace.", ImportAsync);
         Register("generate", "Pipeline", "Generate artifacts from the workspace.", GenerateAsync);

@@ -597,7 +597,8 @@ internal sealed partial class CliRuntime
     
     bool WorkspaceLooksInitialized(string workspaceRoot, string metadataRoot)
     {
-        return File.Exists(Path.Combine(metadataRoot, "workspace.xml")) ||
+        return File.Exists(Path.Combine(workspaceRoot, "workspace.xml")) ||
+               File.Exists(Path.Combine(metadataRoot, "workspace.xml")) ||
                File.Exists(Path.Combine(metadataRoot, "model.xml")) ||
                Directory.Exists(Path.Combine(metadataRoot, "instance")) ||
                File.Exists(Path.Combine(metadataRoot, "instance.xml"));
@@ -620,8 +621,9 @@ internal sealed partial class CliRuntime
         while (!string.IsNullOrWhiteSpace(current))
         {
             var metadataRoot = Path.Combine(current, "metadata");
-            var workspaceXml = Path.Combine(metadataRoot, "workspace.xml");
-            if (File.Exists(workspaceXml) || IsWorkspaceMetadataCandidate(metadataRoot))
+            var workspaceXml = Path.Combine(current, "workspace.xml");
+            var legacyWorkspaceXml = Path.Combine(metadataRoot, "workspace.xml");
+            if (File.Exists(workspaceXml) || File.Exists(legacyWorkspaceXml) || IsWorkspaceMetadataCandidate(metadataRoot))
             {
                 return (current, metadataRoot);
             }
@@ -660,7 +662,9 @@ internal sealed partial class CliRuntime
     
     bool IsWorkspaceMetadataCandidate(string metadataRootPath)
     {
-        return File.Exists(Path.Combine(metadataRootPath, "workspace.xml")) ||
+        var workspaceRootPath = Directory.GetParent(metadataRootPath)?.FullName ?? metadataRootPath;
+        return File.Exists(Path.Combine(workspaceRootPath, "workspace.xml")) ||
+               File.Exists(Path.Combine(metadataRootPath, "workspace.xml")) ||
                File.Exists(Path.Combine(metadataRootPath, "model.xml")) ||
                File.Exists(Path.Combine(metadataRootPath, "instance.xml")) ||
                Directory.Exists(Path.Combine(metadataRootPath, "instance"));
@@ -1575,6 +1579,7 @@ internal sealed partial class CliRuntime
         return candidate.ToString();
     }
 }
+
 
 
 

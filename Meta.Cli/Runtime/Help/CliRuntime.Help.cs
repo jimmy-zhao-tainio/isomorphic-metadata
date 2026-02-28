@@ -95,7 +95,7 @@ internal sealed partial class CliRuntime
                 {
                     "xml" => "meta import xml <modelXmlPath> <instanceXmlPath> --new-workspace <path>",
                     "sql" => "meta import sql <connectionString> <schema> --new-workspace <path>",
-                    "csv" => "meta import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]",
+                    "csv" => "meta import csv <csvFile> --entity <EntityName> [--plural <PluralName>] [--workspace <path> | --new-workspace <path>]",
                     _ => "meta import <xml|sql|csv> ...",
                 }
                 : "meta import <xml|sql|csv> ...",

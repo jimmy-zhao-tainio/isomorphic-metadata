@@ -110,13 +110,13 @@ function Add-Case {
         })
 }
 
-$baseWorkspace = "Samples\CommandExamples"
-$initWorkspace = "Samples\CommandExamplesInit"
-$importXmlWorkspace = "Samples\CommandExamplesImportedXml"
-$brokenWorkspace = "Samples\CommandExamplesBroken"
-$diffLeftWorkspace = "Samples\CommandExamplesDiffLeft"
-$diffRightWorkspace = "Samples\CommandExamplesDiffRight"
-$outputRoot = "Samples\CommandExamplesOut"
+$baseWorkspace = "Samples\\Fixtures\\CommandExamples"
+$initWorkspace = "Samples\\Fixtures\\CommandExamplesInit"
+$importXmlWorkspace = "Samples\\Fixtures\\CommandExamplesImportedXml"
+$brokenWorkspace = "Samples\\Fixtures\\CommandExamplesBroken"
+$diffLeftWorkspace = "Samples\\Fixtures\\CommandExamplesDiffLeft"
+$diffRightWorkspace = "Samples\\Fixtures\\CommandExamplesDiffRight"
+$outputRoot = "Samples\\Fixtures\\CommandExamplesOut"
 $inputRoot = Join-Path $baseWorkspace "input"
 $bulkFile = Join-Path $inputRoot "cube-bulk-insert.tsv"
 $bulkInvalidFile = Join-Path $inputRoot "cube-bulk-insert-invalid.tsv"
@@ -140,9 +140,9 @@ foreach ($path in $cleanupTargets)
     }
 }
 
-Invoke-MetaStrict -MetaArgs @("import", "xml", "Samples\SampleModel.xml", "Samples\SampleInstance.xml", "--new-workspace", $baseWorkspace) | Out-Null
-Invoke-MetaStrict -MetaArgs @("import", "xml", "Samples\SampleModel.xml", "Samples\SampleInstance.xml", "--new-workspace", $diffLeftWorkspace) | Out-Null
-Invoke-MetaStrict -MetaArgs @("import", "xml", "Samples\SampleModel.xml", "Samples\SampleInstance.xml", "--new-workspace", $diffRightWorkspace) | Out-Null
+Invoke-MetaStrict -MetaArgs @("import", "xml", "Samples\\Contracts\\SampleModel.xml", "Samples\\Contracts\\SampleInstance.xml", "--new-workspace", $baseWorkspace) | Out-Null
+Invoke-MetaStrict -MetaArgs @("import", "xml", "Samples\\Contracts\\SampleModel.xml", "Samples\\Contracts\\SampleInstance.xml", "--new-workspace", $diffLeftWorkspace) | Out-Null
+Invoke-MetaStrict -MetaArgs @("import", "xml", "Samples\\Contracts\\SampleModel.xml", "Samples\\Contracts\\SampleInstance.xml", "--new-workspace", $diffRightWorkspace) | Out-Null
 Invoke-MetaStrict -MetaArgs @("insert", "Cube", "99", "--set", "CubeName=Diff Cube", "--set", "Purpose=Diff sample", "--set", "RefreshMode=Manual", "--workspace", $diffRightWorkspace) | Out-Null
 
 New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
@@ -240,7 +240,7 @@ Add-Case -Name "generate sql" -SuccessArgs @("generate", "sql", "--out", (Join-P
 Add-Case -Name "generate csharp" -SuccessArgs @("generate", "csharp", "--out", (Join-Path $outputRoot "csharp"), "--workspace", $baseWorkspace) -FailureArgs @("generate", "csharp", "--out", (Join-Path $outputRoot "csharp-broken"), "--workspace", $brokenWorkspace)
 Add-Case -Name "generate ssdt" -SuccessArgs @("generate", "ssdt", "--out", (Join-Path $outputRoot "ssdt"), "--workspace", $baseWorkspace) -FailureArgs @("generate", "ssdt", "--out", (Join-Path $outputRoot "ssdt-broken"), "--workspace", $brokenWorkspace)
 
-Add-Case -Name "import xml" -SuccessArgs @("import", "xml", "Samples\SampleModel.xml", "Samples\SampleInstance.xml", "--new-workspace", $importXmlWorkspace) -FailureArgs @("import", "xml", "Samples\SampleModel.xml", "Samples\SampleInstance.xml", "--new-workspace", $baseWorkspace)
+Add-Case -Name "import xml" -SuccessArgs @("import", "xml", "Samples\\Contracts\\SampleModel.xml", "Samples\\Contracts\\SampleInstance.xml", "--new-workspace", $importXmlWorkspace) -FailureArgs @("import", "xml", "Samples\\Contracts\\SampleModel.xml", "Samples\\Contracts\\SampleInstance.xml", "--new-workspace", $baseWorkspace)
 
 $workspaceDiffForMerge = Invoke-MetaCapture -MetaArgs @("instance", "diff", $diffLeftWorkspace, $diffRightWorkspace)
 $diffWorkspacePath = $null
@@ -298,3 +298,4 @@ if (-not $resolvedOutput)
 
 Set-Content -Path (Join-Path $repoRoot $OutputPath) -Value $content.ToString() -Encoding utf8
 Write-Host "Wrote $OutputPath"
+

@@ -21,7 +21,7 @@ public sealed class SqlXmlIsomorphicRoundTripTests
         }
 
         var repoRoot = FindRepositoryRoot();
-        var sourceInputRoot = Path.Combine(repoRoot, "Samples");
+        var sourceInputRoot = Path.Combine(repoRoot, "Samples", "MainWorkspace");
         var tempRoot = Path.Combine(Path.GetTempPath(), "metadata-sql-roundtrip", Guid.NewGuid().ToString("N"));
         var leftWorkspaceRoot = Path.Combine(tempRoot, "left");
         var rightWorkspaceRoot = Path.Combine(tempRoot, "right");
@@ -291,3 +291,4 @@ public sealed class SqlXmlIsomorphicRoundTripTests
         }
     }
 }
+

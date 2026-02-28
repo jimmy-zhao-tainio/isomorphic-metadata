@@ -136,7 +136,7 @@ public static class NormalizationService
     private static string NormalizeId(GenericRecord record)
     {
         var id = record.Id?.Trim() ?? string.Empty;
-        if (!IsPositiveIntegerIdentity(id))
+        if (!IsValidIdentity(id))
         {
             throw new InvalidOperationException($"Cannot normalize row with invalid Id '{record.Id}'.");
         }
@@ -186,13 +186,14 @@ public static class NormalizationService
             {
                 if (!string.IsNullOrWhiteSpace(relationship.Value))
                 {
-                    if (!IsPositiveIntegerIdentity(relationship.Value))
+                    var normalizedValue = relationship.Value.Trim();
+                    if (!IsValidIdentity(normalizedValue))
                     {
                         throw new InvalidOperationException(
                             $"Cannot normalize row '{record.Id}' because relationship '{relationship.Key}' has invalid target '{relationship.Value}'.");
                     }
 
-                    allRelationships[relationship.Key] = relationship.Value;
+                    allRelationships[relationship.Key] = normalizedValue;
                 }
             }
 
@@ -205,47 +206,23 @@ public static class NormalizationService
             if (record.RelationshipIds.TryGetValue(relationshipName, out var value) &&
                 !string.IsNullOrWhiteSpace(value))
             {
-                if (!IsPositiveIntegerIdentity(value))
+                var normalizedValue = value.Trim();
+                if (!IsValidIdentity(normalizedValue))
                 {
                     throw new InvalidOperationException(
                         $"Cannot normalize row '{record.Id}' because relationship '{relationshipName}' has invalid target '{value}'.");
                 }
 
-                normalized[relationshipName] = value;
+                normalized[relationshipName] = normalizedValue;
             }
         }
 
         return normalized;
     }
 
-    private static bool IsPositiveIntegerIdentity(string? value)
+    private static bool IsValidIdentity(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var text = value.Trim();
-        if (text.Length == 0 || text[0] == '-')
-        {
-            return false;
-        }
-
-        var hasNonZeroDigit = false;
-        foreach (var ch in text)
-        {
-            if (!char.IsDigit(ch))
-            {
-                return false;
-            }
-
-            if (ch != '0')
-            {
-                hasNonZeroDigit = true;
-            }
-        }
-
-        return hasNonZeroDigit;
+        return !string.IsNullOrWhiteSpace(value?.Trim());
     }
 
     private static bool DictionaryEquals(

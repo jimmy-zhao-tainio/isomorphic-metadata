@@ -70,10 +70,8 @@ public sealed class DeterminismGoldenTests
             await services.ExportService.ExportXmlAsync(workspace, outputA);
             await services.ExportService.ExportXmlAsync(workspace, outputB);
 
-            var metadataA = Path.Combine(outputA, "metadata");
-            var metadataB = Path.Combine(outputB, "metadata");
-            var manifestA = BuildDirectoryManifest(metadataA);
-            var manifestB = BuildDirectoryManifest(metadataB);
+            var manifestA = BuildWorkspaceXmlManifest(outputA);
+            var manifestB = BuildWorkspaceXmlManifest(outputB);
 
             AssertManifestEqual(manifestA, manifestB);
             AssertManifestEqual(ExpectedXmlMetadataHashes, manifestA.FileHashes);
@@ -174,6 +172,29 @@ public sealed class DeterminismGoldenTests
         };
     }
 
+    private static DirectoryManifest BuildWorkspaceXmlManifest(string workspaceRoot)
+    {
+        var root = Path.GetFullPath(workspaceRoot);
+        var fileHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var workspaceXmlPath = Path.Combine(root, "workspace.xml");
+        fileHashes["workspace.xml"] = ComputeFileHash(workspaceXmlPath);
+
+        var metadataRoot = Path.Combine(root, "metadata");
+        foreach (var filePath in Directory.GetFiles(metadataRoot, "*", SearchOption.AllDirectories)
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var relativePath = Path.GetRelativePath(metadataRoot, filePath).Replace('\\', '/');
+            fileHashes[relativePath] = ComputeFileHash(filePath);
+        }
+
+        return new DirectoryManifest
+        {
+            FileHashes = fileHashes,
+            CombinedHash = ComputeCombinedHash(fileHashes),
+        };
+    }
+
     private static string ComputeFileHash(string path)
     {
         using var sha = SHA256.Create();
@@ -226,8 +247,8 @@ public sealed class DeterminismGoldenTests
     {
         var repoRoot = FindRepositoryRoot();
         return services.ImportService.ImportXmlAsync(
-            Path.Combine(repoRoot, "Samples", "SampleModel.xml"),
-            Path.Combine(repoRoot, "Samples", "SampleInstance.xml"));
+            Path.Combine(repoRoot, "Samples", "Contracts", "SampleModel.xml"),
+            Path.Combine(repoRoot, "Samples", "Contracts", "SampleInstance.xml"));
     }
 
     private sealed class DirectoryManifest
@@ -238,3 +259,4 @@ public sealed class DeterminismGoldenTests
         public string CombinedHash { get; set; } = string.Empty;
     }
 }
+

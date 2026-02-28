@@ -54,10 +54,10 @@ public sealed class CliStrictModeTests
         var generator = File.ReadAllText(Path.Combine(repoRoot, "scripts", "Generate-CommandExamples.ps1"));
         var combined = string.Join(Environment.NewLine, new[] { commands, examples, cliProgram, generator });
 
-        Assert.DoesNotMatch(@"(?im)^.*Usage:.*--id.*$", combined);
-        Assert.DoesNotMatch(@"(?im)^.*Next:.*--id.*$", combined);
-        Assert.DoesNotMatch(@"(?im)^.*example:.*--id.*$", combined);
-        Assert.DoesNotMatch(@"(?im)^.*meta\s+.*--id.*$", combined);
+        Assert.DoesNotMatch(@"(?im)^.*Usage:.*--id(\s|$).*$", combined);
+        Assert.DoesNotMatch(@"(?im)^.*Next:.*--id(\s|$).*$", combined);
+        Assert.DoesNotMatch(@"(?im)^.*example:.*--id(\s|$).*$", combined);
+        Assert.DoesNotMatch(@"(?im)^.*meta\s+.*--id(\s|$).*$", combined);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class CliStrictModeTests
 
         Directory.CreateDirectory(Path.Combine(brokenWorkspaceRoot, "metadata", "instance"));
         await File.WriteAllTextAsync(
-            Path.Combine(brokenWorkspaceRoot, "metadata", "workspace.xml"),
+            Path.Combine(brokenWorkspaceRoot, "workspace.xml"),
             "<MetaWorkspace><Workspaces><Workspace Id=\"1\" WorkspaceLayoutId=\"1\" EncodingId=\"1\" NewlinesId=\"1\" EntitiesOrderId=\"1\" PropertiesOrderId=\"1\" RelationshipsOrderId=\"1\" RowsOrderId=\"2\" AttributesOrderId=\"3\"><Name>Workspace</Name><FormatVersion>1.0</FormatVersion></Workspace></Workspaces><WorkspaceLayouts><WorkspaceLayout Id=\"1\"><ModelFilePath>metadata/model.xml</ModelFilePath><InstanceDirPath>metadata/instance</InstanceDirPath></WorkspaceLayout></WorkspaceLayouts><Encodings><Encoding Id=\"1\"><Name>utf-8-no-bom</Name></Encoding></Encodings><NewlinesValues><Newlines Id=\"1\"><Name>lf</Name></Newlines></NewlinesValues><CanonicalOrders><CanonicalOrder Id=\"1\"><Name>name-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"2\"><Name>id-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"3\"><Name>id-first-then-name-ordinal</Name></CanonicalOrder></CanonicalOrders><EntityStorages /></MetaWorkspace>");
         await File.WriteAllTextAsync(
             Path.Combine(brokenWorkspaceRoot, "metadata", "model.xml"),
@@ -97,8 +97,8 @@ public sealed class CliStrictModeTests
                 (await RunCliAsync(
                     "import",
                     "xml",
-                    @"Samples\SampleModel.xml",
-                    @"Samples\SampleInstance.xml",
+                    @"Samples\\Contracts\\SampleModel.xml",
+                    @"Samples\\Contracts\\SampleInstance.xml",
                     "--new-workspace",
                     nonEmptyImportTarget)).CombinedOutput,
                 (await RunCliAsync("status", "--workspace", brokenWorkspaceRoot)).CombinedOutput,
@@ -181,7 +181,7 @@ public sealed class CliStrictModeTests
         var outputRoot = Path.Combine(Path.GetTempPath(), "metadata-generate-out", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(brokenWorkspaceRoot, "metadata", "instance"));
         await File.WriteAllTextAsync(
-            Path.Combine(brokenWorkspaceRoot, "metadata", "workspace.xml"),
+            Path.Combine(brokenWorkspaceRoot, "workspace.xml"),
             "<MetaWorkspace><Workspaces><Workspace Id=\"1\" WorkspaceLayoutId=\"1\" EncodingId=\"1\" NewlinesId=\"1\" EntitiesOrderId=\"1\" PropertiesOrderId=\"1\" RelationshipsOrderId=\"1\" RowsOrderId=\"2\" AttributesOrderId=\"3\"><Name>Workspace</Name><FormatVersion>1.0</FormatVersion></Workspace></Workspaces><WorkspaceLayouts><WorkspaceLayout Id=\"1\"><ModelFilePath>metadata/model.xml</ModelFilePath><InstanceDirPath>metadata/instance</InstanceDirPath></WorkspaceLayout></WorkspaceLayouts><Encodings><Encoding Id=\"1\"><Name>utf-8-no-bom</Name></Encoding></Encodings><NewlinesValues><Newlines Id=\"1\"><Name>lf</Name></Newlines></NewlinesValues><CanonicalOrders><CanonicalOrder Id=\"1\"><Name>name-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"2\"><Name>id-ordinal</Name></CanonicalOrder><CanonicalOrder Id=\"3\"><Name>id-first-then-name-ordinal</Name></CanonicalOrder></CanonicalOrders><EntityStorages /></MetaWorkspace>");
         await File.WriteAllTextAsync(
             Path.Combine(brokenWorkspaceRoot, "metadata", "model.xml"),
@@ -297,9 +297,9 @@ public sealed class CliStrictModeTests
             Assert.Contains("Model:", result.StdOut, StringComparison.Ordinal);
             Assert.Contains("Suggestions: 3", result.StdOut, StringComparison.Ordinal);
             Assert.Contains("Relationship suggestions", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("  1) Order.ProductCode -> Product (lookup: Product.ProductCode)", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("  2) Order.SupplierCode -> Supplier (lookup: Supplier.SupplierCode)", result.StdOut, StringComparison.Ordinal);
-            Assert.Contains("  3) Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  1) Order.ProductId -> Product (lookup: Product.Id)", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  2) Order.SupplierId -> Supplier (lookup: Supplier.Id)", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  3) Order.WarehouseId -> Warehouse (lookup: Warehouse.Id)", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("meta model suggest", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("Proposed refactor:", result.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain("Summary", result.StdOut, StringComparison.Ordinal);
@@ -380,45 +380,15 @@ public sealed class CliStrictModeTests
                 result.StdOut,
                 StringComparison.Ordinal);
             Assert.Contains(
-                "--source Order.ProductCode --target Product --lookup ProductCode --drop-source-property",
+                "--source Order.ProductId --target Product --lookup Id --drop-source-property",
                 result.StdOut,
                 StringComparison.Ordinal);
             Assert.Contains(
-                "--source Order.SupplierCode --target Supplier --lookup SupplierCode --drop-source-property",
+                "--source Order.SupplierId --target Supplier --lookup Id --drop-source-property",
                 result.StdOut,
                 StringComparison.Ordinal);
             Assert.Contains(
-                "--source Order.WarehouseCode --target Warehouse --lookup WarehouseCode --drop-source-property",
-                result.StdOut,
-                StringComparison.Ordinal);
-        }
-        finally
-        {
-            DeleteDirectorySafe(workspaceRoot);
-        }
-    }
-
-    [Fact]
-    public async Task ModelSuggest_ExistingRelationship_IsNotPrintedAsEligible()
-    {
-        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
-        try
-        {
-            var addRelationship = await RunCliAsync(
-                "model",
-                "add-relationship",
-                "Order",
-                "Warehouse",
-                "--default-id",
-                "1",
-                "--workspace",
-                workspaceRoot);
-            Assert.Equal(0, addRelationship.ExitCode);
-
-            var result = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
-            Assert.Equal(0, result.ExitCode);
-            Assert.DoesNotContain(
-                "Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)",
+                "--source Order.WarehouseId --target Warehouse --lookup Id --drop-source-property",
                 result.StdOut,
                 StringComparison.Ordinal);
         }
@@ -968,8 +938,8 @@ public sealed class CliStrictModeTests
         var result = await RunCliAsync(
             "import",
             "xml",
-            @"Samples\SampleModel.xml",
-            @"Samples\SampleInstance.xml");
+            @"Samples\\Contracts\\SampleModel.xml",
+            @"Samples\\Contracts\\SampleInstance.xml");
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("import requires --new-workspace", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
@@ -1000,8 +970,8 @@ public sealed class CliStrictModeTests
             var result = await RunCliAsync(
                 "import",
                 "xml",
-                @"Samples\SampleModel.xml",
-                @"Samples\SampleInstance.xml",
+                @"Samples\\Contracts\\SampleModel.xml",
+                @"Samples\\Contracts\\SampleInstance.xml",
                 "--new-workspace",
                 targetRoot);
 
@@ -1023,8 +993,8 @@ public sealed class CliStrictModeTests
         Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
         await File.WriteAllLinesAsync(csvPath, new[]
         {
-            "Name,Status",
-            "A,Open",
+            "Id,Name,Status",
+            "1,A,Open",
         });
 
         try
@@ -1047,6 +1017,133 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
+    public async Task ImportCsv_NewWorkspace_FailsWithoutIdColumn()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Display Name,Active",
+            "Alice,true",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order Items",
+                "--new-workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("CSV file must include Id column 'Id'.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(Path.Combine(workspaceRoot, "metadata")));
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_RejectsIdColumnOverrideOption()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Display Name",
+            "101,Alice",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order Items",
+                "--id-column",
+                "RowId",
+                "--new-workspace",
+                workspaceRoot);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("unknown option", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("--id-column", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(Path.Combine(workspaceRoot, "metadata")));
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_NewWorkspace_FailsWhenIdsDuplicateOrMissing()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var duplicateCsvPath = Path.Combine(csvRoot, "duplicate.csv");
+        var missingCsvPath = Path.Combine(csvRoot, "missing.csv");
+        var duplicateWorkspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        var missingWorkspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(duplicateCsvPath, new[]
+        {
+            "Id,Display Name",
+            "101,Alice",
+            "101,Bob",
+        });
+        await File.WriteAllLinesAsync(missingCsvPath, new[]
+        {
+            "Id,Display Name",
+            "101,Alice",
+            ",Bob",
+        });
+
+        try
+        {
+            var duplicateResult = await RunCliAsync(
+                "import",
+                "csv",
+                duplicateCsvPath,
+                "--entity",
+                "Order Items",
+                "--new-workspace",
+                duplicateWorkspaceRoot);
+            Assert.Equal(4, duplicateResult.ExitCode);
+            Assert.Contains("CSV contains duplicate Id '101' in column 'Id'.", duplicateResult.CombinedOutput, StringComparison.Ordinal);
+
+            var missingResult = await RunCliAsync(
+                "import",
+                "csv",
+                missingCsvPath,
+                "--entity",
+                "Order Items",
+                "--new-workspace",
+                missingWorkspaceRoot);
+            Assert.Equal(4, missingResult.ExitCode);
+            Assert.Contains("CSV row 3 is missing required Id value from column 'Id'.", missingResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(duplicateWorkspaceRoot);
+            DeleteDirectorySafe(missingWorkspaceRoot);
+        }
+    }
+
+    [Fact]
     public async Task ImportCsv_NewWorkspace_CreatesEntityRowsAndInferredTypes()
     {
         var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
@@ -1055,10 +1152,10 @@ public sealed class CliStrictModeTests
         Directory.CreateDirectory(csvRoot);
         await File.WriteAllLinesAsync(csvPath, new[]
         {
-            "Display Name,Active,Count,BigCount,Amount,CreatedAt,Status,Status",
-            "Alice,true,42,2147483648,10.50,2024-01-01T10:20:30Z,Open,Primary",
-            "Bob,false,7,922337203685477580,0.00,2024-02-02T00:00:00Z,Closed,Secondary",
-            ",,,,,,Open,",
+            "Id,Display Name,Active,Count,BigCount,Amount,CreatedAt,Status,Status",
+            "101,Alice,true,42,2147483648,10.50,2024-01-01T10:20:30Z,Open,Primary",
+            "205,Bob,false,7,922337203685477580,0.00,2024-02-02T00:00:00Z,Closed,Secondary",
+            "333,,,,,,,Open,",
         });
 
         try
@@ -1114,9 +1211,9 @@ public sealed class CliStrictModeTests
 
             var rows = LoadEntityRows(workspaceRoot, "Order_Items");
             Assert.Equal(3, rows.Count);
-            Assert.Equal("1", (string?)rows[0].Attribute("Id"));
-            Assert.Equal("2", (string?)rows[1].Attribute("Id"));
-            Assert.Equal("3", (string?)rows[2].Attribute("Id"));
+            Assert.Equal("101", (string?)rows[0].Attribute("Id"));
+            Assert.Equal("205", (string?)rows[1].Attribute("Id"));
+            Assert.Equal("333", (string?)rows[2].Attribute("Id"));
             Assert.Equal("Alice", rows[0].Element("Display_Name")?.Value);
             Assert.Null(rows[2].Element("Display_Name"));
             Assert.Equal("Open", rows[2].Element("Status")?.Value);
@@ -1136,15 +1233,17 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task ImportCsv_ExistingWorkspace_FailsWhenEntityAlreadyExists()
+    public async Task ImportCsv_NewWorkspace_AllowsExplicitPlural()
     {
-        var workspaceRoot = CreateTempWorkspaceFromSamples();
-        var csvPath = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"), "landing.csv");
-        Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "categories.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
         await File.WriteAllLinesAsync(csvPath, new[]
         {
-            "Name,Status",
-            "A,Open",
+            "Id,CategoryName",
+            "CAT-001,Cycles",
+            "CAT-002,Accessories",
         });
 
         try
@@ -1154,17 +1253,203 @@ public sealed class CliStrictModeTests
                 "csv",
                 csvPath,
                 "--entity",
-                "Cube",
+                "Category",
+                "--plural",
+                "Categories",
+                "--new-workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "metadata", "model.xml"));
+            var entity = model.Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Category", StringComparison.Ordinal));
+            Assert.Equal("Categories", (string?)entity.Attribute("plural"));
+
+            var instance = XDocument.Load(Path.Combine(workspaceRoot, "metadata", "instance", "Category.xml"));
+            Assert.NotNull(instance.Root?.Element("Categories"));
+            Assert.Null(instance.Root?.Element("Categorys"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_NewWorkspace_AllowsOpaqueStringIds()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Label",
+            "sku-a,Alpha",
+            "sku-b,Beta",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
+                "--new-workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var rows = LoadEntityRows(workspaceRoot, "Landing")
+                .OrderBy(row => (string?)row.Attribute("Id"), StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(new[] { "sku-a", "sku-b" }, rows.Select(row => (string?)row.Attribute("Id")));
+            Assert.Equal("Alpha", rows[0].Element("Label")?.Value);
+            Assert.Equal("Beta", rows[1].Element("Label")?.Value);
+
+            var check = await RunCliAsync(
+                "check",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_UpsertsByIdAndPreservesRows()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Label,IsActive",
+            "10,Alpha,true",
+            "20,Beta,false",
+        });
+
+        try
+        {
+            var initialImport = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
+                "--new-workspace",
+                workspaceRoot);
+            Assert.Equal(0, initialImport.ExitCode);
+
+            await File.WriteAllLinesAsync(csvPath, new[]
+            {
+                "Id,Label,IsActive",
+                "10,Alpha Updated,false",
+                "30,Gamma,true",
+            });
+
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
                 "--workspace",
                 workspaceRoot);
 
-            Assert.Equal(4, result.ExitCode);
-            Assert.Contains("already exists", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, result.ExitCode);
+
+            var rows = LoadEntityRows(workspaceRoot, "Landing")
+                .OrderBy(row => (string?)row.Attribute("Id"), StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(3, rows.Count);
+            Assert.Equal(new[] { "10", "20", "30" }, rows.Select(row => (string?)row.Attribute("Id")));
+            Assert.Equal("Alpha Updated", rows[0].Element("Label")?.Value);
+            Assert.Equal("false", rows[0].Element("IsActive")?.Value);
+            Assert.Equal("Beta", rows[1].Element("Label")?.Value);
+            Assert.Equal("Gamma", rows[2].Element("Label")?.Value);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_UpsertsRelationshipColumnsAfterRefactor()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "orders-update.csv");
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,OrderNumber,ProductId,SupplierId,WarehouseId,StatusText",
+            "ORD-001,ORD-1001,PRD-002,SUP-001,WH-001,Released",
+            "ORD-002,ORD-1002,PRD-002,SUP-002,WH-001,Released",
+            "ORD-003,ORD-1003,PRD-003,SUP-003,WH-002,Held",
+            "ORD-004,ORD-1004,PRD-004,SUP-004,WH-003,Closed",
+            "ORD-005,ORD-1005,PRD-001,SUP-002,WH-001,Released",
+        });
+
+        try
+        {
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.ProductId",
+                "--target",
+                "Product",
+                "--lookup",
+                "Id",
+                "--drop-source-property",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, refactor.ExitCode);
+
+            var import = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, import.ExitCode);
+
+            var rows = LoadEntityRows(workspaceRoot, "Order")
+                .OrderBy(row => (string?)row.Attribute("Id"), StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(new[] { "ORD-001", "ORD-002", "ORD-003", "ORD-004", "ORD-005" }, rows.Select(row => (string?)row.Attribute("Id")));
+            Assert.Equal("PRD-002", (string?)rows[0].Attribute("ProductId"));
+            Assert.Null(rows[0].Element("ProductId"));
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "metadata", "model.xml"));
+            var orderEntity = model.Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                orderEntity.Element("Relationships")?.Elements("Relationship") ?? Enumerable.Empty<XElement>(),
+                relationship => string.Equals((string?)relationship.Attribute("entity"), "Product", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                orderEntity.Element("Properties")?.Elements("Property") ?? Enumerable.Empty<XElement>(),
+                property => string.Equals((string?)property.Attribute("name"), "ProductId", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
             DeleteDirectorySafe(workspaceRoot);
-            DeleteDirectorySafe(Path.GetDirectoryName(csvPath)!);
+            DeleteDirectorySafe(csvRoot);
         }
     }
 
@@ -1176,9 +1461,9 @@ public sealed class CliStrictModeTests
         Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
         await File.WriteAllLinesAsync(csvPath, new[]
         {
-            "Label,IsActive",
-            "Alpha,true",
-            "Beta,false",
+            "Id,Label,IsActive",
+            "10,Alpha,true",
+            "20,Beta,false",
         });
 
         try
@@ -1447,20 +1732,20 @@ public sealed class CliStrictModeTests
                 "refactor",
                 "property-to-relationship",
                 "--source",
-                "Order.WarehouseCode",
+                "Order.WarehouseId",
                 "--target",
                 "Warehouse",
                 "--lookup",
-                "WarehouseCode",
+                "Id",
                 "--drop-source-property",
                 "--workspace",
                 workspaceRoot);
 
             Assert.Equal(0, refactor.ExitCode);
             Assert.Contains("OK: refactor property-to-relationship", refactor.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Source: Order.WarehouseCode", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Source: Order.WarehouseId", refactor.StdOut, StringComparison.Ordinal);
             Assert.Contains("Target: Warehouse", refactor.StdOut, StringComparison.Ordinal);
-            Assert.Contains("Lookup: Warehouse.WarehouseCode", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Lookup: Warehouse.Id", refactor.StdOut, StringComparison.Ordinal);
             Assert.Contains("Role: (none)", refactor.StdOut, StringComparison.Ordinal);
             Assert.Contains("Drop source property: yes", refactor.StdOut, StringComparison.Ordinal);
             Assert.Contains("Rows rewritten: 5", refactor.StdOut, StringComparison.Ordinal);
@@ -1474,7 +1759,7 @@ public sealed class CliStrictModeTests
                 orderEntity
                     .Element("Properties")?
                     .Elements("Property") ?? Enumerable.Empty<XElement>(),
-                property => string.Equals((string?)property.Attribute("name"), "WarehouseCode", StringComparison.OrdinalIgnoreCase));
+                property => string.Equals((string?)property.Attribute("name"), "WarehouseId", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(
                 orderEntity
                     .Element("Relationships")?
@@ -1488,14 +1773,14 @@ public sealed class CliStrictModeTests
             {
                 var warehouseId = (string?)row.Attribute("WarehouseId");
                 Assert.False(string.IsNullOrWhiteSpace(warehouseId));
-                Assert.Null(row.Element("WarehouseCode"));
+                Assert.Null(row.Element("WarehouseId"));
             }
 
             var suggestAfter = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
             Assert.Equal(0, suggestAfter.ExitCode);
             Assert.Contains("Suggestions: 2", suggestAfter.StdOut, StringComparison.Ordinal);
             Assert.DoesNotContain(
-                "Order.WarehouseCode -> Warehouse (lookup: Warehouse.WarehouseCode)",
+                "Order.WarehouseId -> Warehouse (lookup: Warehouse.Id)",
                 suggestAfter.StdOut,
                 StringComparison.Ordinal);
         }
@@ -1512,16 +1797,12 @@ public sealed class CliStrictModeTests
         var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
         try
         {
-            Assert.Equal(0, (await RunCliAsync(
-                "insert",
-                "Warehouse",
-                "--auto-id",
-                "--set",
-                "WarehouseName=Duplicate Seattle",
-                "--set",
-                "WarehouseCode=WH-001",
-                "--workspace",
-                workspaceRoot)).ExitCode);
+            var warehousePath = Path.Combine(workspaceRoot, "metadata", "instance", "Warehouse.xml");
+            var warehouseDocument = XDocument.Load(warehousePath);
+            var warehouses = warehouseDocument.Descendants("Warehouse").ToList();
+            Assert.True(warehouses.Count >= 2);
+            warehouses[1].SetAttributeValue("Id", "WH-001");
+            warehouseDocument.Save(warehousePath);
             CopyDirectory(workspaceRoot, expectedWorkspace);
 
             var result = await RunCliAsync(
@@ -1529,11 +1810,11 @@ public sealed class CliStrictModeTests
                 "refactor",
                 "property-to-relationship",
                 "--source",
-                "Order.WarehouseCode",
+                "Order.WarehouseId",
                 "--target",
                 "Warehouse",
                 "--lookup",
-                "WarehouseCode",
+                "Id",
                 "--drop-source-property",
                 "--workspace",
                 workspaceRoot);
@@ -1556,15 +1837,12 @@ public sealed class CliStrictModeTests
         var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
         try
         {
-            Assert.Equal(0, (await RunCliAsync(
-                "instance",
-                "update",
-                "Order",
-                "1",
-                "--set",
-                "WarehouseCode=",
-                "--workspace",
-                workspaceRoot)).ExitCode);
+            var orderPath = Path.Combine(workspaceRoot, "metadata", "instance", "Order.xml");
+            var orderDocument = XDocument.Load(orderPath);
+            var firstOrder = orderDocument.Descendants("Order")
+                .First(element => string.Equals((string?)element.Attribute("Id"), "ORD-001", StringComparison.Ordinal));
+            firstOrder.Element("WarehouseId")?.SetValue(string.Empty);
+            orderDocument.Save(orderPath);
             CopyDirectory(workspaceRoot, expectedWorkspace);
 
             var result = await RunCliAsync(
@@ -1572,11 +1850,11 @@ public sealed class CliStrictModeTests
                 "refactor",
                 "property-to-relationship",
                 "--source",
-                "Order.WarehouseCode",
+                "Order.WarehouseId",
                 "--target",
                 "Warehouse",
                 "--lookup",
-                "WarehouseCode",
+                "Id",
                 "--drop-source-property",
                 "--workspace",
                 workspaceRoot);
@@ -1606,9 +1884,9 @@ public sealed class CliStrictModeTests
                 "instance",
                 "update",
                 "Order",
-                "1",
+                "ORD-001",
                 "--set",
-                "WarehouseCode=WH-404",
+                "WarehouseId=WH-404",
                 "--workspace",
                 workspaceRoot)).ExitCode);
             CopyDirectory(workspaceRoot, expectedWorkspace);
@@ -1618,11 +1896,11 @@ public sealed class CliStrictModeTests
                 "refactor",
                 "property-to-relationship",
                 "--source",
-                "Order.WarehouseCode",
+                "Order.WarehouseId",
                 "--target",
                 "Warehouse",
                 "--lookup",
-                "WarehouseCode",
+                "Id",
                 "--drop-source-property",
                 "--workspace",
                 workspaceRoot);
@@ -1646,15 +1924,29 @@ public sealed class CliStrictModeTests
         var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
         try
         {
-            Assert.Equal(0, (await RunCliAsync(
-                "model",
-                "add-relationship",
-                "Order",
-                "Warehouse",
-                "--default-id",
-                "1",
-                "--workspace",
-                workspaceRoot)).ExitCode);
+            var modelPath = Path.Combine(workspaceRoot, "metadata", "model.xml");
+            var modelDocument = XDocument.Load(modelPath);
+            var orderEntity = modelDocument.Descendants("Entity")
+                .First(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            var relationships = orderEntity.Element("Relationships");
+            if (relationships == null)
+            {
+                relationships = new XElement("Relationships");
+                orderEntity.Add(relationships);
+            }
+
+            relationships.Add(new XElement("Relationship",
+                new XAttribute("entity", "Warehouse"),
+                new XAttribute("role", "WarehouseRef")));
+            modelDocument.Save(modelPath);
+
+            var orderPath = Path.Combine(workspaceRoot, "metadata", "instance", "Order.xml");
+            var orderDocument = XDocument.Load(orderPath);
+            foreach (var row in orderDocument.Descendants("Order"))
+            {
+                row.SetAttributeValue("WarehouseRefId", row.Element("WarehouseId")?.Value);
+            }
+            orderDocument.Save(orderPath);
             CopyDirectory(workspaceRoot, expectedWorkspace);
 
             var result = await RunCliAsync(
@@ -1662,17 +1954,19 @@ public sealed class CliStrictModeTests
                 "refactor",
                 "property-to-relationship",
                 "--source",
-                "Order.WarehouseCode",
+                "Order.WarehouseId",
                 "--target",
                 "Warehouse",
+                "--role",
+                "WarehouseRef",
                 "--lookup",
-                "WarehouseCode",
+                "Id",
                 "--drop-source-property",
                 "--workspace",
                 workspaceRoot);
 
             Assert.Equal(4, result.ExitCode);
-            Assert.Contains("Relationship 'Order.WarehouseId' already exists.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Relationship 'Order.WarehouseRefId' already exists.", result.CombinedOutput, StringComparison.Ordinal);
             AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
         }
         finally
@@ -1700,7 +1994,7 @@ public sealed class CliStrictModeTests
                 "--target",
                 "Warehouse",
                 "--lookup",
-                "WarehouseCode",
+                "Id",
                 "--drop-source-property",
                 "--workspace",
                 workspaceRoot);
@@ -2308,6 +2602,13 @@ public sealed class CliStrictModeTests
                 rightWorkspace);
             Assert.Equal(0, insertResult.ExitCode);
 
+            var cubeIdsBeforeMerge = LoadEntityRows(leftWorkspace, "Cube")
+                .Select(row => (string?)row.Attribute("Id"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+            Assert.DoesNotContain("99", cubeIdsBeforeMerge);
+
             var diffResult = await RunCliAsync(
                 "instance",
                 "diff",
@@ -2335,6 +2636,89 @@ public sealed class CliStrictModeTests
                 leftWorkspace);
             Assert.Equal(0, viewResult.ExitCode);
             Assert.Contains("Diff Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+
+            var cubeIdsAfterMerge = LoadEntityRows(leftWorkspace, "Cube")
+                .Select(row => (string?)row.Attribute("Id"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(
+                cubeIdsBeforeMerge.Concat(new[] { "99" }).OrderBy(id => id, StringComparer.Ordinal),
+                cubeIdsAfterMerge);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_FailsOnIncomingIdCollisionWithoutRemapping()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var insertRight = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Diff Cube",
+                "--set",
+                "Purpose=Diff sample",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertRight.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var insertLeft = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Local Cube",
+                "--set",
+                "Purpose=Target-local row",
+                "--set",
+                "RefreshMode=Scheduled",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, insertLeft.ExitCode);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(1, mergeResult.ExitCode);
+            Assert.Contains("precondition failed", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "99",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Local Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Diff Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -2414,6 +2798,21 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
+    public async Task WorkspaceMerge_RejectsAutoIdOption()
+    {
+        var result = await RunCliAsync(
+            "instance",
+            "merge",
+            ".\\LeftWorkspace",
+            ".\\RightWorkspace.instance-diff",
+            "--auto-id");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Error:", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("applied", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task WorkspaceMerge_FailsHardWhenDiffContainsModelDeltas()
     {
         var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
@@ -2472,7 +2871,7 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
-    public async Task Insert_RejectsNonNumericIds()
+    public async Task Insert_AllowsOpaqueStringIds()
     {
         var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
         try
@@ -2489,8 +2888,17 @@ public sealed class CliStrictModeTests
                 "RefreshMode=Manual",
                 "--workspace",
                 rightWorkspace);
-            Assert.Equal(4, insertResult.ExitCode);
-            Assert.Contains("invalid Id", insertResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, insertResult.ExitCode);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "b|a",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Pipe Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -2691,7 +3099,7 @@ public sealed class CliStrictModeTests
                 blankLeftWorkspace,
                 blankRightWorkspace);
             Assert.Equal(4, blankDiffResult.ExitCode);
-            Assert.Contains("missing valid numeric Id", blankDiffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("missing valid Id", blankDiffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
 
             var duplicateInstancePath = Path.Combine(duplicateLeftWorkspace, "metadata", "instance", "Cube.xml");
             var duplicateInstance = XDocument.Load(duplicateInstancePath);
@@ -3792,22 +4200,22 @@ public sealed class CliStrictModeTests
         Directory.CreateDirectory(root);
 
         var repoRoot = FindRepositoryRoot();
-        var csvRoot = Path.Combine(repoRoot, "Samples", "SuggestDemo", "demo-csv");
+        var csvRoot = Path.Combine(repoRoot, "Samples", "Demos", "SuggestDemo", "demo-csv");
         var imports = new[]
         {
-            (File: "products.csv", Entity: "Product", NewWorkspace: true),
-            (File: "suppliers.csv", Entity: "Supplier", NewWorkspace: false),
-            (File: "categories.csv", Entity: "Category", NewWorkspace: false),
-            (File: "warehouses.csv", Entity: "Warehouse", NewWorkspace: false),
-            (File: "orders.csv", Entity: "Order", NewWorkspace: false),
+            (File: "products.csv", Entity: "Product", NewWorkspace: true, Plural: (string?)null),
+            (File: "suppliers.csv", Entity: "Supplier", NewWorkspace: false, Plural: (string?)null),
+            (File: "categories.csv", Entity: "Category", NewWorkspace: false, Plural: "Categories"),
+            (File: "warehouses.csv", Entity: "Warehouse", NewWorkspace: false, Plural: (string?)null),
+            (File: "orders.csv", Entity: "Order", NewWorkspace: false, Plural: (string?)null),
         };
 
         foreach (var item in imports)
         {
             var csvPath = Path.Combine(csvRoot, item.File);
             var args = item.NewWorkspace
-                ? new[] { "import", "csv", csvPath, "--entity", item.Entity, "--new-workspace", root, }
-                : new[] { "import", "csv", csvPath, "--entity", item.Entity, "--workspace", root, };
+                ? BuildImportArgs(csvPath, item.Entity, item.Plural, "--new-workspace", root)
+                : BuildImportArgs(csvPath, item.Entity, item.Plural, "--workspace", root);
             var result = await RunCliAsync(args);
             if (result.ExitCode != 0)
             {
@@ -3817,6 +4225,27 @@ public sealed class CliStrictModeTests
         }
 
         return root;
+
+        static string[] BuildImportArgs(string csvPath, string entity, string? plural, string workspaceSwitch, string workspaceRoot)
+        {
+            var args = new System.Collections.Generic.List<string>
+            {
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                entity,
+            };
+            if (!string.IsNullOrWhiteSpace(plural))
+            {
+                args.Add("--plural");
+                args.Add(plural);
+            }
+
+            args.Add(workspaceSwitch);
+            args.Add(workspaceRoot);
+            return args.ToArray();
+        }
     }
 
     private static async Task<string> CreateTempRefactorCycleWorkspaceAsync()
@@ -3847,8 +4276,8 @@ public sealed class CliStrictModeTests
         var services = new ServiceCollection();
         var workspace = services.ImportService
             .ImportXmlAsync(
-                Path.Combine(repoRoot, "Samples", "SampleModel.xml"),
-                Path.Combine(repoRoot, "Samples", "SampleInstance.xml"))
+                Path.Combine(repoRoot, "Samples", "Contracts", "SampleModel.xml"),
+                Path.Combine(repoRoot, "Samples", "Contracts", "SampleInstance.xml"))
             .GetAwaiter()
             .GetResult();
         workspace.WorkspaceRootPath = root;
@@ -3871,8 +4300,8 @@ public sealed class CliStrictModeTests
         var services = new ServiceCollection();
         var workspace = await services.ImportService
             .ImportXmlAsync(
-                Path.Combine(repoRoot, "Samples", "SampleModel.xml"),
-                Path.Combine(repoRoot, "Samples", "SampleInstance.xml"))
+                Path.Combine(repoRoot, "Samples", "Contracts", "SampleModel.xml"),
+                Path.Combine(repoRoot, "Samples", "Contracts", "SampleInstance.xml"))
             .ConfigureAwait(false);
         workspace.WorkspaceRootPath = root;
         workspace.MetadataRootPath = string.Empty;
@@ -3918,6 +4347,7 @@ public sealed class CliStrictModeTests
         return diffPathMatch.Groups[1].Value.Trim();
     }
 }
+
 
 
 

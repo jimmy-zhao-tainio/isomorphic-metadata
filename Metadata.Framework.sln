@@ -5,7 +5,7 @@ VisualStudioVersion = 17.12.35707.178 d17.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Metadata.Framework", "Metadata.Framework.csproj", "{B4F7A809-E10C-427B-B442-DF7F02ABD17B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleModel", "Samples\SampleModel.csproj", "{09F8D121-056E-43C6-B63B-85B278464577}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleModel", "Samples\\ConsumerApi\\SampleModel.csproj", "{09F8D121-056E-43C6-B63B-85B278464577}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Samples.Console", "Samples.Console\Samples.Console.csproj", "{03A24A29-20E4-4C0F-A10F-6F0CA871A60A}"
 EndProject
@@ -56,3 +56,4 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 EndGlobal
+

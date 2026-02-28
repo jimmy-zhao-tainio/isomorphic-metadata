@@ -7,8 +7,9 @@ namespace Metadata.Framework.ConsoleHarness
     {
         private static void Main(string[] args)
         {
-            var modelPath = args.Length > 0 ? args[0] : Path.Combine("Samples", "SampleModel.xml");
+            var modelPath = args.Length > 0 ? args[0] : Path.Combine("Samples", "Contracts", "SampleModel.xml");
             Console.WriteLine($"Metadata.Framework console harness is legacy-only. Model path: {modelPath}");
         }
     }
 }
+

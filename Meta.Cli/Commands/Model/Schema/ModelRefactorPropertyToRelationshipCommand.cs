@@ -86,9 +86,10 @@ internal sealed partial class CliRuntime
                 $"Property '{options.SourceEntityName}.{options.SourcePropertyName}' does not exist.");
         }
 
+        var usesImplicitTargetId = string.Equals(options.LookupPropertyName, "Id", StringComparison.OrdinalIgnoreCase);
         var targetLookupProperty = targetEntity.Properties.FirstOrDefault(item =>
             string.Equals(item.Name, options.LookupPropertyName, StringComparison.OrdinalIgnoreCase));
-        if (targetLookupProperty == null)
+        if (!usesImplicitTargetId && targetLookupProperty == null)
         {
             throw new InvalidOperationException(
                 $"Property '{options.TargetEntityName}.{options.LookupPropertyName}' does not exist.");
@@ -126,7 +127,10 @@ internal sealed partial class CliRuntime
 
         var propertyCollision = sourceEntity.Properties.Any(item =>
             string.Equals(item.Name, relationshipUsageName, StringComparison.OrdinalIgnoreCase));
-        if (propertyCollision)
+        var replacingSourceProperty =
+            options.DropSourceProperty &&
+            string.Equals(sourceProperty.Name, relationshipUsageName, StringComparison.OrdinalIgnoreCase);
+        if (propertyCollision && !replacingSourceProperty)
         {
             throw new InvalidOperationException(
                 $"Cannot add relationship '{sourceEntity.Name}.{relationshipUsageName}' because property '{sourceEntity.Name}.{relationshipUsageName}' already exists.");
@@ -137,8 +141,9 @@ internal sealed partial class CliRuntime
             sourceEntity.Name,
             sourceProperty.Name,
             targetEntity.Name,
-            targetLookupProperty.Name,
-            options.Role);
+            usesImplicitTargetId ? "Id" : targetLookupProperty!.Name,
+            options.Role,
+            options.DropSourceProperty);
         if (relationshipAssessment.Status != LookupCandidateStatus.Eligible)
         {
             var blockerMessage = string.Join(" ", relationshipAssessment.Blockers);
@@ -152,7 +157,10 @@ internal sealed partial class CliRuntime
                 $"Cannot refactor '{sourceEntity.Name}.{sourceProperty.Name}' to relationship '{sourceEntity.Name}->{targetEntity.Name}': {blockerMessage}");
         }
 
-        var targetLookupMap = BuildTargetLookupMap(workspace, targetEntity.Name, targetLookupProperty.Name);
+        var targetLookupMap = BuildTargetLookupMap(
+            workspace,
+            targetEntity.Name,
+            usesImplicitTargetId ? "Id" : targetLookupProperty!.Name);
         var sourceRows = workspace.Instance.GetOrCreateEntityRecords(sourceEntity.Name)
             .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.Id, StringComparer.Ordinal)
@@ -196,7 +204,7 @@ internal sealed partial class CliRuntime
             PropertyDropped: options.DropSourceProperty,
             SourceAddress: sourceEntity.Name + "." + sourceProperty.Name,
             TargetEntityName: targetEntity.Name,
-            LookupAddress: targetEntity.Name + "." + targetLookupProperty.Name,
+            LookupAddress: targetEntity.Name + "." + (usesImplicitTargetId ? "Id" : targetLookupProperty!.Name),
             Role: options.Role);
     }
 
@@ -221,8 +229,12 @@ internal sealed partial class CliRuntime
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var targetRow in entityRows)
         {
-            if (!targetRow.Values.TryGetValue(targetLookupPropertyName, out var targetLookupValue) ||
-                string.IsNullOrEmpty(targetLookupValue))
+            var targetLookupValue = string.Equals(targetLookupPropertyName, "Id", StringComparison.OrdinalIgnoreCase)
+                ? targetRow.Id
+                : targetRow.Values.TryGetValue(targetLookupPropertyName, out var scalarLookupValue)
+                    ? scalarLookupValue
+                    : null;
+            if (string.IsNullOrEmpty(targetLookupValue))
             {
                 throw new InvalidOperationException(
                     $"Target lookup key has null/blank values. ({targetEntityName}.{targetLookupPropertyName}, Id={targetRow.Id})");

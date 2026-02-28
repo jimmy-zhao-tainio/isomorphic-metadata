@@ -114,7 +114,7 @@ public sealed class WorkspaceService : IWorkspaceService
 
         var workspaceRoot = Path.GetFullPath(workspace.WorkspaceRootPath);
         var metadataRootPath = Path.Combine(workspaceRoot, MetadataDirectoryName);
-        var workspaceConfigPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
+        var workspaceConfigPath = Path.Combine(workspaceRoot, WorkspaceXmlFileName);
         var workspaceConfig = NormalizeWorkspaceConfig(workspace.WorkspaceConfig, workspaceConfigPath);
         using var writeLock = WorkspaceWriteLock.Acquire(workspaceRoot);
 
@@ -150,13 +150,14 @@ public sealed class WorkspaceService : IWorkspaceService
         Directory.CreateDirectory(stagingMetadataRootPath);
         try
         {
-            WriteWorkspaceConfigToFile(workspaceConfig, Path.Combine(stagingMetadataRootPath, WorkspaceXmlFileName));
-
             WriteXmlToFile(BuildModelDocument(workspace.Model), stagingModelPath, indented: true);
             WriteInstanceShards(workspace, stagingInstanceDirectoryPath);
             DeleteIfExists(Path.Combine(stagingMetadataRootPath, InstanceFileName));
+            DeleteIfExists(Path.Combine(stagingMetadataRootPath, WorkspaceXmlFileName));
 
             SwapMetadataDirectories(metadataRootPath, stagingMetadataRootPath, backupMetadataRootPath);
+            WriteWorkspaceConfigToFile(workspaceConfig, workspaceConfigPath);
+            DeleteIfExists(Path.Combine(metadataRootPath, WorkspaceXmlFileName));
         }
         finally
         {
@@ -216,9 +217,15 @@ public sealed class WorkspaceService : IWorkspaceService
         while (!string.IsNullOrWhiteSpace(current))
         {
             var metadataRootPath = Path.Combine(current, MetadataDirectoryName);
-            var workspaceXmlPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
+            var workspaceXmlPath = Path.Combine(current, WorkspaceXmlFileName);
+            var legacyWorkspaceXmlPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
 
             if (File.Exists(workspaceXmlPath))
+            {
+                return new WorkspacePaths(current, metadataRootPath);
+            }
+
+            if (File.Exists(legacyWorkspaceXmlPath))
             {
                 return new WorkspacePaths(current, metadataRootPath);
             }
@@ -280,12 +287,21 @@ public sealed class WorkspaceService : IWorkspaceService
 
     private static MetaWorkspaceGenerated ReadWorkspaceConfig(string workspaceRootPath, string metadataRootPath)
     {
-        var workspaceXmlPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
+        var workspaceXmlPath = Path.Combine(workspaceRootPath, WorkspaceXmlFileName);
         if (File.Exists(workspaceXmlPath))
         {
             var generated = MetaWorkspaceGenerated.LoadFromXml(workspaceXmlPath);
             var normalizedFromXml = NormalizeWorkspaceConfig(generated, workspaceXmlPath);
             ValidateContractVersion(normalizedFromXml, workspaceXmlPath);
+            return normalizedFromXml;
+        }
+
+        var legacyWorkspaceXmlPath = Path.Combine(metadataRootPath, WorkspaceXmlFileName);
+        if (File.Exists(legacyWorkspaceXmlPath))
+        {
+            var generated = MetaWorkspaceGenerated.LoadFromXml(legacyWorkspaceXmlPath);
+            var normalizedFromXml = NormalizeWorkspaceConfig(generated, legacyWorkspaceXmlPath);
+            ValidateContractVersion(normalizedFromXml, legacyWorkspaceXmlPath);
             return normalizedFromXml;
         }
 
@@ -633,34 +649,9 @@ public sealed class WorkspaceService : IWorkspaceService
         return entityNames.ToList();
     }
 
-    private static bool IsPositiveIntegerIdentity(string? value)
+    private static bool IsValidIdentity(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var text = value.Trim();
-        if (text.Length == 0 || text[0] == '-')
-        {
-            return false;
-        }
-
-        var hasNonZeroDigit = false;
-        foreach (var ch in text)
-        {
-            if (!char.IsDigit(ch))
-            {
-                return false;
-            }
-
-            if (ch != '0')
-            {
-                hasNonZeroDigit = true;
-            }
-        }
-
-        return hasNonZeroDigit;
+        return !string.IsNullOrWhiteSpace(value?.Trim());
     }
 
     private static void EnsurePathUnderMetadataRoot(string path, string metadataRootPath, string workspaceConfigFieldName)

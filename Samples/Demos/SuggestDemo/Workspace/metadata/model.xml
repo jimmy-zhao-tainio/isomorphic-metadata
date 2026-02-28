@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Model name="ProductModel">
+  <Entities>
+    <Entity name="Category" plural="Categories">
+      <Properties>
+        <Property name="CategoryName" />
+      </Properties>
+    </Entity>
+    <Entity name="Order">
+      <Properties>
+        <Property name="OrderNumber" />
+        <Property name="StatusText" />
+      </Properties>
+      <Relationships>
+        <Relationship entity="Product" />
+        <Relationship entity="Supplier" />
+        <Relationship entity="Warehouse" />
+      </Relationships>
+    </Entity>
+    <Entity name="Product">
+      <Properties>
+        <Property name="ProductGroup" />
+        <Property name="ProductName" />
+      </Properties>
+    </Entity>
+    <Entity name="Supplier">
+      <Properties>
+        <Property name="SupplierName" isRequired="false" />
+      </Properties>
+    </Entity>
+    <Entity name="Warehouse">
+      <Properties>
+        <Property name="WarehouseName" />
+      </Properties>
+    </Entity>
+  </Entities>
+</Model>

@@ -11,7 +11,7 @@ public sealed class GenerationServiceTests
     public async Task GenerateSql_IsDeterministicAcrossRuns()
     {
         var services = new ServiceCollection();
-        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples"));
+        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples", "MainWorkspace"));
         var outputA = Path.Combine(Path.GetTempPath(), "metadata-gen-tests", Guid.NewGuid().ToString("N"), "a");
         var outputB = Path.Combine(Path.GetTempPath(), "metadata-gen-tests", Guid.NewGuid().ToString("N"), "b");
 
@@ -35,7 +35,7 @@ public sealed class GenerationServiceTests
     public async Task GenerateSsdt_WritesExpectedFiles()
     {
         var services = new ServiceCollection();
-        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples"));
+        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples", "MainWorkspace"));
         var output = Path.Combine(Path.GetTempPath(), "metadata-gen-tests", Guid.NewGuid().ToString("N"), "ssdt");
 
         try
@@ -58,7 +58,7 @@ public sealed class GenerationServiceTests
     public async Task GenerateCSharp_IsDeterministicAcrossRuns()
     {
         var services = new ServiceCollection();
-        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples"));
+        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples", "MainWorkspace"));
         var outputA = Path.Combine(Path.GetTempPath(), "metadata-gen-tests", Guid.NewGuid().ToString("N"), "a");
         var outputB = Path.Combine(Path.GetTempPath(), "metadata-gen-tests", Guid.NewGuid().ToString("N"), "b");
 
@@ -86,7 +86,7 @@ public sealed class GenerationServiceTests
     public async Task GenerateCSharp_WithTooling_EmitsToolingFile()
     {
         var services = new ServiceCollection();
-        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples"));
+        var workspace = await services.WorkspaceService.LoadAsync(Path.Combine(FindRepositoryRoot(), "Samples", "MainWorkspace"));
         var output = Path.Combine(Path.GetTempPath(), "metadata-gen-tests", Guid.NewGuid().ToString("N"), "tooling");
 
         try
@@ -135,3 +135,4 @@ public sealed class GenerationServiceTests
         throw new InvalidOperationException("Could not locate repository root from test base directory.");
     }
 }
+

@@ -82,7 +82,7 @@ internal sealed partial class CliRuntime
                     if (commandArgs.Length < 3)
                     {
                         return PrintUsageError(
-                            "Usage: import csv <csvFile> --entity <EntityName> [--workspace <path> | --new-workspace <path>]");
+                            "Usage: import csv <csvFile> --entity <EntityName> [--plural <PluralName>] [--workspace <path> | --new-workspace <path>]");
                     }
 
                     var csvOptions = ParseImportCsvOptions(commandArgs, startIndex: 3);
@@ -91,14 +91,14 @@ internal sealed partial class CliRuntime
                         return PrintArgumentError(csvOptions.ErrorMessage);
                     }
 
-                    var importedFromCsv = await services.ImportService
-                        .ImportCsvAsync(commandArgs[2], csvOptions.EntityName)
-                        .ConfigureAwait(false);
-                    var importedEntity = importedFromCsv.Model.Entities.Single();
-                    var importedRows = importedFromCsv.Instance.RecordsByEntity[importedEntity.Name];
-
                     if (csvOptions.UseNewWorkspace)
                     {
+                        var importedFromCsv = await services.ImportService
+                            .ImportCsvAsync(commandArgs[2], csvOptions.EntityName, csvOptions.PluralName)
+                            .ConfigureAwait(false);
+                        var importedEntity = importedFromCsv.Model.Entities.Single();
+                        var importedRows = importedFromCsv.Instance.RecordsByEntity[importedEntity.Name];
+
                         workspacePath = csvOptions.NewWorkspacePath;
                         targetValidation = ValidateNewWorkspaceTarget(workspacePath);
                         if (targetValidation != 0)
@@ -127,17 +127,29 @@ internal sealed partial class CliRuntime
                     workspacePath = csvOptions.WorkspacePath;
                     var workspaceForCsv = await LoadWorkspaceForCommandAsync(workspacePath).ConfigureAwait(false);
                     PrintContractCompatibilityWarning(workspaceForCsv.WorkspaceConfig);
+                    var importedForMerge = await services.ImportService
+                        .ImportCsvAsync(commandArgs[2], csvOptions.EntityName, csvOptions.PluralName)
+                        .ConfigureAwait(false);
+                    var importedEntityForMerge = importedForMerge.Model.Entities.Single();
+                    var importedRowsForMerge = importedForMerge.Instance.RecordsByEntity[importedEntityForMerge.Name];
+                    var existingEntity = workspaceForCsv.Model.FindEntity(importedEntityForMerge.Name);
 
-                    if (workspaceForCsv.Model.Entities.Any(entity =>
-                            string.Equals(entity.Name, importedEntity.Name, StringComparison.OrdinalIgnoreCase)))
+                    if (existingEntity == null)
                     {
-                        return PrintDataError(
-                            "E_OPERATION",
-                            $"Entity '{importedEntity.Name}' already exists in workspace.");
+                        workspaceForCsv.Model.Entities.Add(importedEntityForMerge);
+                        workspaceForCsv.Instance.RecordsByEntity[importedEntityForMerge.Name] = importedRowsForMerge;
                     }
+                    else
+                    {
+                        if (!string.IsNullOrWhiteSpace(csvOptions.PluralName) &&
+                            !string.Equals(existingEntity.GetPluralName(), importedEntityForMerge.GetPluralName(), StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException(
+                                $"CSV import plural '{importedEntityForMerge.GetPluralName()}' does not match existing entity plural '{existingEntity.GetPluralName()}' for '{existingEntity.Name}'.");
+                        }
 
-                    workspaceForCsv.Model.Entities.Add(importedEntity);
-                    workspaceForCsv.Instance.RecordsByEntity[importedEntity.Name] = importedRows;
+                        MergeCsvImportIntoExistingEntity(existingEntity, workspaceForCsv, importedEntityForMerge, importedRowsForMerge);
+                    }
                     ApplyImplicitNormalization(workspaceForCsv);
 
                     var workspaceCsvDiagnostics = services.ValidationService.Validate(workspaceForCsv);
@@ -151,8 +163,8 @@ internal sealed partial class CliRuntime
                     presenter.WriteOk(
                         "imported csv",
                         ("Workspace", Path.GetFullPath(workspaceForCsv.WorkspaceRootPath)),
-                        ("Entity", importedEntity.Name),
-                        ("Rows", importedRows.Count.ToString()));
+                        ("Entity", importedEntityForMerge.Name),
+                        ("Rows", importedRowsForMerge.Count.ToString()));
 
                     return 0;
                 default:
@@ -162,6 +174,79 @@ internal sealed partial class CliRuntime
         catch (Exception exception)
         {
             return PrintDataError("E_IMPORT", exception.Message);
+        }
+    }
+
+    private static void MergeCsvImportIntoExistingEntity(
+        GenericEntity existingEntity,
+        Workspace workspace,
+        GenericEntity importedEntity,
+        IReadOnlyList<GenericRecord> importedRows)
+    {
+        var existingPropertyNames = existingEntity.Properties
+            .Select(item => item.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existingRelationshipNames = existingEntity.Relationships
+            .Select(item => item.GetColumnName())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var importedProperty in importedEntity.Properties)
+        {
+            var name = importedProperty.Name;
+            if (existingPropertyNames.Contains(name) || existingRelationshipNames.Contains(name))
+            {
+                continue;
+            }
+
+            throw new InvalidOperationException(
+                $"CSV column '{name}' does not match existing property or relationship on entity '{existingEntity.Name}'.");
+        }
+
+        var existingRows = workspace.Instance.GetOrCreateEntityRecords(existingEntity.Name);
+        var rowsById = existingRows.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var importedRow in importedRows
+                     .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            if (!rowsById.TryGetValue(importedRow.Id, out var targetRow))
+            {
+                targetRow = new GenericRecord
+                {
+                    Id = importedRow.Id,
+                };
+                existingRows.Add(targetRow);
+                rowsById[targetRow.Id] = targetRow;
+            }
+
+            foreach (var importedProperty in importedEntity.Properties)
+            {
+                var name = importedProperty.Name;
+                var hasValue = importedRow.Values.TryGetValue(name, out var value);
+
+                if (existingRelationshipNames.Contains(name))
+                {
+                    if (!hasValue || string.IsNullOrWhiteSpace(value))
+                    {
+                        targetRow.RelationshipIds.Remove(name);
+                    }
+                    else
+                    {
+                        targetRow.RelationshipIds[name] = value;
+                    }
+
+                    continue;
+                }
+
+                if (!hasValue || string.IsNullOrWhiteSpace(value))
+                {
+                    targetRow.Values.Remove(name);
+                }
+                else
+                {
+                    targetRow.Values[name] = value;
+                }
+            }
         }
     }
 }
