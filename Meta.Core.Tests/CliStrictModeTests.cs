@@ -302,6 +302,7 @@ public sealed class CliStrictModeTests
         Assert.Contains("model", commandHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("Usage:", commandHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("Next: meta model <subcommand> help", commandHelp.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("rename-entity", commandHelp.StdOut, StringComparison.OrdinalIgnoreCase);
 
         var suggestHelp = await RunCliAsync("model", "suggest", "--help");
         Assert.Equal(0, suggestHelp.ExitCode);
@@ -330,6 +331,17 @@ public sealed class CliStrictModeTests
         Assert.Contains("--role <Role>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--property <PropertyName>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--workspace <path>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+
+        var renameEntityHelp = await RunCliAsync("model", "refactor", "rename", "entity", "--help");
+        Assert.Equal(0, renameEntityHelp.ExitCode);
+        Assert.Contains("meta model refactor rename entity", renameEntityHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--from <OldEntity>", renameEntityHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--to <NewEntity>", renameEntityHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace <path>", renameEntityHelp.StdOut, StringComparison.Ordinal);
+
+        var legacyRenameEntity = await RunCliAsync("model", "rename-entity", "--help");
+        Assert.Equal(1, legacyRenameEntity.ExitCode);
+        Assert.Contains("Error: unknown help topic 'model rename-entity'.", legacyRenameEntity.CombinedOutput, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2338,6 +2350,145 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
+    public async Task ModelRefactorRenameEntity_UpdatesRelationshipsInstanceFieldsAndWorkspaceConfig()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithEntityStorageRenameFixture();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "rename",
+                "entity",
+                "--from",
+                "SystemType",
+                "--to",
+                "PlatformType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("OK: refactor rename entity", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("From: SystemType", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("To: PlatformType", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Relationships updated: 1", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("FK fields renamed: 1", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Rows touched: 2", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "metadata", "model.xml"));
+            Assert.DoesNotContain(
+                model.Descendants("Entity"),
+                element => string.Equals((string?)element.Attribute("name"), "SystemType", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                model.Descendants("Entity"),
+                element => string.Equals((string?)element.Attribute("name"), "PlatformType", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                model.Descendants("Relationship"),
+                element => string.Equals((string?)element.Attribute("entity"), "PlatformType", StringComparison.OrdinalIgnoreCase));
+
+            var workspaceConfig = XDocument.Load(Path.Combine(workspaceRoot, "workspace.xml"));
+            Assert.Contains(
+                workspaceConfig.Descendants("EntityStorage"),
+                element => string.Equals((string?)element.Element("EntityName"), "PlatformType", StringComparison.OrdinalIgnoreCase));
+
+            var systemRows = LoadEntityRows(workspaceRoot, "System");
+            Assert.All(systemRows, row =>
+            {
+                Assert.NotNull(row.Attribute("PlatformTypeId"));
+                Assert.Null(row.Attribute("SystemTypeId"));
+            });
+
+            Assert.True(File.Exists(Path.Combine(workspaceRoot, "metadata", "instance", "PlatformType.xml")));
+            Assert.False(File.Exists(Path.Combine(workspaceRoot, "metadata", "instance", "SystemType.xml")));
+
+            var check = await RunCliAsync("check", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRenameEntity_RoleRelationship_DoesNotRenameRoleField()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithRoleRenameFixture();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "rename",
+                "entity",
+                "--from",
+                "SystemType",
+                "--to",
+                "PlatformType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Relationships updated: 1", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("FK fields renamed: 0", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Rows touched: 0", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "metadata", "model.xml"));
+            Assert.Contains(
+                model.Descendants("Relationship"),
+                element =>
+                    string.Equals((string?)element.Attribute("entity"), "PlatformType", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals((string?)element.Attribute("role"), "PrimarySystemType", StringComparison.OrdinalIgnoreCase));
+
+            var systemRows = LoadEntityRows(workspaceRoot, "System");
+            Assert.All(systemRows, row =>
+            {
+                Assert.NotNull(row.Attribute("PrimarySystemTypeId"));
+                Assert.Null(row.Attribute("PlatformTypeId"));
+            });
+
+            var check = await RunCliAsync("check", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRenameEntity_CollisionFailsAndIsAtomic()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithRenameCollisionFixture();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-rename-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "rename",
+                "entity",
+                "--from",
+                "SystemType",
+                "--to",
+                "PlatformType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("row 'System:1' already contains relationship 'PlatformTypeId'", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
     public async Task ModelAddProperty_BackfillsExistingRows_WhenRequiredAndDefaultValueProvided()
     {
         var workspaceRoot = CreateTempWorkspaceFromSamples();
@@ -4157,7 +4308,20 @@ public sealed class CliStrictModeTests
         var candidate = Path.Combine(repoRoot, "Meta.Cli", "bin", "Debug", targetFramework, "meta.dll");
         if (File.Exists(candidate))
         {
-            File.Delete(candidate);
+            try
+            {
+                File.Delete(candidate);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Another process may still hold the built CLI assembly. Clearing the cached path is enough
+                // to force re-resolution without turning the test into a file-lock race.
+            }
+            catch (IOException)
+            {
+                // Another process may still hold the built CLI assembly. Clearing the cached path is enough
+                // to force re-resolution without turning the test into a file-lock race.
+            }
         }
     }
 
@@ -4554,6 +4718,79 @@ public sealed class CliStrictModeTests
         Assert.Equal(0, (await RunCliAsync("insert", "A", "1", "--set", "Code=A1", "--set", "BId=1", "--workspace", root)).ExitCode);
         Assert.Equal(0, (await RunCliAsync("check", "--workspace", root)).ExitCode);
 
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithEntityStorageRenameFixture()
+    {
+        var root = CreateTempWorkspaceFromSamples();
+        var workspaceConfigPath = Path.Combine(root, "workspace.xml");
+        var workspaceConfig = XDocument.Load(workspaceConfigPath);
+        var entityStorages = workspaceConfig.Root?.Element("EntityStorages");
+        Assert.NotNull(entityStorages);
+        entityStorages!.Add(
+            new XElement("EntityStorage",
+                new XAttribute("Id", "1"),
+                new XAttribute("WorkspaceId", "1"),
+                new XElement("EntityName", "SystemType"),
+                new XElement("StorageKind", "Sharded"),
+                new XElement("FilePath", "metadata/instance/SystemType.xml")));
+        workspaceConfig.Save(workspaceConfigPath);
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithRoleRenameFixture()
+    {
+        var root = CreateTempWorkspaceFromSamples();
+
+        var modelPath = Path.Combine(root, "metadata", "model.xml");
+        var modelDocument = XDocument.Load(modelPath);
+        var systemEntity = modelDocument
+            .Descendants("Entity")
+            .Single(element => string.Equals((string?)element.Attribute("name"), "System", StringComparison.OrdinalIgnoreCase));
+        var relationship = systemEntity
+            .Descendants("Relationship")
+            .Single(element => string.Equals((string?)element.Attribute("entity"), "SystemType", StringComparison.OrdinalIgnoreCase));
+        relationship.SetAttributeValue("role", "PrimarySystemType");
+        modelDocument.Save(modelPath);
+
+        var systemPath = Path.Combine(root, "metadata", "instance", "System.xml");
+        var systemDocument = XDocument.Load(systemPath);
+        foreach (var row in systemDocument.Descendants("System"))
+        {
+            var current = (string?)row.Attribute("SystemTypeId");
+            row.SetAttributeValue("PrimarySystemTypeId", current);
+            row.Attribute("SystemTypeId")?.Remove();
+        }
+
+        systemDocument.Save(systemPath);
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithRenameCollisionFixture()
+    {
+        var root = CreateTempWorkspaceFromSamples();
+
+        var modelPath = Path.Combine(root, "metadata", "model.xml");
+        var modelDocument = XDocument.Load(modelPath);
+        var systemEntity = modelDocument
+            .Descendants("Entity")
+            .Single(element => string.Equals((string?)element.Attribute("name"), "System", StringComparison.OrdinalIgnoreCase));
+        var relationships = systemEntity.Element("Relationships");
+        Assert.NotNull(relationships);
+        relationships!.Add(new XElement("Relationship",
+            new XAttribute("entity", "Cube"),
+            new XAttribute("role", "PlatformType")));
+        modelDocument.Save(modelPath);
+
+        var systemPath = Path.Combine(root, "metadata", "instance", "System.xml");
+        var systemDocument = XDocument.Load(systemPath);
+        foreach (var row in systemDocument.Descendants("System"))
+        {
+            row.SetAttributeValue("PlatformTypeId", "1");
+        }
+
+        systemDocument.Save(systemPath);
         return root;
     }
 

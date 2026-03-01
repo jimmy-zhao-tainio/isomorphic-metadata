@@ -54,6 +54,10 @@ public interface IOperationService
 
 public interface IModelRefactorService
 {
+    RenameEntityRefactorResult RenameEntity(
+        Workspace workspace,
+        RenameEntityRefactorOptions options);
+
     PropertyToRelationshipRefactorResult RefactorPropertyToRelationship(
         Workspace workspace,
         PropertyToRelationshipRefactorOptions options);

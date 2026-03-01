@@ -146,7 +146,7 @@ Inspect:
 - `meta instance merge-aligned <targetWorkspace> <diffWorkspace>`
 
 Modify:
-- `meta model <suggest|refactor|add-entity|rename-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
+- `meta model <suggest|refactor|add-entity|add-property|rename-property|add-relationship|drop-property|drop-relationship|drop-entity> ...`
   - `suggest` usage: `meta model suggest [--show-keys] [--explain] [--print-commands] [--workspace <path>]`
   - default suggest output is actionable-only (eligible many-to-one relationship suggestions + compact summary)
   - suggest only emits the sanctioned Id-based inference path: `<TargetEntity>Id -> <TargetEntity>.Id`
@@ -157,6 +157,7 @@ Modify:
   - `--print-commands` prints copy/paste `meta model refactor property-to-relationship ...` commands for eligible suggestions
   - `refactor` usage: `meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]`
   - inverse refactor: `meta model refactor relationship-to-property --source <Entity> --target <Entity> [--role <Role>] [--property <PropertyName>] [--workspace <path>]`
+  - entity rename refactor: `meta model refactor rename entity --from <OldEntity> --to <NewEntity> [--workspace <path>]`
   - refactor is atomic (model + instance): if any precondition fails, nothing is written.
   - `add-property` usage: `meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]`
   - `--default-value` is required when adding a required property to an entity that already has rows (used for backfill).
@@ -211,7 +212,7 @@ Model mutation and refactor:
 | `meta model refactor property-to-relationship ...` | You need atomic model+instance promotion from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.ProductId --target Product --lookup Id --drop-source-property` |
 | `meta model refactor relationship-to-property ...` | You need atomic model+instance demotion from required relationship back to scalar Id property. | `meta model refactor relationship-to-property --source Order --target Product` |
 | `meta model add-entity <Name>` | You need a new entity definition. | `meta model add-entity SourceSystem` |
-| `meta model rename-entity <Old> <New>` | You need to rename an entity. | `meta model rename-entity SourceSystem Source` |
+| `meta model refactor rename entity ...` | You need to rename an entity and follow implied relationship FK names. | `meta model refactor rename entity --from SourceSystem --to Source` |
 | `meta model drop-entity <Entity>` | You need to remove an entity (when not blocked by data/references). | `meta model drop-entity SourceSystem` |
 | `meta model add-property <Entity> <Property> ...` | You need to add scalar schema (with optional required/backfill controls). | `meta model add-property Cube Purpose --required true --default-value Unknown` |
 | `meta model rename-property <Entity> <Old> <New>` | You need to rename a scalar property. | `meta model rename-property Cube Purpose BusinessPurpose` |

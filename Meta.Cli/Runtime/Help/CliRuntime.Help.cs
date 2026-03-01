@@ -61,7 +61,6 @@ internal sealed partial class CliRuntime
                 ? args[1].Trim().ToLowerInvariant() switch
                 {
                     "add-entity" => "meta model add-entity <Name> [--workspace <path>]",
-                    "rename-entity" => "meta model rename-entity <Old> <New> [--workspace <path>]",
                     "add-property" => "meta model add-property <Entity> <Property> [--required true|false] [--default-value <Value>] [--workspace <path>]",
                     "rename-property" => "meta model rename-property <Entity> <Old> <New> [--workspace <path>]",
                     "add-relationship" => "meta model add-relationship <FromEntity> <ToEntity> [--role <RoleName>] [--default-id <ToId>] [--workspace <path>]",
@@ -69,6 +68,8 @@ internal sealed partial class CliRuntime
                     {
                         "property-to-relationship" => "meta model refactor property-to-relationship --source <Entity.Property> --target <Entity> --lookup <Property> [--role <Role>] [--drop-source-property] [--workspace <path>]",
                         "relationship-to-property" => "meta model refactor relationship-to-property --source <Entity> --target <Entity> [--role <Role>] [--property <PropertyName>] [--workspace <path>]",
+                        "rename" when args.Length >= 4 && string.Equals(args[3], "entity", StringComparison.OrdinalIgnoreCase)
+                            => "meta model refactor rename entity --from <OldEntity> --to <NewEntity> [--workspace <path>]",
                         _ => "meta model refactor <subcommand> [arguments] [--workspace <path>]",
                     },
                     "refactor" => "meta model refactor <subcommand> [arguments] [--workspace <path>]",

@@ -82,7 +82,6 @@ Options:
 Subcommands:
 
   add-entity         Create an entity.
-  rename-entity      Rename an entity.
   drop-entity        Remove an entity (must be empty).
   add-property       Add a property to an entity.
   rename-property    Rename a property.
@@ -93,7 +92,7 @@ Subcommands:
 Examples:
 
   meta model add-entity SalesCube
-  meta model rename-entity OldName NewName
+  meta model refactor rename entity --from OldName --to NewName
   meta model add-property Cube Purpose --required true --default-value Unknown
 
 Next: meta model <subcommand> help
@@ -425,20 +424,25 @@ Error: Entity 'Cube' already exists.
 Next: meta list entities
 ```
 
-## model rename-entity
+## model refactor rename entity
 
 Success:
 ```powershell
-> meta model rename-entity CmdEntity CmdEntityRenamed --workspace Samples\\Fixtures\\CommandExamples
+> meta model refactor rename entity --from CmdEntity --to CmdEntityRenamed --workspace Samples\\Fixtures\\CommandExamples
 [exit 0]
-OK: entity renamed
+OK: refactor rename entity
+Workspace: <repo>\Samples\\Fixtures\\CommandExamples
+Model: EnterpriseBIPlatform
 From: CmdEntity
 To: CmdEntityRenamed
+Relationships updated: 0
+FK fields renamed: 0
+Rows touched: 0
 ```
 
 Failure:
 ```powershell
-> meta model rename-entity MissingEntity Anything --workspace Samples\\Fixtures\\CommandExamples
+> meta model refactor rename entity --from MissingEntity --to Anything --workspace Samples\\Fixtures\\CommandExamples
 [exit 4]
 Error: Entity 'MissingEntity' was not found.
 

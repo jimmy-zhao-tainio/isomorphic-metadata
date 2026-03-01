@@ -35,9 +35,157 @@ public readonly record struct RelationshipToPropertyRefactorResult(
     string Role,
     string PropertyName);
 
+public readonly record struct RenameEntityRefactorOptions(
+    string OldEntityName,
+    string NewEntityName);
+
+public readonly record struct RenameEntityRefactorResult(
+    string OldEntityName,
+    string NewEntityName,
+    int RelationshipsUpdated,
+    int FkFieldsRenamed,
+    int RowsTouched);
+
 public sealed class ModelRefactorService : IModelRefactorService
 {
     private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
+
+    public RenameEntityRefactorResult RenameEntity(
+        Workspace workspace,
+        RenameEntityRefactorOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+
+        if (string.IsNullOrWhiteSpace(options.OldEntityName))
+        {
+            throw new InvalidOperationException("Entity name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.NewEntityName))
+        {
+            throw new InvalidOperationException("New entity name is required.");
+        }
+
+        if (!IdentifierPattern.IsMatch(options.NewEntityName))
+        {
+            throw new InvalidOperationException(
+                $"Entity '{options.NewEntityName}' is invalid. Use identifier pattern [A-Za-z_][A-Za-z0-9_]*.");
+        }
+
+        var sourceEntity = RequireEntity(workspace.Model, options.OldEntityName);
+        if (workspace.Model.FindEntity(options.NewEntityName) != null)
+        {
+            throw new InvalidOperationException($"Entity '{options.NewEntityName}' already exists.");
+        }
+
+        var relationshipPlans = new List<RenameRelationshipPlan>();
+        foreach (var modelEntity in workspace.Model.Entities)
+        {
+            foreach (var relationship in modelEntity.Relationships
+                         .Where(item => string.Equals(item.Entity, options.OldEntityName, StringComparison.OrdinalIgnoreCase)))
+            {
+                var oldFieldName = relationship.GetColumnName();
+                var needsFieldRename = string.IsNullOrWhiteSpace(relationship.Role);
+                var renamedRelationship = new GenericRelationship
+                {
+                    Entity = options.NewEntityName,
+                    Role = relationship.Role,
+                };
+                var newFieldName = renamedRelationship.GetColumnName();
+
+                if (needsFieldRename)
+                {
+                    if (modelEntity.Properties.Any(item =>
+                            string.Equals(item.Name, newFieldName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        throw new InvalidOperationException(
+                            $"Cannot rename entity '{options.OldEntityName}' to '{options.NewEntityName}' because property '{modelEntity.Name}.{newFieldName}' already exists.");
+                    }
+
+                    var sourceRows = workspace.Instance.GetOrCreateEntityRecords(modelEntity.Name);
+                    foreach (var row in sourceRows)
+                    {
+                        if (row.RelationshipIds.ContainsKey(newFieldName))
+                        {
+                            throw new InvalidOperationException(
+                                $"Cannot rename entity '{options.OldEntityName}' to '{options.NewEntityName}' because row '{modelEntity.Name}:{row.Id}' already contains relationship '{newFieldName}'.");
+                        }
+                    }
+
+                    var relationshipCollision = modelEntity.Relationships.Any(item =>
+                        !ReferenceEquals(item, relationship) &&
+                        string.Equals(item.GetColumnName(), newFieldName, StringComparison.OrdinalIgnoreCase));
+                    if (relationshipCollision)
+                    {
+                        throw new InvalidOperationException(
+                            $"Cannot rename entity '{options.OldEntityName}' to '{options.NewEntityName}' because relationship usage '{modelEntity.Name}.{newFieldName}' already exists.");
+                    }
+                }
+
+                relationshipPlans.Add(new RenameRelationshipPlan(modelEntity, relationship, oldFieldName, newFieldName, needsFieldRename));
+            }
+        }
+
+        sourceEntity.Name = options.NewEntityName;
+        if (workspace.Instance.RecordsByEntity.TryGetValue(options.OldEntityName, out var renamedEntityRecords))
+        {
+            workspace.Instance.RecordsByEntity.Remove(options.OldEntityName);
+            var oldDefaultShardFileName = options.OldEntityName + ".xml";
+            var newDefaultShardFileName = options.NewEntityName + ".xml";
+            foreach (var record in renamedEntityRecords)
+            {
+                if (string.Equals(record.SourceShardFileName, oldDefaultShardFileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    record.SourceShardFileName = newDefaultShardFileName;
+                }
+            }
+
+            workspace.Instance.RecordsByEntity[options.NewEntityName] = renamedEntityRecords;
+        }
+
+        var rowsTouched = 0;
+        var fkFieldsRenamed = 0;
+        foreach (var plan in relationshipPlans)
+        {
+            plan.Relationship.Entity = options.NewEntityName;
+            if (!plan.NeedsFieldRename)
+            {
+                continue;
+            }
+
+            fkFieldsRenamed++;
+            var sourceRows = workspace.Instance.GetOrCreateEntityRecords(plan.SourceEntity.Name)
+                .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .ToList();
+            foreach (var row in sourceRows)
+            {
+                if (!row.RelationshipIds.TryGetValue(plan.OldFieldName, out var relationshipId))
+                {
+                    continue;
+                }
+
+                row.RelationshipIds.Remove(plan.OldFieldName);
+                row.RelationshipIds[plan.NewFieldName] = relationshipId;
+                rowsTouched++;
+            }
+        }
+
+        foreach (var entityStorage in workspace.WorkspaceConfig.EntityStorage
+                     .Where(item => string.Equals(item.EntityName, options.OldEntityName, StringComparison.OrdinalIgnoreCase)))
+        {
+            entityStorage.EntityName = options.NewEntityName;
+        }
+
+        workspace.IsDirty = true;
+
+        return new RenameEntityRefactorResult(
+            OldEntityName: options.OldEntityName,
+            NewEntityName: options.NewEntityName,
+            RelationshipsUpdated: relationshipPlans.Count,
+            FkFieldsRenamed: fkFieldsRenamed,
+            RowsTouched: rowsTouched);
+    }
 
     public PropertyToRelationshipRefactorResult RefactorPropertyToRelationship(
         Workspace workspace,
@@ -275,4 +423,11 @@ public sealed class ModelRefactorService : IModelRefactorService
 
         return map;
     }
+
+    private readonly record struct RenameRelationshipPlan(
+        GenericEntity SourceEntity,
+        GenericRelationship Relationship,
+        string OldFieldName,
+        string NewFieldName,
+        bool NeedsFieldRename);
 }

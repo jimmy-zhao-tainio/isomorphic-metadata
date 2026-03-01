@@ -2,18 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Meta.Core.Domain;
+using MetaWorkspaceGenerated = Meta.Core.WorkspaceConfig.Generated.MetaWorkspace;
+using DomainWorkspace = Meta.Core.Domain.Workspace;
 
 namespace Meta.Core.Operations;
 
 public sealed class WorkspaceSnapshot
 {
+    public MetaWorkspaceGenerated WorkspaceConfig { get; set; } = new();
     public GenericModel Model { get; set; } = new();
     public GenericInstance Instance { get; set; } = new();
 }
 
 public static class WorkspaceSnapshotCloner
 {
-    public static WorkspaceSnapshot Capture(Workspace workspace)
+    public static WorkspaceSnapshot Capture(DomainWorkspace workspace)
     {
         if (workspace == null)
         {
@@ -22,12 +25,13 @@ public static class WorkspaceSnapshotCloner
 
         return new WorkspaceSnapshot
         {
+            WorkspaceConfig = CloneWorkspaceConfig(workspace.WorkspaceConfig),
             Model = CloneModel(workspace.Model),
             Instance = CloneInstance(workspace.Instance),
         };
     }
 
-    public static void Restore(Workspace workspace, WorkspaceSnapshot snapshot)
+    public static void Restore(DomainWorkspace workspace, WorkspaceSnapshot snapshot)
     {
         if (workspace == null)
         {
@@ -39,6 +43,7 @@ public static class WorkspaceSnapshotCloner
             throw new ArgumentNullException(nameof(snapshot));
         }
 
+        workspace.WorkspaceConfig = CloneWorkspaceConfig(snapshot.WorkspaceConfig);
         workspace.Model = CloneModel(snapshot.Model);
         workspace.Instance = CloneInstance(snapshot.Instance);
         workspace.IsDirty = true;
@@ -117,6 +122,12 @@ public static class WorkspaceSnapshotCloner
         }
 
         return clone;
+    }
+
+    public static MetaWorkspaceGenerated CloneWorkspaceConfig(MetaWorkspaceGenerated source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return MetaWorkspaceGenerated.Normalize(source, "workspace-config");
     }
 
     public static RowPatch ToRowPatch(GenericRecord record)
