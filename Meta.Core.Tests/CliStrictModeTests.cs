@@ -567,6 +567,22 @@ public sealed class CliStrictModeTests
     }
 
     [Fact]
+    public async Task ArgumentError_UsesSameUsageAsCommandHelp()
+    {
+        var help = await RunCliAsync("model", "rename-entity", "--help");
+        var error = await RunCliAsync("model", "rename-entity");
+
+        Assert.Equal(0, help.ExitCode);
+        Assert.Equal(1, error.ExitCode);
+
+        var helpUsage = ExtractUsageClause(help.StdOut);
+        var errorUsage = ExtractUsageClause(error.CombinedOutput);
+
+        Assert.Equal(helpUsage, errorUsage);
+        Assert.Contains("Next: meta model rename-entity help", error.CombinedOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Check_RejectsScopeOption()
     {
         var workspaceRoot = CreateTempWorkspaceFromSamples();
@@ -4942,6 +4958,14 @@ public sealed class CliStrictModeTests
         var diffPathMatch = Regex.Match(output, @"(?m)^DiffWorkspace:\s*(.+)$");
         Assert.True(diffPathMatch.Success, $"Expected diff workspace path in output:{Environment.NewLine}{output}");
         return diffPathMatch.Groups[1].Value.Trim();
+    }
+
+    private static string ExtractUsageClause(string output)
+    {
+        var normalized = Regex.Replace(output, @"\s+", " ").Trim();
+        var usageMatch = Regex.Match(normalized, @"Usage:\s+meta\s+.+?(?=\s+Options:|\s+Examples:|\s+Next:|$)");
+        Assert.True(usageMatch.Success, $"Expected usage clause in output:{Environment.NewLine}{output}");
+        return usageMatch.Value.Trim();
     }
 }
 

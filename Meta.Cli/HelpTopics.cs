@@ -73,6 +73,70 @@ internal static class HelpTopics
         return suggestions;
     }
 
+    public static bool TryResolveHelpTopicKey(IEnumerable<string> commandArgs, out string key)
+    {
+        key = string.Empty;
+        if (commandArgs == null)
+        {
+            return false;
+        }
+
+        var normalizedTokens = commandArgs
+            .Where(token => !string.IsNullOrWhiteSpace(token))
+            .Select(token => token.Trim().ToLowerInvariant())
+            .ToArray();
+        if (normalizedTokens.Length == 0)
+        {
+            return false;
+        }
+
+        for (var length = normalizedTokens.Length; length > 0; length--)
+        {
+            var candidate = string.Join(" ", normalizedTokens.Take(length));
+            if (TryBuildHelpTopic(candidate, out _))
+            {
+                key = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool TryResolveUsageForArgs(IEnumerable<string> commandArgs, out string usage)
+    {
+        usage = string.Empty;
+        if (commandArgs == null)
+        {
+            return false;
+        }
+
+        var normalizedTokens = commandArgs
+            .Where(token => !string.IsNullOrWhiteSpace(token))
+            .Select(token => token.Trim())
+            .ToArray();
+        if (normalizedTokens.Length == 0)
+        {
+            return false;
+        }
+
+        if (string.Equals(normalizedTokens[0], "help", StringComparison.OrdinalIgnoreCase))
+        {
+            usage = "meta help [<command> ...]";
+            return true;
+        }
+
+        if (!TryResolveHelpTopicKey(normalizedTokens, out var key) ||
+            !TryBuildHelpTopic(key, out var document) ||
+            string.IsNullOrWhiteSpace(document.Usage))
+        {
+            return false;
+        }
+
+        usage = document.Usage;
+        return true;
+    }
+
     private static string NormalizeDomain(string? domain)
     {
         if (string.IsNullOrWhiteSpace(domain))
