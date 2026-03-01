@@ -302,7 +302,7 @@ public sealed class CliStrictModeTests
         Assert.Contains("model", commandHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("Usage:", commandHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("Next: meta model <subcommand> help", commandHelp.StdOut, StringComparison.Ordinal);
-        Assert.DoesNotContain("rename-entity", commandHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("rename-entity", commandHelp.StdOut, StringComparison.OrdinalIgnoreCase);
 
         var suggestHelp = await RunCliAsync("model", "suggest", "--help");
         Assert.Equal(0, suggestHelp.ExitCode);
@@ -332,16 +332,10 @@ public sealed class CliStrictModeTests
         Assert.Contains("--property <PropertyName>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--workspace <path>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
 
-        var renameEntityHelp = await RunCliAsync("model", "refactor", "rename", "entity", "--help");
+        var renameEntityHelp = await RunCliAsync("model", "rename-entity", "--help");
         Assert.Equal(0, renameEntityHelp.ExitCode);
-        Assert.Contains("meta model refactor rename entity", renameEntityHelp.StdOut, StringComparison.Ordinal);
-        Assert.Contains("--from <OldEntity>", renameEntityHelp.StdOut, StringComparison.Ordinal);
-        Assert.Contains("--to <NewEntity>", renameEntityHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("meta model rename-entity <Old> <New>", renameEntityHelp.StdOut, StringComparison.Ordinal);
         Assert.Contains("--workspace <path>", renameEntityHelp.StdOut, StringComparison.Ordinal);
-
-        var legacyRenameEntity = await RunCliAsync("model", "rename-entity", "--help");
-        Assert.Equal(1, legacyRenameEntity.ExitCode);
-        Assert.Contains("Error: unknown help topic 'model rename-entity'.", legacyRenameEntity.CombinedOutput, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2357,18 +2351,14 @@ public sealed class CliStrictModeTests
         {
             var result = await RunCliAsync(
                 "model",
-                "refactor",
-                "rename",
-                "entity",
-                "--from",
+                "rename-entity",
                 "SystemType",
-                "--to",
                 "PlatformType",
                 "--workspace",
                 workspaceRoot);
 
             Assert.Equal(0, result.ExitCode);
-            Assert.Contains("OK: refactor rename entity", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("OK: entity renamed", result.StdOut, StringComparison.Ordinal);
             Assert.Contains("From: SystemType", result.StdOut, StringComparison.Ordinal);
             Assert.Contains("To: PlatformType", result.StdOut, StringComparison.Ordinal);
             Assert.Contains("Relationships updated: 1", result.StdOut, StringComparison.Ordinal);
@@ -2418,12 +2408,8 @@ public sealed class CliStrictModeTests
         {
             var result = await RunCliAsync(
                 "model",
-                "refactor",
-                "rename",
-                "entity",
-                "--from",
+                "rename-entity",
                 "SystemType",
-                "--to",
                 "PlatformType",
                 "--workspace",
                 workspaceRoot);
@@ -2467,12 +2453,8 @@ public sealed class CliStrictModeTests
 
             var result = await RunCliAsync(
                 "model",
-                "refactor",
-                "rename",
-                "entity",
-                "--from",
+                "rename-entity",
                 "SystemType",
-                "--to",
                 "PlatformType",
                 "--workspace",
                 workspaceRoot);

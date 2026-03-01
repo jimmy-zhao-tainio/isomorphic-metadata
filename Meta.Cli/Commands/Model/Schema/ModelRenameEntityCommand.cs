@@ -3,9 +3,9 @@ using Meta.Core.Services;
 
 internal sealed partial class CliRuntime
 {
-    async Task<int> ModelRefactorRenameEntityAsync(string[] commandArgs)
+    async Task<int> ModelRenameEntityAsync(string[] commandArgs)
     {
-        var options = ParseModelRefactorRenameEntityOptions(commandArgs, startIndex: 4);
+        var options = ParseModelRenameEntityOptions(commandArgs, startIndex: 2);
         if (!options.Ok)
         {
             return PrintArgumentError(options.ErrorMessage);
@@ -30,7 +30,7 @@ internal sealed partial class CliRuntime
             {
                 WorkspaceSnapshotCloner.Restore(workspace, before);
                 return PrintOperationValidationFailure(
-                    "model refactor rename entity",
+                    "model rename-entity",
                     Array.Empty<WorkspaceOp>(),
                     diagnostics);
             }
@@ -38,7 +38,7 @@ internal sealed partial class CliRuntime
             await services.WorkspaceService.SaveAsync(workspace).ConfigureAwait(false);
 
             presenter.WriteOk(
-                "refactor rename entity",
+                "entity renamed",
                 ("Workspace", Path.GetFullPath(workspace.WorkspaceRootPath)),
                 ("Model", workspace.Model.Name),
                 ("From", result.OldEntityName),
@@ -69,69 +69,34 @@ internal sealed partial class CliRuntime
     }
 
     (bool Ok, RenameEntityCommandOptions Options, string ErrorMessage)
-        ParseModelRefactorRenameEntityOptions(string[] commandArgs, int startIndex)
+        ParseModelRenameEntityOptions(string[] commandArgs, int startIndex)
     {
-        var workspacePath = DefaultWorkspacePath();
-        var from = string.Empty;
-        var to = string.Empty;
-
-        for (var i = startIndex; i < commandArgs.Length; i++)
+        if (commandArgs.Length <= startIndex + 1)
         {
-            var arg = commandArgs[i];
-            if (string.Equals(arg, "--workspace", StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 >= commandArgs.Length)
-                {
-                    return (false, default, "Error: --workspace requires a path.");
-                }
-
-                workspacePath = commandArgs[++i];
-                continue;
-            }
-
-            if (string.Equals(arg, "--from", StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 >= commandArgs.Length)
-                {
-                    return (false, default, "Error: --from requires <OldEntity>.");
-                }
-
-                from = commandArgs[++i].Trim();
-                continue;
-            }
-
-            if (string.Equals(arg, "--to", StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 >= commandArgs.Length)
-                {
-                    return (false, default, "Error: --to requires <NewEntity>.");
-                }
-
-                to = commandArgs[++i].Trim();
-                continue;
-            }
-
-            return (false, default, $"Error: unknown option '{arg}'.");
+            return (false, default, "Error: missing required arguments <Old> <New>.");
         }
 
-        if (string.IsNullOrWhiteSpace(from))
+        var oldEntityName = commandArgs[startIndex].Trim();
+        var newEntityName = commandArgs[startIndex + 1].Trim();
+        var options = ParseMutatingCommonOptions(commandArgs, startIndex + 2);
+        if (!options.Ok)
         {
-            return (false, default, "Error: --from <OldEntity> is required.");
+            return (false, default, options.ErrorMessage);
         }
 
-        if (string.IsNullOrWhiteSpace(to))
+        if (string.IsNullOrWhiteSpace(oldEntityName) || string.IsNullOrWhiteSpace(newEntityName))
         {
-            return (false, default, "Error: --to <NewEntity> is required.");
+            return (false, default, "Error: missing required arguments <Old> <New>.");
         }
 
-        if (!ModelNamePattern.IsMatch(to))
+        if (!ModelNamePattern.IsMatch(newEntityName))
         {
-            return (false, default, "Error: --to must use identifier pattern [A-Za-z_][A-Za-z0-9_]*.");
+            return (false, default, "Error: <New> must use identifier pattern [A-Za-z_][A-Za-z0-9_]*.");
         }
 
         return (true, new RenameEntityCommandOptions(
-            WorkspacePath: workspacePath,
-            Refactor: new RenameEntityRefactorOptions(from, to)), string.Empty);
+            WorkspacePath: options.WorkspacePath,
+            Refactor: new RenameEntityRefactorOptions(oldEntityName, newEntityName)), string.Empty);
     }
 
     readonly record struct RenameEntityCommandOptions(

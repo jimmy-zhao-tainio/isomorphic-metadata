@@ -341,13 +341,14 @@ internal static class HelpTopics
                     {
                         "meta model suggest",
                         "meta model add-entity SalesCube",
-                        "meta model refactor rename entity --from OldName --to NewName",
+                        "meta model rename-entity OldName NewName",
                         "meta model add-property Cube Purpose --required true --default-value Unknown",
                     },
                     next: "meta model <subcommand> help",
                     subcommands: new[]
                     {
                         ("add-entity", "Create an entity."),
+                        ("rename-entity", "Atomically rename an entity and follow implied relationship field names."),
                         ("drop-entity", "Remove an entity (must be empty)."),
                         ("add-property", "Add a property to an entity."),
                         ("rename-property", "Rename a property."),
@@ -366,6 +367,16 @@ internal static class HelpTopics
                     usage: "meta model add-entity <Name> [--workspace <path>]",
                     options: new[] { ("--workspace <path>", "Override workspace root.") },
                     examples: new[] { "meta model add-entity SourceSystem" },
+                    next: "meta model rename-entity --help");
+                return true;
+
+            case "model rename-entity":
+                document = BuildTopicDocument(
+                    title: "Command: model rename-entity",
+                    summary: "Atomically rename an entity and follow implied non-role relationship field names.",
+                    usage: "meta model rename-entity <Old> <New> [--workspace <path>]",
+                    options: new[] { ("--workspace <path>", "Override workspace root.") },
+                    examples: new[] { "meta model rename-entity Warehouse StorageLocation" },
                     next: "meta model add-property --help");
                 return true;
 
@@ -424,7 +435,6 @@ internal static class HelpTopics
                     {
                         ("property-to-relationship", "Promote scalar property to required relationship using lookup key."),
                         ("relationship-to-property", "Demote required relationship to scalar Id property."),
-                        ("rename entity", "Rename an entity and follow implied relationship field names."),
                     });
                 return true;
 
@@ -469,24 +479,6 @@ internal static class HelpTopics
                         "meta model refactor relationship-to-property --source Order --target Product --role ProductRef --property ProductId",
                     },
                     next: "meta model refactor relationship-to-property help");
-                return true;
-
-            case "model refactor rename entity":
-                document = BuildTopicDocument(
-                    title: "Command: model refactor rename entity",
-                    summary: "Atomically rename an entity and follow implied non-role relationship field names.",
-                    usage: "meta model refactor rename entity --from <OldEntity> --to <NewEntity> [--workspace <path>]",
-                    options: new[]
-                    {
-                        ("--from <OldEntity>", "Required existing entity name."),
-                        ("--to <NewEntity>", "Required replacement entity name."),
-                        ("--workspace <path>", "Override workspace root."),
-                    },
-                    examples: new[]
-                    {
-                        "meta model refactor rename entity --from Warehouse --to StorageLocation",
-                    },
-                    next: "meta model refactor rename entity help");
                 return true;
 
             case "model drop-property":

@@ -400,7 +400,7 @@ Global behavior:
 | `meta model refactor property-to-relationship ...` | Atomic model+instance rewrite from scalar property to required relationship. | `meta model refactor property-to-relationship --source Order.WarehouseId --target Warehouse --lookup Id --drop-source-property` |
 | `meta model refactor relationship-to-property ...` | Atomic model+instance rewrite from required relationship back to scalar Id property. | `meta model refactor relationship-to-property --source Order --target Warehouse` |
 | `meta model add-entity <Name>` | Add a new entity definition. | `meta model add-entity SourceSystem` |
-| `meta model refactor rename entity ...` | Atomically rename an entity and follow implied relationship FK names. | `meta model refactor rename entity --from SourceSystem --to Source` |
+| `meta model rename-entity <Old> <New>` | Atomically rename an entity and follow implied relationship FK names. | `meta model rename-entity SourceSystem Source` |
 | `meta model drop-entity <Entity>` | Drop entity definition (blocked if instances or inbound refs exist). | `meta model drop-entity SourceSystem` |
 | `meta model add-property <Entity> <Property> ...` | Add scalar property; uses `--default-value` to backfill required additions on existing rows. | `meta model add-property Cube Purpose --required true --default-value Unknown` |
 | `meta model rename-property <Entity> <Old> <New>` | Rename one scalar property. | `meta model rename-property Cube Purpose BusinessPurpose` |
