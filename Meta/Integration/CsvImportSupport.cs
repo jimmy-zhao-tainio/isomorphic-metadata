@@ -67,69 +67,7 @@ internal static class CsvImportSupport
     }
 
     public static List<List<string>> ParseRows(string csvText)
-    {
-        var rows = new List<List<string>>();
-        var currentRow = new List<string>();
-        var currentCell = new StringBuilder();
-        var inQuotes = false;
-
-        for (var index = 0; index < csvText.Length; index++)
-        {
-            var ch = csvText[index];
-            if (ch == '"')
-            {
-                if (inQuotes && index + 1 < csvText.Length && csvText[index + 1] == '"')
-                {
-                    currentCell.Append('"');
-                    index++;
-                }
-                else
-                {
-                    inQuotes = !inQuotes;
-                }
-
-                continue;
-            }
-
-            if (!inQuotes && ch == ',')
-            {
-                AppendCell(currentRow, currentCell);
-                continue;
-            }
-
-            if (!inQuotes && (ch == '\r' || ch == '\n'))
-            {
-                AppendCell(currentRow, currentCell);
-                if (!IsRowCompletelyEmpty(currentRow))
-                {
-                    rows.Add(currentRow);
-                }
-
-                currentRow = new List<string>();
-                if (ch == '\r' && index + 1 < csvText.Length && csvText[index + 1] == '\n')
-                {
-                    index++;
-                }
-
-                continue;
-            }
-
-            currentCell.Append(ch);
-        }
-
-        if (inQuotes)
-        {
-            throw new InvalidOperationException("CSV contains an unclosed quoted field.");
-        }
-
-        AppendCell(currentRow, currentCell);
-        if (!IsRowCompletelyEmpty(currentRow) || rows.Count == 0)
-        {
-            rows.Add(currentRow);
-        }
-
-        return rows;
-    }
+        => DelimitedTextParser.ParseRows(csvText, ',');
 
     public static string GetCellValue(IReadOnlyList<string> row, int columnIndex)
     {
@@ -189,16 +127,6 @@ internal static class CsvImportSupport
 
         ValidateIdentifier(normalized, "Identifier");
         return normalized;
-    }
-
-    private static void AppendCell(ICollection<string> row, StringBuilder currentCell)
-    {
-        var value = currentCell
-            .ToString()
-            .Trim()
-            .TrimStart('\uFEFF');
-        row.Add(value);
-        currentCell.Clear();
     }
 
     private static string CollapseUnderscores(string value)

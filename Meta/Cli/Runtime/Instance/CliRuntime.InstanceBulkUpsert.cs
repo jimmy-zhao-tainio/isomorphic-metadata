@@ -386,30 +386,26 @@ internal sealed partial class CliRuntime
 
     IReadOnlyList<Dictionary<string, string>> ParseDelimitedRows(string input, char delimiter)
     {
-        var lines = (input ?? string.Empty)
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .ToList();
-        if (lines.Count == 0)
+        if (string.IsNullOrWhiteSpace(input))
         {
             return Array.Empty<Dictionary<string, string>>();
         }
 
-        var header = lines[0].Split(delimiter).Select(item => item.Trim()).ToArray();
+        var parsedRows = Meta.Integration.DelimitedTextParser.ParseRows(input, delimiter);
+        var header = parsedRows[0].Select(item => item.Trim()).ToArray();
         if (header.Length == 0 || header.Any(string.IsNullOrWhiteSpace))
         {
             throw new InvalidOperationException("Input header is empty or invalid.");
         }
 
         var rows = new List<Dictionary<string, string>>();
-        for (var i = 1; i < lines.Count; i++)
+        for (var i = 1; i < parsedRows.Count; i++)
         {
-            var parts = lines[i].Split(delimiter);
-            if (parts.Length != header.Length)
+            var parts = parsedRows[i];
+            if (parts.Count != header.Length)
             {
                 throw new InvalidOperationException(
-                    $"Input row {i + 1} column count ({parts.Length}) does not match header ({header.Length}).");
+                    $"Input row {i + 1} column count ({parts.Count}) does not match header ({header.Length}).");
             }
 
             var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

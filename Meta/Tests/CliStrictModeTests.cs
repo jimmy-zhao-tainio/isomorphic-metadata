@@ -1022,6 +1022,42 @@ public sealed partial class CliStrictModeTests
     }
 
     [Fact]
+    public async Task BulkInsert_Csv_StandardInput_PreservesQuotedCommasAndEscapedQuotes()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliWithStandardInputAsync(
+                "\"Id\",\"CubeName\",\"Purpose\",\"RefreshMode\"\r\n" +
+                "\"99\",\"Quoted, Cube\",\"Said \"\"hello\"\", then left\",\"Manual\"\r\n",
+                "bulk-insert",
+                "Cube",
+                "--from",
+                "csv",
+                "--stdin",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.True(result.ExitCode == 0, result.CombinedOutput);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "99",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Quoted, Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Said \"hello\", then left", viewResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
     public async Task BulkInsert_AutoId_RejectsKeyCombination()
     {
         var workspaceRoot = CreateTempWorkspaceFromSamples();
