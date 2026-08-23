@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MetaCli>
+  <ParameterList>
+    <Parameter Id="param-add-direction-name" ValueShapeId="shape-text">
+      <Description>Direction name.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-add-direction-source" ValueShapeId="shape-text">
+      <Description>Named source workspace contract as name=model. Repeat for additional sources.</Description>
+      <IsRepeatable>true</IsRepeatable>
+      <IsRequired>true</IsRequired>
+      <Name>source</Name>
+    </Parameter>
+    <Parameter Id="param-add-direction-target-model" ValueShapeId="shape-text">
+      <Description>Target workspace model contract.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>target-model</Name>
+    </Parameter>
+    <Parameter Id="param-add-direction-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-add-relation-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the relation.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-add-relation-name" ValueShapeId="shape-text">
+      <Description>Relation name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-add-relation-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-add-requirement-code" ValueShapeId="shape-text">
+      <Description>Stable diagnostic code for violating rows.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>code</Name>
+    </Parameter>
+    <Parameter Id="param-add-requirement-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the requirement.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-add-requirement-message" ValueShapeId="shape-text">
+      <Description>Diagnostic message for violating rows.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>message</Name>
+    </Parameter>
+    <Parameter Id="param-add-requirement-name" ValueShapeId="shape-text">
+      <Description>Requirement name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-add-requirement-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-add-string-parameter-direction" ValueShapeId="shape-text">
+      <Description>Direction that declares the parameter.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-add-string-parameter-name" ValueShapeId="shape-text">
+      <Description>String parameter name, referenced from WeaveScript as @name.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-add-string-parameter-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-add-transformation-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the transformation.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-add-transformation-name" ValueShapeId="shape-text">
+      <Description>Transformation name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-add-transformation-target-entity" ValueShapeId="shape-text">
+      <Description>Target entity populated by the transformation.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>target-entity</Name>
+    </Parameter>
+    <Parameter Id="param-add-transformation-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-create-connection-env" ValueShapeId="shape-text">
+      <Description>Environment variable containing the SQL Server connection string.</Description>
+      <Name>connection-env</Name>
+    </Parameter>
+    <Parameter Id="param-create-csharp" ValueShapeId="shape-path">
+      <Description>Create a C# MetaWeave workspace.</Description>
+      <Name>csharp</Name>
+    </Parameter>
+    <Parameter Id="param-create-name" ValueShapeId="shape-text">
+      <Description>Weave name.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-create-sql" ValueShapeId="shape-path">
+      <Description>Create a SQL MetaWeave workspace described by this directory.</Description>
+      <Name>sql</Name>
+    </Parameter>
+    <Parameter Id="param-create-xml" ValueShapeId="shape-path">
+      <Description>Create an XML MetaWeave workspace.</Description>
+      <Name>xml</Name>
+    </Parameter>
+    <Parameter Id="param-emit-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the transformation.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-emit-name" ValueShapeId="shape-text">
+      <Description>Transformation name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-emit-relation-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the relation.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-emit-relation-name" ValueShapeId="shape-text">
+      <Description>Relation name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-emit-relation-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-emit-requirement-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the requirement.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-emit-requirement-name" ValueShapeId="shape-text">
+      <Description>Requirement name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-emit-requirement-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-emit-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-execute-connection-env" ValueShapeId="shape-text">
+      <Description>Environment variable containing the SQL Server connection string.</Description>
+      <Name>connection-env</Name>
+    </Parameter>
+    <Parameter Id="param-execute-csharp" ValueShapeId="shape-path">
+      <Description>Create the result as a C# workspace.</Description>
+      <Name>csharp</Name>
+    </Parameter>
+    <Parameter Id="param-execute-direction" ValueShapeId="shape-text">
+      <DefaultValue>forward</DefaultValue>
+      <Description>Direction to execute. Defaults to forward.</Description>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-execute-parameter" ValueShapeId="shape-text">
+      <Description>String execution parameter as name=value. Repeat for additional parameters.</Description>
+      <IsRepeatable>true</IsRepeatable>
+      <Name>parameter</Name>
+    </Parameter>
+    <Parameter Id="param-execute-source-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Populated source workspace as name=path. Repeat for additional sources; a bare path is accepted for a single-source direction.</Description>
+      <IsRepeatable>true</IsRepeatable>
+      <IsRequired>true</IsRequired>
+      <Name>source-workspace</Name>
+    </Parameter>
+    <Parameter Id="param-execute-sql" ValueShapeId="shape-path">
+      <Description>Create the result as a SQL workspace described by this directory.</Description>
+      <Name>sql</Name>
+    </Parameter>
+    <Parameter Id="param-execute-target-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Workspace supplying the target model contract.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>target-workspace</Name>
+    </Parameter>
+    <Parameter Id="param-execute-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-execute-xml" ValueShapeId="shape-path">
+      <Description>Create the result as an XML workspace.</Description>
+      <Name>xml</Name>
+    </Parameter>
+    <Parameter Id="param-show-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-update-relation-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the relation.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-update-relation-name" ValueShapeId="shape-text">
+      <Description>Relation name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-update-relation-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-update-requirement-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the requirement.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-update-requirement-name" ValueShapeId="shape-text">
+      <Description>Requirement name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-update-requirement-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-update-transformation-direction" ValueShapeId="shape-text">
+      <Description>Direction that owns the transformation.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>direction</Name>
+    </Parameter>
+    <Parameter Id="param-update-transformation-name" ValueShapeId="shape-text">
+      <Description>Transformation name within the direction.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>name</Name>
+    </Parameter>
+    <Parameter Id="param-update-transformation-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaWeave workspace. Defaults to the current directory.</Description>
+      <IsRequired>false</IsRequired>
+      <Name>workspace</Name>
+    </Parameter>
+  </ParameterList>
+</MetaCli>

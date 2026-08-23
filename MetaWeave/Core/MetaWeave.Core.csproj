@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>MetaWeave.Core</PackageId>
+    <Description>Authors and loads complete MetaWeave correspondences with embedded WeaveScript directions.</Description>
+    <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Meta\Integration\Meta.Integration.csproj" />
+    <ProjectReference Include="..\MetaWeave.Model.csproj" />
+    <ProjectReference Include="..\Script\Execution\MetaWeaveScript.Execution.csproj" />
+    <ProjectReference Include="..\Script\Sql\MetaWeaveScript.Sql.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\PACKAGE-README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

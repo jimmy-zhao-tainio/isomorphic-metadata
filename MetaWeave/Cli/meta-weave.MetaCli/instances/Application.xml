@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MetaCli>
+  <ApplicationList>
+    <Application Id="app-meta-weave">
+      <Description>Author, inspect, emit, and execute complete MetaWeave correspondences between Meta workspaces.</Description>
+      <ExecutableName>meta-weave</ExecutableName>
+      <Name>meta-weave</Name>
+    </Application>
+  </ApplicationList>
+</MetaCli>

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MetaCli>
+  <CommandList>
+    <Command Id="cmd-add-operation" ApplicationId="app-meta-mesh">
+      <Description>Add one declared operation.</Description>
+      <Name>add-operation</Name>
+      <Token>add-operation</Token>
+    </Command>
+    <Command Id="cmd-add-step" ApplicationId="app-meta-mesh">
+      <Description>Add one executable step to an operation.</Description>
+      <Name>add-step</Name>
+      <Token>add-step</Token>
+    </Command>
+    <Command Id="cmd-add-workspace" ApplicationId="app-meta-mesh">
+      <Description>Add one declared workspace.</Description>
+      <Name>add-workspace</Name>
+      <Token>add-workspace</Token>
+    </Command>
+    <Command Id="cmd-create" ApplicationId="app-meta-mesh">
+      <Description>Create a meta-mesh workspace.</Description>
+      <Name>create</Name>
+      <Token>create</Token>
+    </Command>
+    <Command Id="cmd-help" ApplicationId="app-meta-mesh">
+      <Description>Show help.</Description>
+      <Name>help</Name>
+      <Token>help</Token>
+    </Command>
+    <Command Id="cmd-operations" ApplicationId="app-meta-mesh">
+      <Description>List declared operations.</Description>
+      <Name>operations</Name>
+      <Token>operations</Token>
+    </Command>
+    <Command Id="cmd-remove-step" ApplicationId="app-meta-mesh">
+      <Description>Remove one executable operation step and preserve operation order.</Description>
+      <Name>remove-step</Name>
+      <Token>remove-step</Token>
+    </Command>
+    <Command Id="cmd-run" ApplicationId="app-meta-mesh">
+      <Description>Run the steps declared for one operation.</Description>
+      <Name>run</Name>
+      <Token>run</Token>
+    </Command>
+    <Command Id="cmd-show" ApplicationId="app-meta-mesh">
+      <Description>Show a compact mesh overview.</Description>
+      <Name>show</Name>
+      <Token>show</Token>
+    </Command>
+    <Command Id="cmd-steps" ApplicationId="app-meta-mesh">
+      <Description>List steps for one operation.</Description>
+      <Name>steps</Name>
+      <Token>steps</Token>
+    </Command>
+    <Command Id="cmd-update-step" ApplicationId="app-meta-mesh">
+      <Description>Update one executable operation step.</Description>
+      <Name>update-step</Name>
+      <Token>update-step</Token>
+    </Command>
+    <Command Id="cmd-validate" ApplicationId="app-meta-mesh">
+      <Description>Validate one operation before running it.</Description>
+      <Name>validate</Name>
+      <Token>validate</Token>
+    </Command>
+    <Command Id="cmd-workspaces" ApplicationId="app-meta-mesh">
+      <Description>List declared workspaces.</Description>
+      <Name>workspaces</Name>
+      <Token>workspaces</Token>
+    </Command>
+  </CommandList>
+</MetaCli>

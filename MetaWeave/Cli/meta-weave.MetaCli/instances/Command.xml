@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MetaCli>
+  <CommandList>
+    <Command Id="cmd-add-direction" ApplicationId="app-meta-weave">
+      <Description>Add one independent direction to a MetaWeave workspace.</Description>
+      <Name>add-direction</Name>
+      <Token>add-direction</Token>
+    </Command>
+    <Command Id="cmd-add-relation" ApplicationId="app-meta-weave">
+      <Description>Read WeaveScript from standard input and add one named relation to a direction.</Description>
+      <Name>add-relation</Name>
+      <Token>add-relation</Token>
+    </Command>
+    <Command Id="cmd-add-requirement" ApplicationId="app-meta-weave">
+      <Description>Add a source-domain requirement to one direction.</Description>
+      <Name>add-requirement</Name>
+      <Token>add-requirement</Token>
+    </Command>
+    <Command Id="cmd-add-string-parameter" ApplicationId="app-meta-weave">
+      <Description>Declare one string execution parameter on a direction.</Description>
+      <Name>add-string-parameter</Name>
+      <Token>add-string-parameter</Token>
+    </Command>
+    <Command Id="cmd-add-transformation" ApplicationId="app-meta-weave">
+      <Description>Read WeaveScript from standard input and add one transformation to a direction.</Description>
+      <Name>add-transformation</Name>
+      <Token>add-transformation</Token>
+    </Command>
+    <Command Id="cmd-create" ApplicationId="app-meta-weave">
+      <Description>Create a MetaWeave workspace.</Description>
+      <Name>create</Name>
+      <Token>create</Token>
+    </Command>
+    <Command Id="cmd-emit-relation" ApplicationId="app-meta-weave">
+      <Description>Emit one named relation as recognizable T-SQL.</Description>
+      <Name>emit-relation</Name>
+      <Token>emit-relation</Token>
+    </Command>
+    <Command Id="cmd-emit-requirement" ApplicationId="app-meta-weave">
+      <Description>Emit one direction requirement query as recognizable T-SQL.</Description>
+      <Name>emit-requirement</Name>
+      <Token>emit-requirement</Token>
+    </Command>
+    <Command Id="cmd-emit-transformation" ApplicationId="app-meta-weave">
+      <Description>Emit one embedded transformation as recognizable T-SQL.</Description>
+      <Name>emit-transformation</Name>
+      <Token>emit-transformation</Token>
+    </Command>
+    <Command Id="cmd-execute" ApplicationId="app-meta-weave">
+      <Description>Execute one modeled direction into a new target workspace.</Description>
+      <Name>execute</Name>
+      <Token>execute</Token>
+    </Command>
+    <Command Id="cmd-help" ApplicationId="app-meta-weave">
+      <Description>Show help.</Description>
+      <Name>help</Name>
+      <Token>help</Token>
+    </Command>
+    <Command Id="cmd-show" ApplicationId="app-meta-weave">
+      <Description>Show the weave, its directions, and transformations.</Description>
+      <Name>show</Name>
+      <Token>show</Token>
+    </Command>
+    <Command Id="cmd-update-relation" ApplicationId="app-meta-weave">
+      <Description>Read replacement WeaveScript from standard input and update one named relation.</Description>
+      <Name>update-relation</Name>
+      <Token>update-relation</Token>
+    </Command>
+    <Command Id="cmd-update-requirement" ApplicationId="app-meta-weave">
+      <Description>Read replacement WeaveScript from standard input and update one requirement.</Description>
+      <Name>update-requirement</Name>
+      <Token>update-requirement</Token>
+    </Command>
+    <Command Id="cmd-update-transformation" ApplicationId="app-meta-weave">
+      <Description>Read replacement WeaveScript from standard input and update one transformation.</Description>
+      <Name>update-transformation</Name>
+      <Token>update-transformation</Token>
+    </Command>
+  </CommandList>
+</MetaCli>

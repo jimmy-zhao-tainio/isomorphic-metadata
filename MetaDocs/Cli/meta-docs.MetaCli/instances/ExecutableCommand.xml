@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MetaCli>
+  <ExecutableCommandList>
+    <ExecutableCommand Id="exec-author-page" CommandId="cmd-author-page" />
+    <ExecutableCommand Id="exec-browse" CommandId="cmd-browse" />
+    <ExecutableCommand Id="exec-cli-matrix" CommandId="cmd-cli-matrix" />
+    <ExecutableCommand Id="exec-contents" CommandId="cmd-contents" />
+    <ExecutableCommand Id="exec-help" CommandId="cmd-help" />
+    <ExecutableCommand Id="exec-import-cli" CommandId="cmd-import-cli" />
+    <ExecutableCommand Id="exec-import-workspace-instances" CommandId="cmd-import-workspace-instances" />
+    <ExecutableCommand Id="exec-import-workspace-model" CommandId="cmd-import-workspace-model" />
+    <ExecutableCommand Id="exec-include-instance-entity" CommandId="cmd-include-instance-entity" />
+    <ExecutableCommand Id="exec-include-instance-property" CommandId="cmd-include-instance-property" />
+    <ExecutableCommand Id="exec-include-instance-relationship" CommandId="cmd-include-instance-relationship" />
+    <ExecutableCommand Id="exec-merge" CommandId="cmd-merge" />
+    <ExecutableCommand Id="exec-render-site" CommandId="cmd-render-site" />
+    <ExecutableCommand Id="exec-search" CommandId="cmd-search" />
+    <ExecutableCommand Id="exec-update-description" CommandId="cmd-update-description" />
+    <ExecutableCommand Id="exec-validate" CommandId="cmd-validate" />
+  </ExecutableCommandList>
+</MetaCli>

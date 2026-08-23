@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>MetaCli.Core</PackageId>
+    <Description>Parser, runtime, help, and workspace services for MetaCli applications.</Description>
+    <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Meta\Surfaces\Meta.Surfaces.csproj" />
+    <ProjectReference Include="..\..\Meta\Operations\Meta.Operations.csproj" />
+    <ProjectReference Include="..\..\Meta\Integration\Meta.Integration.csproj" />
+    <ProjectReference Include="..\MetaCli.Model.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\PACKAGE-README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

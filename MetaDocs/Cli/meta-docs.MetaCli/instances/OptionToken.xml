@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MetaCli>
+  <OptionTokenList>
+    <OptionToken Id="token-author-page-body" OptionId="option-author-page-body">
+      <Token>--body</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-id" OptionId="option-author-page-id">
+      <Token>--id</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-navigation-title" OptionId="option-author-page-navigation-title">
+      <Token>--navigation-title</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-output-connection-env" OptionId="option-author-page-output-connection-env">
+      <Token>--output-connection-env</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-output-csharp" OptionId="option-author-page-output-csharp">
+      <Token>--output-csharp</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-output-sql" OptionId="option-author-page-output-sql">
+      <Token>--output-sql</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-output-xml" OptionId="option-author-page-output-xml">
+      <Token>--output-xml</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-parent" OptionId="option-author-page-parent">
+      <Token>--parent</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-path" OptionId="option-author-page-path">
+      <Token>--path</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-slot" OptionId="option-author-page-slot">
+      <Token>--slot</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-source-id" OptionId="option-author-page-source-id">
+      <Token>--source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-source-name" OptionId="option-author-page-source-name">
+      <Token>--source-name</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-subject-type" OptionId="option-author-page-subject-type">
+      <Token>--subject-type</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-summary" OptionId="option-author-page-summary">
+      <Token>--summary</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-title" OptionId="option-author-page-title">
+      <Token>--title</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-view-root" OptionId="option-author-page-view-root">
+      <Token>--view-root</Token>
+    </OptionToken>
+    <OptionToken Id="token-author-page-workspace" OptionId="option-author-page-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-browse-workspace" OptionId="option-browse-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-cli-matrix-mesh-root" OptionId="option-cli-matrix-mesh-root">
+      <Token>--mesh-root</Token>
+    </OptionToken>
+    <OptionToken Id="token-cli-matrix-out" OptionId="option-cli-matrix-out">
+      <Token>--out</Token>
+    </OptionToken>
+    <OptionToken Id="token-cli-matrix-require-conformant" OptionId="option-cli-matrix-require-conformant">
+      <Token>--require-conformant</Token>
+    </OptionToken>
+    <OptionToken Id="token-cli-matrix-view" OptionId="option-cli-matrix-view">
+      <Token>--view</Token>
+    </OptionToken>
+    <OptionToken Id="token-cli-matrix-workspace" OptionId="option-cli-matrix-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-contents-depth" OptionId="option-contents-depth">
+      <Token>--depth</Token>
+    </OptionToken>
+    <OptionToken Id="token-contents-view" OptionId="option-contents-view">
+      <Token>--view</Token>
+    </OptionToken>
+    <OptionToken Id="token-contents-workspace" OptionId="option-contents-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-application" OptionId="option-import-cli-application">
+      <Token>--application</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-output-connection-env" OptionId="option-import-cli-output-connection-env">
+      <Token>--output-connection-env</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-output-csharp" OptionId="option-import-cli-output-csharp">
+      <Token>--output-csharp</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-output-sql" OptionId="option-import-cli-output-sql">
+      <Token>--output-sql</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-output-xml" OptionId="option-import-cli-output-xml">
+      <Token>--output-xml</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-parent-subject" OptionId="option-import-cli-parent-subject">
+      <Token>--parent-subject</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-source-id" OptionId="option-import-cli-source-id">
+      <Token>--source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-source-workspace" OptionId="option-import-cli-source-workspace">
+      <Token>--source-workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-cli-workspace" OptionId="option-import-cli-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-instances-display-name" OptionId="option-import-workspace-instances-display-name">
+      <Token>--display-name</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-instances-model-source-id" OptionId="option-import-workspace-instances-model-source-id">
+      <Token>--model-source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-instances-source-id" OptionId="option-import-workspace-instances-source-id">
+      <Token>--source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-instances-source-workspace" OptionId="option-import-workspace-instances-source-workspace">
+      <Token>--source-workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-instances-workspace" OptionId="option-import-workspace-instances-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-display-name" OptionId="option-import-workspace-model-display-name">
+      <Token>--display-name</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-output-connection-env" OptionId="option-import-workspace-model-output-connection-env">
+      <Token>--output-connection-env</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-output-csharp" OptionId="option-import-workspace-model-output-csharp">
+      <Token>--output-csharp</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-output-sql" OptionId="option-import-workspace-model-output-sql">
+      <Token>--output-sql</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-output-xml" OptionId="option-import-workspace-model-output-xml">
+      <Token>--output-xml</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-parent-subject" OptionId="option-import-workspace-model-parent-subject">
+      <Token>--parent-subject</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-source-id" OptionId="option-import-workspace-model-source-id">
+      <Token>--source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-source-workspace" OptionId="option-import-workspace-model-source-workspace">
+      <Token>--source-workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-import-workspace-model-workspace" OptionId="option-import-workspace-model-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-entity-display-name-property" OptionId="option-include-instance-entity-display-name-property">
+      <Token>--display-name-property</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-entity-entity" OptionId="option-include-instance-entity-entity">
+      <Token>--entity</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-entity-source-id" OptionId="option-include-instance-entity-source-id">
+      <Token>--source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-entity-summary-property" OptionId="option-include-instance-entity-summary-property">
+      <Token>--summary-property</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-entity-workspace" OptionId="option-include-instance-entity-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-property-entity" OptionId="option-include-instance-property-entity">
+      <Token>--entity</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-property-property" OptionId="option-include-instance-property-property">
+      <Token>--property</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-property-source-id" OptionId="option-include-instance-property-source-id">
+      <Token>--source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-property-workspace" OptionId="option-include-instance-property-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-relationship-entity" OptionId="option-include-instance-relationship-entity">
+      <Token>--entity</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-relationship-relationship" OptionId="option-include-instance-relationship-relationship">
+      <Token>--relationship</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-relationship-source-id" OptionId="option-include-instance-relationship-source-id">
+      <Token>--source-id</Token>
+    </OptionToken>
+    <OptionToken Id="token-include-instance-relationship-workspace" OptionId="option-include-instance-relationship-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-merge-include" OptionId="option-merge-include">
+      <Token>--include</Token>
+    </OptionToken>
+    <OptionToken Id="token-merge-output-connection-env" OptionId="option-merge-output-connection-env">
+      <Token>--output-connection-env</Token>
+    </OptionToken>
+    <OptionToken Id="token-merge-output-csharp" OptionId="option-merge-output-csharp">
+      <Token>--output-csharp</Token>
+    </OptionToken>
+    <OptionToken Id="token-merge-output-sql" OptionId="option-merge-output-sql">
+      <Token>--output-sql</Token>
+    </OptionToken>
+    <OptionToken Id="token-merge-output-xml" OptionId="option-merge-output-xml">
+      <Token>--output-xml</Token>
+    </OptionToken>
+    <OptionToken Id="token-render-site-out" OptionId="option-render-site-out">
+      <Token>--out</Token>
+    </OptionToken>
+    <OptionToken Id="token-render-site-workspace" OptionId="option-render-site-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-search-limit" OptionId="option-search-limit">
+      <Token>--limit</Token>
+    </OptionToken>
+    <OptionToken Id="token-search-subject-type" OptionId="option-search-subject-type">
+      <Token>--subject-type</Token>
+    </OptionToken>
+    <OptionToken Id="token-search-workspace" OptionId="option-search-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-body" OptionId="option-update-description-body">
+      <Token>--body</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-body-stdin" OptionId="option-update-description-body-stdin">
+      <Token>--body-stdin</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-cli" OptionId="option-update-description-cli">
+      <Token>--cli</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-command" OptionId="option-update-description-command">
+      <Token>--command</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-model" OptionId="option-update-description-model">
+      <Token>--model</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-option" OptionId="option-update-description-option">
+      <Token>--option</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-slot" OptionId="option-update-description-slot">
+      <Token>--slot</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-subject" OptionId="option-update-description-subject">
+      <Token>--subject</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-title" OptionId="option-update-description-title">
+      <Token>--title</Token>
+    </OptionToken>
+    <OptionToken Id="token-update-description-workspace" OptionId="option-update-description-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+    <OptionToken Id="token-validate-include-description-diagnostics" OptionId="option-validate-include-description-diagnostics">
+      <Token>--include-description-diagnostics</Token>
+    </OptionToken>
+    <OptionToken Id="token-validate-warnings-as-errors" OptionId="option-validate-warnings-as-errors">
+      <Token>--warnings-as-errors</Token>
+    </OptionToken>
+    <OptionToken Id="token-validate-workspace" OptionId="option-validate-workspace">
+      <Token>--workspace</Token>
+    </OptionToken>
+  </OptionTokenList>
+</MetaCli>

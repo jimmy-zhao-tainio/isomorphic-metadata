@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MetaCli>
+  <ParameterList>
+    <Parameter Id="param-author-page-option-body" ValueShapeId="shape-text">
+      <Description>Authored narrative body.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>body</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-id" ValueShapeId="shape-text">
+      <Description>Stable documentation subject id.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>id</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-navigation-title" ValueShapeId="shape-text">
+      <Description>Navigation label for the page. Defaults to the page title when first authored.</Description>
+      <Name>navigation-title</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-parent" ValueShapeId="shape-text">
+      <Description>Optional parent subject id.</Description>
+      <Name>parent</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-path" ValueShapeId="shape-text">
+      <Description>Optional display path. Default: title.</Description>
+      <Name>path</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-slot" ValueShapeId="shape-text">
+      <Description>Optional narrative slot. Default: Summary.</Description>
+      <Name>slot</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-source-id" ValueShapeId="shape-text">
+      <Description>Optional authored documentation source id.</Description>
+      <Name>source-id</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-source-name" ValueShapeId="shape-text">
+      <Description>Optional authored documentation source display name.</Description>
+      <Name>source-name</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-subject-type" ValueShapeId="shape-text">
+      <Description>Documentation subject type. Defaults to Guide.</Description>
+      <Name>subject-type</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-summary" ValueShapeId="shape-text">
+      <Description>Short subject summary.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>summary</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-title" ValueShapeId="shape-text">
+      <Description>Page title and subject display name.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>title</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-view-root" ValueShapeId="shape-bool">
+      <Description>Set this page as the default documentation view root.</Description>
+      <Name>view-root</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Existing MetaDocs workspace to update in place.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-output-connection-env" ValueShapeId="shape-text">
+      <Description>Environment variable containing the output SQL workspace connection string.</Description>
+      <Name>output-connection-env</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-output-csharp" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-csharp</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-output-sql" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-sql</Name>
+    </Parameter>
+    <Parameter Id="param-author-page-output-xml" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-xml</Name>
+    </Parameter>
+    <Parameter Id="param-browse-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaDocs workspace to browse. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-browse-positional-path" ValueShapeId="shape-query">
+      <Description>Documentation path to browse, for example cli/meta-sql/deploy.</Description>
+      <Name>path</Name>
+    </Parameter>
+    <Parameter Id="param-cli-matrix-mesh-root" ValueShapeId="shape-path">
+      <Description>Root directory or MetaMesh workspace to inspect. Repeat for multiple roots.</Description>
+      <IsRepeatable>true</IsRepeatable>
+      <Name>mesh-root</Name>
+    </Parameter>
+    <Parameter Id="param-cli-matrix-out" ValueShapeId="shape-path">
+      <Description>CSV output path.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>out</Name>
+    </Parameter>
+    <Parameter Id="param-cli-matrix-require-conformant" ValueShapeId="shape-flag">
+      <Description>Exit with code 4 when any mesh invocation violates the CLI matrix.</Description>
+      <Name>require-conformant</Name>
+    </Parameter>
+    <Parameter Id="param-cli-matrix-view" ValueShapeId="shape-cli-matrix-export-view">
+      <Description>Export command inventory, decision cohorts, raw findings, or mesh invocation conformance.</Description>
+      <Name>view</Name>
+    </Parameter>
+    <Parameter Id="param-cli-matrix-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaDocs workspace to analyze. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-contents-option-depth" ValueShapeId="shape-text">
+      <Description>Maximum tree depth. Default: 4.</Description>
+      <Name>depth</Name>
+    </Parameter>
+    <Parameter Id="param-contents-option-view" ValueShapeId="shape-text">
+      <Description>Optional documentation view id, name, or title.</Description>
+      <Name>view</Name>
+    </Parameter>
+    <Parameter Id="param-contents-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaDocs workspace to list. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-option-application" ValueShapeId="shape-text">
+      <Description>Optional MetaCli application id when the source workspace contains more than one application.</Description>
+      <Name>application</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-option-parent-subject" ValueShapeId="shape-text">
+      <Description>Optional parent subject id for the imported CLI application.</Description>
+      <Name>parent-subject</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-option-source-id" ValueShapeId="shape-text">
+      <Description>Stable documentation source id. Keep it fixed so authored descriptions stay attached.</Description>
+      <Name>source-id</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-option-source-workspace" ValueShapeId="shape-path">
+      <Description>Source MetaCli workspace to refresh reference documentation from.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>source-workspace</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Existing MetaDocs source workspace to refresh in place.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-output-connection-env" ValueShapeId="shape-text">
+      <Description>Environment variable containing the output SQL workspace connection string.</Description>
+      <Name>output-connection-env</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-output-csharp" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-csharp</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-output-sql" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-sql</Name>
+    </Parameter>
+    <Parameter Id="param-import-cli-output-xml" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-xml</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-instances-option-display-name" ValueShapeId="shape-text">
+      <Description>Optional source display name.</Description>
+      <Name>display-name</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-instances-option-model-source-id" ValueShapeId="shape-text">
+      <Description>Optional source id used by import-workspace-model, for linking instance docs to model docs.</Description>
+      <Name>model-source-id</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-instances-option-source-id" ValueShapeId="shape-text">
+      <Description>Optional stable documentation source id for imported instance docs.</Description>
+      <Name>source-id</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-instances-option-source-workspace" ValueShapeId="shape-path">
+      <Description>Source Meta workspace whose allowed instances should be documented.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>source-workspace</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-instances-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Existing MetaDocs workspace to update in place. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-option-display-name" ValueShapeId="shape-text">
+      <Description>Optional source display name.</Description>
+      <Name>display-name</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-option-parent-subject" ValueShapeId="shape-text">
+      <Description>Optional parent subject id for the imported model subject.</Description>
+      <Name>parent-subject</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-option-source-id" ValueShapeId="shape-text">
+      <Description>Stable documentation source id. Keep it fixed so authored descriptions stay attached.</Description>
+      <Name>source-id</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-option-source-workspace" ValueShapeId="shape-path">
+      <Description>Source Meta workspace to refresh model reference documentation from.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>source-workspace</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Existing MetaDocs source workspace to refresh in place.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-output-connection-env" ValueShapeId="shape-text">
+      <Description>Environment variable containing the output SQL workspace connection string.</Description>
+      <Name>output-connection-env</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-output-csharp" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-csharp</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-output-sql" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-sql</Name>
+    </Parameter>
+    <Parameter Id="param-import-workspace-model-output-xml" ValueShapeId="shape-path">
+      <Description>Create the output on the selected workspace surface.</Description>
+      <Name>output-xml</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-entity-option-display-name-property" ValueShapeId="shape-text">
+      <Description>Optional property used only as the imported instance display name.</Description>
+      <Name>display-name-property</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-entity-option-entity" ValueShapeId="shape-text">
+      <Description>Source workspace entity name to include.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>entity</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-entity-option-source-id" ValueShapeId="shape-text">
+      <Description>Optional model documentation source id this policy applies to. Omit for a global policy.</Description>
+      <Name>source-id</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-entity-option-summary-property" ValueShapeId="shape-text">
+      <Description>Optional property used only as the imported instance summary.</Description>
+      <Name>summary-property</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-entity-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Existing MetaDocs workspace to update in place. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-property-option-entity" ValueShapeId="shape-text">
+      <Description>Source workspace entity name.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>entity</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-property-option-property" ValueShapeId="shape-text">
+      <Description>Property name to import as a generated fact.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>property</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-property-option-source-id" ValueShapeId="shape-text">
+      <Description>Optional model documentation source id this policy applies to. Omit for a global policy.</Description>
+      <Name>source-id</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-property-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Existing MetaDocs workspace to update in place. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-relationship-option-entity" ValueShapeId="shape-text">
+      <Description>Source workspace entity name.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>entity</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-relationship-option-relationship" ValueShapeId="shape-text">
+      <Description>Relationship selector, navigation name, or relationship column name.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>relationship</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-relationship-option-source-id" ValueShapeId="shape-text">
+      <Description>Optional model documentation source id this policy applies to. Omit for a global policy.</Description>
+      <Name>source-id</Name>
+    </Parameter>
+    <Parameter Id="param-include-instance-relationship-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>Existing MetaDocs workspace to update in place. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-merge-option-include" ValueShapeId="shape-path">
+      <Description>Source MetaDocs workspace to include. Repeat for many workspaces.</Description>
+      <IsRepeatable>true</IsRepeatable>
+      <IsRequired>true</IsRequired>
+      <Name>include</Name>
+    </Parameter>
+    <Parameter Id="param-merge-output-connection-env" ValueShapeId="shape-text">
+      <Description>Environment variable containing the output SQL workspace connection string.</Description>
+      <IsRepeatable>false</IsRepeatable>
+      <IsRequired>false</IsRequired>
+      <Name>output-connection-env</Name>
+    </Parameter>
+    <Parameter Id="param-merge-output-csharp" ValueShapeId="shape-workspace-location">
+      <Description>Create the merged workspace as C# at this path.</Description>
+      <IsRepeatable>false</IsRepeatable>
+      <IsRequired>false</IsRequired>
+      <Name>output-csharp</Name>
+    </Parameter>
+    <Parameter Id="param-merge-output-sql" ValueShapeId="shape-workspace-location">
+      <Description>Create the merged workspace as SQL at this path.</Description>
+      <IsRepeatable>false</IsRepeatable>
+      <IsRequired>false</IsRequired>
+      <Name>output-sql</Name>
+    </Parameter>
+    <Parameter Id="param-merge-output-xml" ValueShapeId="shape-workspace-location">
+      <Description>Create the merged workspace as XML at this path.</Description>
+      <IsRepeatable>false</IsRepeatable>
+      <IsRequired>false</IsRequired>
+      <Name>output-xml</Name>
+    </Parameter>
+    <Parameter Id="param-render-site-option-out" ValueShapeId="shape-path">
+      <Description>Output directory. The merged page is written as docs.html.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>out</Name>
+    </Parameter>
+    <Parameter Id="param-render-site-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaDocs workspace to render. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-search-option-limit" ValueShapeId="shape-text">
+      <Description>Maximum number of matches. Default: 25.</Description>
+      <Name>limit</Name>
+    </Parameter>
+    <Parameter Id="param-search-option-subject-type" ValueShapeId="shape-text">
+      <Description>Filter results by documentation subject type.</Description>
+      <Name>subject-type</Name>
+    </Parameter>
+    <Parameter Id="param-search-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaDocs workspace to search. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-search-positional-query" ValueShapeId="shape-query">
+      <Description>Search text.</Description>
+      <Name>query</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-body" ValueShapeId="shape-text">
+      <Description>Authored description body.</Description>
+      <Name>body</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-body-stdin" ValueShapeId="shape-flag">
+      <Description>Read authored description body from standard input.</Description>
+      <Name>body-stdin</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-cli" ValueShapeId="shape-text">
+      <Description>CLI application name.</Description>
+      <Name>cli</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-command" ValueShapeId="shape-text">
+      <Description>CLI command name or path.</Description>
+      <Name>command</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-model" ValueShapeId="shape-text">
+      <Description>Model name.</Description>
+      <Name>model</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-option" ValueShapeId="shape-token">
+      <Description>CLI option token.</Description>
+      <Name>option</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-slot" ValueShapeId="shape-text">
+      <Description>Description slot to add or update. Default: Summary.</Description>
+      <Name>slot</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-subject" ValueShapeId="shape-text">
+      <Description>Documentation subject id or key.</Description>
+      <Name>subject</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-title" ValueShapeId="shape-text">
+      <Description>Optional description title. Defaults to the slot.</Description>
+      <Name>title</Name>
+    </Parameter>
+    <Parameter Id="param-update-description-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaDocs workspace to update. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+    <Parameter Id="param-validate-option-include-description-diagnostics" ValueShapeId="shape-flag">
+      <Description>Include description authoring diagnostics.</Description>
+      <Name>include-description-diagnostics</Name>
+    </Parameter>
+    <Parameter Id="param-validate-option-warnings-as-errors" ValueShapeId="shape-flag">
+      <Description>Treat warnings as failing diagnostics.</Description>
+      <Name>warnings-as-errors</Name>
+    </Parameter>
+    <Parameter Id="param-validate-option-workspace" ValueShapeId="shape-workspace-location">
+      <Description>MetaDocs workspace to validate. Defaults to the current directory.</Description>
+      <Name>workspace</Name>
+    </Parameter>
+  </ParameterList>
+</MetaCli>

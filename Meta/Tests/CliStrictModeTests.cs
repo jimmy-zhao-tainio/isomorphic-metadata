@@ -1,0 +1,6147 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+using Meta.Integration;
+using Meta.Operations.Domain;
+using Meta.Surfaces.CSharp;
+using Meta.Surfaces.Sql;
+using Meta.Surfaces.Xml;
+using Meta.Core.Services;
+using Meta.Surfaces;
+
+namespace Meta.Core.Tests;
+
+public sealed partial class CliStrictModeTests
+{
+    [Fact]
+    public void CommandExamples_DoNotContainLegacyHumanErrorTokens()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var content = string.Join(
+            Environment.NewLine,
+            ReadMetaCliSurface(repoRoot),
+            File.ReadAllText(Path.Combine(repoRoot, "README.md")));
+
+        Assert.DoesNotContain("Where:", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hint:", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("instance.relationship.orphan", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("contains(Id,'')", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("--where", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("contains(", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CommandDocs_DoNotContainWhereDslTokens()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var commands = ReadMetaCliSurface(repoRoot);
+        var readme = File.ReadAllText(Path.Combine(repoRoot, "README.md"));
+        var combined = commands + Environment.NewLine + readme;
+
+        Assert.DoesNotContain("--where", combined, StringComparison.Ordinal);
+        Assert.DoesNotContain("contains(", combined, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SurfaceDocs_DoNotAdvertiseIdSwitch_ForRowTargeting()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var commands = ReadMetaCliSurface(repoRoot);
+        var readme = File.ReadAllText(Path.Combine(repoRoot, "README.md"));
+        var cliProgram = File.ReadAllText(Path.Combine(repoRoot, Path.Combine("Meta", "Cli"), "Program.cs"));
+        var combined = string.Join(Environment.NewLine, new[] { commands, readme, cliProgram });
+
+        Assert.DoesNotMatch(@"(?im)^.*Usage:.*--id(\s|$).*$", combined);
+        Assert.DoesNotMatch(@"(?im)^.*Next:.*--id(\s|$).*$", combined);
+        Assert.DoesNotMatch(@"(?im)^.*example:.*--id(\s|$).*$", combined);
+        Assert.DoesNotMatch(@"(?im)^.*meta\s+.*--id(\s|$).*$", combined);
+    }
+
+    [Fact]
+    public void SurfaceDocs_DoNotAdvertiseSetId_ForRowTargeting()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var commands = ReadMetaCliSurface(repoRoot);
+        var readme = File.ReadAllText(Path.Combine(repoRoot, "README.md"));
+        var combined = string.Join(Environment.NewLine, new[] { commands, readme });
+
+        Assert.DoesNotContain("--set Id=", combined, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HumanFailures_DoNotLeakDiagnosticKeyValueTokens_AndUseSingleNext()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var nonEmptyImportTarget = Path.Combine(Path.GetTempPath(), "metadata-import-target", Guid.NewGuid().ToString("N"));
+        var brokenWorkspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-broken", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(nonEmptyImportTarget);
+        await File.WriteAllTextAsync(Path.Combine(nonEmptyImportTarget, "placeholder.txt"), "x");
+
+        Directory.CreateDirectory(Path.Combine(brokenWorkspaceRoot, "instances"));
+        WriteXmlWorkspaceDescriptor(brokenWorkspaceRoot);
+        await File.WriteAllTextAsync(
+            Path.Combine(brokenWorkspaceRoot, "model.xml"),
+            "<Model name=\"Broken\"><EntityList><Entity name=\"X\"></EntityList></Model>");
+
+        try
+        {
+            var outputs = new[]
+            {
+                (await RunCliAsync("view", "entity", "MissingEntity", "--workspace", workspaceRoot)).CombinedOutput,
+                (await RunCliAsync("create", "--xml", nonEmptyImportTarget)).CombinedOutput,
+                (await RunCliAsync("status", "--workspace", brokenWorkspaceRoot)).CombinedOutput,
+            };
+
+            var bannedTokens = new[]
+            {
+                "endPos=",
+                "startPos=",
+                "file=",
+                "workspace=",
+                "entity=",
+                "occurrences=",
+                "entries=",
+                "sampleEntries=",
+            };
+
+            foreach (var output in outputs)
+            {
+                foreach (var banned in bannedTokens)
+                {
+                    Assert.DoesNotContain(banned, output, StringComparison.Ordinal);
+                }
+
+                var nextCount = Regex.Matches(output, @"(?m)^Next:\s").Count;
+                Assert.True(nextCount <= 1, $"Expected at most one Next line, got {nextCount}:{Environment.NewLine}{output}");
+            }
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(nonEmptyImportTarget);
+            DeleteDirectorySafe(brokenWorkspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task NotFoundMessages_UseCanonicalTemplates_AcrossCommandFamilies()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var missingEntity = await RunCliAsync("view", "entity", "MissingEntity", "--workspace", workspaceRoot);
+            var missingRow = await RunCliAsync("view", "instance", "Cube", "999", "--workspace", workspaceRoot);
+            var missingProperty = await RunCliAsync(
+                "query",
+                "Cube",
+                "--contains",
+                "MissingField",
+                "Value",
+                "--workspace",
+                workspaceRoot);
+            var missingRelationship = await RunCliAsync(
+                "instance",
+                "relationship",
+                "set",
+                "Cube",
+                "1",
+                "--to",
+                "System",
+                "1",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Contains("Entity 'MissingEntity' was not found.", missingEntity.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Instance 'Cube 999' was not found.", missingRow.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Property 'Cube.MissingField' was not found.", missingProperty.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Relationship 'Cube->System' was not found.", missingRelationship.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task XmlParseErrors_UseSameEnvelope_InStatusAndCreate()
+    {
+        var brokenWorkspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-broken", Guid.NewGuid().ToString("N"));
+        var outputRoot = Path.Combine(Path.GetTempPath(), "metadata-generate-out", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(brokenWorkspaceRoot, "instances"));
+        WriteXmlWorkspaceDescriptor(brokenWorkspaceRoot);
+        await File.WriteAllTextAsync(
+            Path.Combine(brokenWorkspaceRoot, "model.xml"),
+            "<Model name=\"Broken\"><EntityList><Entity name=\"X\"></EntityList></Model>");
+
+        try
+        {
+            var status = await RunCliAsync("status", "--workspace", brokenWorkspaceRoot);
+            var create = await RunCliAsync(
+                "create",
+                "--xml",
+                outputRoot,
+                "--source-workspace",
+                brokenWorkspaceRoot);
+
+            Assert.Equal(4, status.ExitCode);
+            Assert.Equal(4, create.ExitCode);
+
+            Assert.Contains("Cannot parse model.xml.", status.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Cannot parse model.xml.", create.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Location: line 1, position", status.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Location: line 1, position", create.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Next: meta status", status.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Next: meta status", create.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Usage:", create.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(brokenWorkspaceRoot);
+            DeleteDirectorySafe(outputRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelWithDisplayKeyAttribute_FailsWithClearError()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            var model = XDocument.Load(modelPath);
+            var firstEntity = model.Descendants("Entity").First();
+            firstEntity.SetAttributeValue("displayKey", "Name");
+            model.Save(modelPath);
+
+            var status = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(4, status.ExitCode);
+            Assert.Contains("unsupported attribute 'displayKey'", status.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task InvalidInstanceMissingRequiredRelationship_FailsAtLoad_ForCheckAndRelationshipToProperty()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithMissingRequiredRelationship();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-invalid-load-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(4, check.ExitCode);
+            Assert.Contains("Cannot continue.", check.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Entity 'Order' row 'ORD-001' is missing required relationship 'WarehouseId'.", check.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Unhandled exception", check.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Stack trace", check.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(4, refactor.ExitCode);
+            Assert.Contains("Cannot continue.", refactor.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Entity 'Order' row 'ORD-001' is missing required relationship 'WarehouseId'.", refactor.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Unhandled exception", refactor.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Stack trace", refactor.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task Help_OverviewAndCommandHelp_AreAvailable()
+    {
+        var overview = await RunCliAsync("help");
+        Assert.Equal(0, overview.ExitCode);
+        Assert.DoesNotContain("Meta CLI", overview.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("Version:", overview.StdOut, StringComparison.Ordinal);
+        Assert.Contains("meta <command> [options]", overview.StdOut, StringComparison.Ordinal);
+        Assert.Contains("workspace", overview.StdOut, StringComparison.Ordinal);
+        Assert.Contains("model", overview.StdOut, StringComparison.Ordinal);
+        Assert.Contains("instance", overview.StdOut, StringComparison.Ordinal);
+        Assert.Contains("import", overview.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("Utility", overview.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("random", overview.StdOut, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Command  Description", overview.StdOut, StringComparison.Ordinal);
+        foreach (var line in overview.StdOut.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+        {
+            Assert.Equal(line.TrimEnd(), line);
+        }
+        Assert.Contains("Next: meta help <command>", overview.StdOut, StringComparison.Ordinal);
+
+        var createHelp = await RunCliAsync("create", "--help");
+        Assert.Equal(0, createHelp.ExitCode);
+        Assert.Contains(
+            "meta create [--connection-env <value>] [--source-workspace <path>] [--with-instances] [--strict] [--workspace <workspace>] (--xml <path> | --csharp <path> | --sql <path>)",
+            createHelp.StdOut,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("--new-workspace", createHelp.StdOut, StringComparison.Ordinal);
+
+        var createWithoutOutput = await RunCliAsync("create");
+        Assert.Equal(1, createWithoutOutput.ExitCode);
+        Assert.Contains(
+            "Parameter group 'output' requires one of: xml, csharp, sql.",
+            createWithoutOutput.CombinedOutput,
+            StringComparison.Ordinal);
+
+        var createWithConflictingOutputs = await RunCliAsync(
+            "create",
+            "--xml",
+            "out-xml",
+            "--csharp",
+            "out-csharp");
+        Assert.Equal(1, createWithConflictingOutputs.ExitCode);
+        Assert.Contains(
+            "Parameter group 'output' accepts only one member.",
+            createWithConflictingOutputs.CombinedOutput,
+            StringComparison.Ordinal);
+
+        var commandHelp = await RunCliAsync("model", "--help");
+        Assert.Equal(0, commandHelp.ExitCode);
+        Assert.Contains("model", commandHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("Usage:", commandHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("Next: meta help model <command>", commandHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("rename-entity", commandHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+
+        var suggestHelp = await RunCliAsync("model", "suggest", "--help");
+        Assert.Equal(0, suggestHelp.ExitCode);
+        Assert.Contains("meta model suggest", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--show-keys", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--explain", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--print-commands", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace", suggestHelp.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("concepts", suggestHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("confirm", suggestHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+
+        var refactorHelp = await RunCliAsync("model", "refactor", "property-to-relationship", "--help");
+        Assert.Equal(0, refactorHelp.ExitCode);
+        Assert.Contains("meta model refactor property-to-relationship", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--source <Entity.Property>", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--target <Entity>", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--lookup <Property>", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--preserve-property", refactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace <workspace>", refactorHelp.StdOut, StringComparison.Ordinal);
+
+        var inverseRefactorHelp = await RunCliAsync("model", "refactor", "relationship-to-property", "--help");
+        Assert.Equal(0, inverseRefactorHelp.ExitCode);
+        Assert.Contains("meta model refactor relationship-to-property", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--source <Entity>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--target <Entity>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--role <Role>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--property <PropertyName>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace <workspace>", inverseRefactorHelp.StdOut, StringComparison.Ordinal);
+
+        var renameEntityHelp = await RunCliAsync("model", "rename-entity", "--help");
+        Assert.Equal(0, renameEntityHelp.ExitCode);
+        Assert.Contains("meta model rename-entity <Old> <New> [--strict] [--workspace <workspace>]", renameEntityHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace <workspace>", renameEntityHelp.StdOut, StringComparison.Ordinal);
+
+        var renameIdHelp = await RunCliAsync("instance", "rename-id", "--help");
+        Assert.Equal(0, renameIdHelp.ExitCode);
+        Assert.Contains("meta instance rename-id <Entity> <OldId> <NewId>", renameIdHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--workspace <workspace>", renameIdHelp.StdOut, StringComparison.Ordinal);
+
+        var renameModelHelp = await RunCliAsync("model", "rename-model", "--help");
+        Assert.Equal(0, renameModelHelp.ExitCode);
+        Assert.Contains("meta model rename-model <Old> <New> [--strict] [--workspace <workspace>]", renameModelHelp.StdOut, StringComparison.Ordinal);
+
+        var relationshipSetHelp = await RunCliAsync("instance", "relationship", "set", "--help");
+        Assert.Equal(0, relationshipSetHelp.ExitCode);
+        Assert.Contains("meta instance relationship set <FromEntity> <FromId> --to <RelationshipSelector> <ToId>", relationshipSetHelp.StdOut, StringComparison.Ordinal);
+
+        var renameRelationshipHelp = await RunCliAsync("model", "rename-relationship", "--help");
+        Assert.Equal(0, renameRelationshipHelp.ExitCode);
+        Assert.Contains("meta model rename-relationship <FromEntity> <ToEntity> [--role <Role>] [--strict] [--workspace <workspace>]", renameRelationshipHelp.StdOut, StringComparison.Ordinal);
+
+        var setPropertyRequiredHelp = await RunCliAsync("model", "set-property-required", "--help");
+        Assert.Equal(0, setPropertyRequiredHelp.ExitCode);
+        Assert.Contains("--required true|false", setPropertyRequiredHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--default-value", setPropertyRequiredHelp.StdOut, StringComparison.Ordinal);
+
+        var exportCsvHelp = await RunCliAsync("export", "csv", "--help");
+        Assert.Equal(0, exportCsvHelp.ExitCode);
+        Assert.Contains("meta export csv <Entity> --out <file> [--strict] [--workspace <workspace>]", exportCsvHelp.StdOut, StringComparison.Ordinal);
+
+        Assert.Contains("target entity, relationship role, or implied relationship field name", relationshipSetHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PipelineHelp_UsesConnectionEnvironmentVariableLanguage()
+    {
+        var importHelp = await RunCliAsync("import", "sql", "--help");
+        Assert.Equal(0, importHelp.ExitCode);
+        Assert.Contains("meta import sql <schema> --connection-env <name>", importHelp.StdOut, StringComparison.Ordinal);
+        Assert.Contains("--output-xml <path>", importHelp.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("<connectionString>", importHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+
+        var deployHelp = await RunCliAsync("deploy", "sqlserver", "--help");
+        Assert.Equal(0, deployHelp.ExitCode);
+        Assert.Contains("meta deploy sqlserver --connection-env <name> [--database <name>] --scripts <dir> [--strict] [--workspace <workspace>]", deployHelp.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("--connection-string", deployHelp.StdOut, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ImportSql_FailsWhenConnectionEnvironmentVariableIsMissing()
+    {
+        var workspacePath = Path.Combine(Path.GetTempPath(), "meta-import-env-tests", Guid.NewGuid().ToString("N"));
+        var environmentVariableName = "META_IMPORT_TEST_" + Guid.NewGuid().ToString("N").ToUpperInvariant();
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, null);
+
+            var result = await RunCliAsync(
+                "import",
+                "sql",
+                "--connection-env",
+                environmentVariableName,
+                "dbo",
+                "--output-xml",
+                workspacePath);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains($"Connection environment variable '{environmentVariableName}' was not found.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(workspacePath));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+            DeleteDirectorySafe(workspacePath);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_DefaultOutput_IsActionableOnly()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var result = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
+            Assert.Equal(0, result.ExitCode);
+            Assert.DoesNotContain("Ok", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Workspace:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Model:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Suggestions:", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Relationship suggestions", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  1) Order.ProductId -> Product (lookup: Product.Id)", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  2) Order.SupplierId -> Supplier (lookup: Supplier.Id)", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("  3) Order.WarehouseId -> Warehouse (lookup: Warehouse.Id)", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("meta model suggest", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Proposed refactor:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Summary", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Candidate business keys", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Blocked relationship candidates", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Evidence:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Stats:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Why:", result.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("score=", result.StdOut, StringComparison.OrdinalIgnoreCase);
+
+            var normalized = result.StdOut.Replace("\r\n", "\n", StringComparison.Ordinal);
+            Assert.StartsWith("Relationship suggestions\n", normalized, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_ShowKeysFlag_IsOptIn()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var showKeys = await RunCliAsync("model", "suggest", "--show-keys", "--workspace", workspaceRoot);
+            Assert.Equal(0, showKeys.ExitCode);
+            Assert.Contains("Candidate business keys", showKeys.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_Explain_ShowsPlanBlocks()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var explainOnly = await RunCliAsync("model", "suggest", "--explain", "--workspace", workspaceRoot);
+            Assert.Equal(0, explainOnly.ExitCode);
+            Assert.Contains("Plan:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Add relationship Order -> Product", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Evidence:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Stats:", explainOnly.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Why:", explainOnly.StdOut, StringComparison.Ordinal);
+
+            var explainKeys = await RunCliAsync(
+                "model",
+                "suggest",
+                "--show-keys",
+                "--explain",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, explainKeys.ExitCode);
+            Assert.Contains("Candidate business keys", explainKeys.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Details:", explainKeys.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_PrintCommands_EmitsRefactorCommands()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var result = await RunCliAsync("model", "suggest", "--print-commands", "--workspace", workspaceRoot);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Suggested commands", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains(
+                $"meta model refactor property-to-relationship --workspace {workspaceRoot}",
+                result.StdOut,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "--source Order.ProductId --target Product --lookup Id",
+                result.StdOut,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "--source Order.SupplierId --target Supplier --lookup Id",
+                result.StdOut,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "--source Order.WarehouseId --target Warehouse --lookup Id",
+                result.StdOut,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_Output_IsDeterministic_PerMode()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            await AssertModeDeterministic("model", "suggest", "--workspace", workspaceRoot);
+            await AssertModeDeterministic("model", "suggest", "--show-keys", "--workspace", workspaceRoot);
+            await AssertModeDeterministic("model", "suggest", "--explain", "--workspace", workspaceRoot);
+            await AssertModeDeterministic("model", "suggest", "--print-commands", "--workspace", workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    private static async Task AssertModeDeterministic(params string[] args)
+    {
+        var first = await RunCliAsync(args);
+        var second = await RunCliAsync(args);
+        Assert.Equal(0, first.ExitCode);
+        Assert.Equal(0, second.ExitCode);
+        Assert.Equal(first.StdOut, second.StdOut);
+    }
+
+    [Fact]
+    public async Task ModelSuggest_UnknownFlag_ReturnsArgumentError()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync("model", "suggest", "--wat", "--workspace", workspaceRoot);
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("Cannot continue.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Option '--wat' is not recognized.", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSuggest_SubcommandsAreNotSupported()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var concepts = await RunCliAsync("model", "suggest", "concepts", "--workspace", workspaceRoot);
+            Assert.Equal(1, concepts.ExitCode);
+            Assert.Contains("Unexpected argument 'concepts'.", concepts.CombinedOutput, StringComparison.Ordinal);
+
+            var confirm = await RunCliAsync(
+                "model", "suggest", "confirm", "--concept", "DisplayName", "--labels", "CubeName", "--workspace", workspaceRoot);
+            Assert.Equal(1, confirm.ExitCode);
+            Assert.Contains("Unexpected argument 'confirm'.", confirm.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ArgumentError_IncludesUsageAndNext()
+    {
+        var result = await RunCliAsync("model", "add-entity");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Required parameter 'Name' was not provided.", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.Contains("Usage: meta model add-entity <Name> [--strict] [--workspace <workspace>]", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.Contains("Next: meta help model add-entity", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("Where:", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hint:", result.CombinedOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ArgumentError_UsesSameUsageAsCommandHelp()
+    {
+        var help = await RunCliAsync("model", "rename-entity", "--help");
+        var error = await RunCliAsync("model", "rename-entity");
+
+        Assert.Equal(0, help.ExitCode);
+        Assert.Equal(1, error.ExitCode);
+
+        var helpUsage = ExtractUsageClause(help.StdOut);
+        var errorUsage = ExtractUsageClause(error.CombinedOutput);
+
+        Assert.Equal(helpUsage, errorUsage);
+        Assert.Contains("Next: meta help model rename-entity", error.CombinedOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ModelAddEntity_AppliesByDefault()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync("model", "add-entity", "SmokeEntity", "--workspace", workspaceRoot);
+            Assert.True(result.ExitCode == 0, result.CombinedOutput);
+
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            Assert.True(File.Exists(modelPath), "Expected model.xml to be written.");
+
+            var modelDocument = XDocument.Load(modelPath);
+            Assert.NotNull(modelDocument
+                .Descendants("Entity")
+                .SingleOrDefault(element => string.Equals((string?)element.Attribute("name"), "SmokeEntity", StringComparison.OrdinalIgnoreCase)));
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceCommand_IsNotExposed_OnCliSurface()
+    {
+        var result = await RunCliAsync("workspace", "migrate");
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Unknown command 'workspace", result.CombinedOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_WritesAReadableMergedWorkspace()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "meta-cli-workspace-merge-tests",
+            Guid.NewGuid().ToString("N"));
+        var left = Path.Combine(root, "left");
+        var right = Path.Combine(root, "right");
+        var merged = Path.Combine(root, "merged");
+
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", left)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", right)).ExitCode);
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-entity",
+                    "Alpha",
+                    "--workspace",
+                    left)).ExitCode);
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-entity",
+                    "Beta",
+                    "--workspace",
+                    right)).ExitCode);
+
+            var result = await RunCliAsync(
+                "workspace",
+                "merge",
+                left,
+                right,
+                "--model",
+                "MergedModel",
+                "--output-xml",
+                merged);
+
+            Assert.True(result.ExitCode == 0, result.CombinedOutput);
+            var opened = await XmlWorkspaceReader.OpenAsync(merged);
+            Assert.Equal("MergedModel", opened.Model.Name);
+            Assert.NotNull(opened.Model.FindEntity("Alpha"));
+            Assert.NotNull(opened.Model.FindEntity("Beta"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(root);
+        }
+    }
+
+    [Fact]
+    public async Task GraphStats_ReturnsTextOutput()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "graph",
+                "stats",
+                "--workspace",
+                workspaceRoot,
+                "--top",
+                "3",
+                "--cycles",
+                "2");
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Graph:", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Nodes:", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Top out-degree", result.StdOut, StringComparison.Ordinal);
+            Assert.Contains("Top in-degree", result.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ViewRow_AcceptsOpaqueIdWithoutSpecialParsing()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var opaqueId = string.Concat("Cube", "#", "1");
+            var result = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                opaqueId,
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Instance 'Cube Cube#1' was not found.", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task RowTargetCommands_RejectLegacyIdSwitch()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var cases = new[]
+            {
+                new[] { "view", "instance", "Cube", "1", "--id", "1", "--workspace", workspaceRoot },
+                new[] { "insert", "Cube", "10", "--id", "10", "--set", "CubeName=Test", "--workspace", workspaceRoot },
+                new[] { "instance", "update", "Cube", "1", "--id", "1", "--set", "RefreshMode=Manual", "--workspace", workspaceRoot },
+                new[] { "delete", "Cube", "1", "--id", "1", "--workspace", workspaceRoot },
+                new[] { "instance", "relationship", "set", "Measure", "--id", "1", "--to", "Cube", "1", "--workspace", workspaceRoot },
+            };
+
+            foreach (var command in cases)
+            {
+                var result = await RunCliAsync(command);
+                Assert.Equal(1, result.ExitCode);
+                Assert.Contains("Option '--id' is not recognized.", result.CombinedOutput, StringComparison.Ordinal);
+                Assert.Contains("Usage:", result.CombinedOutput, StringComparison.Ordinal);
+                Assert.Contains("Next:", result.CombinedOutput, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task RowTargetCommands_RejectSetIdAsRowIdentifier()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var cases = new[]
+            {
+                new[] { "insert", "Cube", "10", "--set", "Id=10", "--set", "CubeName=Bad", "--workspace", workspaceRoot },
+                new[] { "instance", "update", "Cube", "1", "--set", "Id=2", "--workspace", workspaceRoot },
+            };
+
+            foreach (var command in cases)
+            {
+                var result = await RunCliAsync(command);
+                Assert.Equal(1, result.ExitCode);
+                Assert.Contains("do not use --set Id", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("Usage:", result.CombinedOutput, StringComparison.Ordinal);
+                Assert.Contains("Next:", result.CombinedOutput, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task Insert_AutoId_CreatesNextNumericRow()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var insertResult = await RunCliAsync(
+                "insert",
+                "Cube",
+                "--auto-id",
+                "--set",
+                "CubeName=Auto Id Cube",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, insertResult.ExitCode);
+            Assert.Contains("Ok", insertResult.CombinedOutput, StringComparison.Ordinal);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "3",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Instance: Cube 3", viewResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task Insert_AutoId_CannotBeCombinedWithPositionalId()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "insert",
+                "Cube",
+                "10",
+                "--auto-id",
+                "--set",
+                "CubeName=Conflicting",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("cannot be combined", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Usage:", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Next:", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task Insert_AutoId_UsesNextNumericId()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var autoIdInsert = await RunCliAsync(
+                "insert",
+                "Cube",
+                "--auto-id",
+                "--set",
+                "CubeName=Auto Generated",
+                "--set",
+                "Purpose=Auto id test",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, autoIdInsert.ExitCode);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "3",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Auto Generated", viewResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task BulkInsert_AutoId_CreatesNextNumericRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var tsvPath = Path.Combine(workspaceRoot, "bulk-auto-id.tsv");
+        await File.WriteAllLinesAsync(
+            tsvPath,
+            new[]
+            {
+                "CubeName\tPurpose\tRefreshMode",
+                "Auto Cube A\tAuto row A\tManual",
+                "Auto Cube B\tAuto row B\tScheduled",
+            });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "bulk-insert",
+                "Cube",
+                "--from",
+                "tsv",
+                "--file",
+                tsvPath,
+                "--auto-id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var viewThree = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "3",
+                "--workspace",
+                workspaceRoot);
+            var viewFour = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "4",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, viewThree.ExitCode);
+            Assert.Equal(0, viewFour.ExitCode);
+            Assert.Contains("Instance: Cube 3", viewThree.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Instance: Cube 4", viewFour.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task BulkInsert_StandardInput_NormalizesLeadingBom()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliWithStandardInputAsync(
+                "\uFEFFId\tCubeName\tPurpose\tRefreshMode\n99\tStdin Cube\tBulk insert from standard input\tManual\n",
+                "bulk-insert",
+                "Cube",
+                "--from",
+                "tsv",
+                "--stdin",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.True(result.ExitCode == 0, result.CombinedOutput);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "99",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Stdin Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task BulkInsert_AutoId_RejectsKeyCombination()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var tsvPath = Path.Combine(workspaceRoot, "bulk-auto-id-conflict.tsv");
+        await File.WriteAllLinesAsync(
+            tsvPath,
+            new[]
+            {
+                "CubeName\tPurpose\tRefreshMode",
+                "Auto Cube Conflict\tConflict row\tManual",
+            });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "bulk-insert",
+                "Cube",
+                "--from",
+                "tsv",
+                "--file",
+                tsvPath,
+                "--auto-id",
+                "--key",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("cannot be combined", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Usage:", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Next:", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task UnknownFieldOrColumnErrors_ProvideSingleNextAction()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var tsvPath = Path.Combine(workspaceRoot, "bad-bulk-insert.tsv");
+        await File.WriteAllLinesAsync(
+            tsvPath,
+            new[]
+            {
+                "Id\tUnknownColumn",
+                "1\tBadValue",
+            });
+
+        try
+        {
+            var insertResult = await RunCliAsync(
+                "insert",
+                "Cube",
+                "10",
+                "--set",
+                "MissingField=WillFail",
+                "--workspace",
+                workspaceRoot);
+            var rowUpdateResult = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "MissingField=BadValue",
+                "--workspace",
+                workspaceRoot);
+            var bulkInsertResult = await RunCliAsync(
+                "bulk-insert",
+                "Cube",
+                "--from",
+                "tsv",
+                "--file",
+                tsvPath,
+                "--key",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            foreach (var result in new[] { insertResult, rowUpdateResult, bulkInsertResult })
+            {
+                Assert.Equal(4, result.ExitCode);
+                Assert.Contains("Property 'Cube.", result.CombinedOutput, StringComparison.Ordinal);
+                Assert.Contains("' was not found.", result.CombinedOutput, StringComparison.Ordinal);
+                var nextMatches = Regex.Matches(result.CombinedOutput, @"(?m)^Next:\s+meta list properties Cube\s*$");
+                Assert.Single(nextMatches.Cast<Match>());
+            }
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportSql_RequiresOutputWorkspaceOption()
+    {
+        var environmentVariableName = "META_IMPORT_TEST_" + Guid.NewGuid().ToString("N").ToUpperInvariant();
+        var originalValue = Environment.GetEnvironmentVariable(environmentVariableName);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                environmentVariableName,
+                "Server=localhost;Database=master;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False");
+
+            var result = await RunCliAsync(
+                "import",
+                "sql",
+                "--connection-env",
+                environmentVariableName,
+                "dbo");
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("Parameter group 'target' requires one of: output-xml, output-csharp, output-sql.", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentVariableName, originalValue);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_WithoutWorkspaceFlags_UsesDefaultWorkspaceDiscovery()
+    {
+        var csvPath = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"), "landing.csv");
+        Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Name,Status",
+            "1,A,Open",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing");
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.DoesNotContain("requires --workspace <path> or --output-xml <path>", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("workspace.meta", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(Path.GetDirectoryName(csvPath)!);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_OutputWorkspace_FailsWithoutIdColumn()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Display Name,Active",
+            "Alice,true",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order Items",
+                "--output-xml",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("CSV file must include Id column 'Id'.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(workspaceRoot));
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_RejectsIdColumnOverrideOption()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Display Name",
+            "101,Alice",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order Items",
+                "--id-column",
+                "RowId",
+                "--output-xml",
+                workspaceRoot);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("Option '--id-column' is not recognized.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("--id-column", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(workspaceRoot));
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_OutputWorkspace_FailsWhenIdsDuplicateOrMissing()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var duplicateCsvPath = Path.Combine(csvRoot, "duplicate.csv");
+        var missingCsvPath = Path.Combine(csvRoot, "missing.csv");
+        var duplicateWorkspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        var missingWorkspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(duplicateCsvPath, new[]
+        {
+            "Id,Display Name",
+            "101,Alice",
+            "101,Bob",
+        });
+        await File.WriteAllLinesAsync(missingCsvPath, new[]
+        {
+            "Id,Display Name",
+            "101,Alice",
+            ",Bob",
+        });
+
+        try
+        {
+            var duplicateResult = await RunCliAsync(
+                "import",
+                "csv",
+                duplicateCsvPath,
+                "--entity",
+                "Order Items",
+                "--output-xml",
+                duplicateWorkspaceRoot);
+            Assert.Equal(4, duplicateResult.ExitCode);
+            Assert.Contains("CSV contains duplicate Id '101' in column 'Id'.", duplicateResult.CombinedOutput, StringComparison.Ordinal);
+
+            var missingResult = await RunCliAsync(
+                "import",
+                "csv",
+                missingCsvPath,
+                "--entity",
+                "Order Items",
+                "--output-xml",
+                missingWorkspaceRoot);
+            Assert.Equal(4, missingResult.ExitCode);
+            Assert.Contains("CSV row 3 is missing required Id value from column 'Id'.", missingResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(duplicateWorkspaceRoot);
+            DeleteDirectorySafe(missingWorkspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_OutputWorkspace_CreatesEntityRowsAndRequiredness()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Display Name,Active,Count,BigCount,Amount,CreatedAt,Status,Status",
+            "101,Alice,true,42,2147483648,10.50,2024-01-01T10:20:30Z,Open,Primary",
+            "205,Bob,false,7,922337203685477580,0.00,2024-02-02T00:00:00Z,Closed,Secondary",
+            "333,,,,,,,Open,",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order Items",
+                "--output-xml",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            var model = XDocument.Load(modelPath);
+            var entity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order_Items", StringComparison.Ordinal));
+
+            var properties = entity
+                .Element("PropertyList")?
+                .Elements("Property")
+                .ToList() ?? new List<XElement>();
+
+            Assert.Contains(properties, property => string.Equals((string?)property.Attribute("name"), "Display_Name", StringComparison.Ordinal));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Active", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Count", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "BigCount", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Amount", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "CreatedAt", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(properties, property => string.Equals((string?)property.Attribute("name"), "Status", StringComparison.Ordinal));
+            Assert.Contains(properties, property =>
+                string.Equals((string?)property.Attribute("name"), "Status_2", StringComparison.Ordinal) &&
+                string.Equals((string?)property.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+
+            var rows = LoadEntityRows(workspaceRoot, "Order_Items");
+            Assert.Equal(3, rows.Count);
+            Assert.Equal("101", (string?)rows[0].Attribute("Id"));
+            Assert.Equal("205", (string?)rows[1].Attribute("Id"));
+            Assert.Equal("333", (string?)rows[2].Attribute("Id"));
+            Assert.Equal("Alice", rows[0].Element("Display_Name")?.Value);
+            Assert.Null(rows[2].Element("Display_Name"));
+            Assert.Equal("Open", rows[2].Element("Status")?.Value);
+            Assert.Null(rows[2].Element("Status_2"));
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_OutputWorkspace_AllowsExplicitPlural()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "categories.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,CategoryName",
+            "CAT-001,Cycles",
+            "CAT-002,Accessories",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Category",
+                "--output-xml",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var entity = model.Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Category", StringComparison.Ordinal));
+            Assert.Null(entity.Attribute("plural"));
+
+            var instance = XDocument.Load(Path.Combine(workspaceRoot, "instances", "Category.xml"));
+            Assert.NotNull(instance.Root?.Element("CategoryList"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_OutputWorkspace_AllowsOpaqueStringIds()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Label",
+            "sku-a,Alpha",
+            "sku-b,Beta",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
+                "--output-xml",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var rows = LoadEntityRows(workspaceRoot, "Landing")
+                .OrderBy(row => (string?)row.Attribute("Id"), StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(new[] { "sku-a", "sku-b" }, rows.Select(row => (string?)row.Attribute("Id")));
+            Assert.Equal("Alpha", rows[0].Element("Label")?.Value);
+            Assert.Equal("Beta", rows[1].Element("Label")?.Value);
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_UpsertsByIdAndPreservesRows()
+    {
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "landing.csv");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv-workspace", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Label,IsActive",
+            "10,Alpha,true",
+            "20,Beta,false",
+        });
+
+        try
+        {
+            var initialImport = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
+                "--output-xml",
+                workspaceRoot);
+            Assert.Equal(0, initialImport.ExitCode);
+
+            await File.WriteAllLinesAsync(csvPath, new[]
+            {
+                "Id,Label,IsActive",
+                "10,Alpha Updated,false",
+                "30,Gamma,true",
+            });
+
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var rows = LoadEntityRows(workspaceRoot, "Landing")
+                .OrderBy(row => (string?)row.Attribute("Id"), StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(3, rows.Count);
+            Assert.Equal(new[] { "10", "20", "30" }, rows.Select(row => (string?)row.Attribute("Id")));
+            Assert.Equal("Alpha Updated", rows[0].Element("Label")?.Value);
+            Assert.Equal("false", rows[0].Element("IsActive")?.Value);
+            Assert.Equal("Beta", rows[1].Element("Label")?.Value);
+            Assert.Equal("Gamma", rows[2].Element("Label")?.Value);
+        }
+        finally
+        {
+            DeleteDirectorySafe(csvRoot);
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_UpsertsRelationshipColumnsAfterRefactor()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "orders-update.csv");
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,OrderNumber,ProductId,SupplierId,WarehouseId,StatusText",
+            "ORD-001,ORD-1001,PRD-002,SUP-001,WH-001,Released",
+            "ORD-002,ORD-1002,PRD-002,SUP-002,WH-001,Released",
+            "ORD-003,ORD-1003,PRD-003,SUP-003,WH-002,Held",
+            "ORD-004,ORD-1004,PRD-004,SUP-004,WH-003,Closed",
+            "ORD-005,ORD-1005,PRD-001,SUP-002,WH-001,Released",
+        });
+
+        try
+        {
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.ProductId",
+                "--target",
+                "Product",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, refactor.ExitCode);
+
+            var import = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, import.ExitCode);
+
+            var rows = LoadEntityRows(workspaceRoot, "Order")
+                .OrderBy(row => (string?)row.Attribute("Id"), StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(new[] { "ORD-001", "ORD-002", "ORD-003", "ORD-004", "ORD-005" }, rows.Select(row => (string?)row.Attribute("Id")));
+            Assert.Equal("PRD-002", (string?)rows[0].Attribute("ProductId"));
+            Assert.Null(rows[0].Element("ProductId"));
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var orderEntity = model.Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                orderEntity.Element("RelationshipList")?.Elements("Relationship") ?? Enumerable.Empty<XElement>(),
+                relationship => string.Equals((string?)relationship.Attribute("entity"), "Product", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                orderEntity.Element("PropertyList")?.Elements("Property") ?? Enumerable.Empty<XElement>(),
+                property => string.Equals((string?)property.Attribute("name"), "ProductId", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(csvRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_FailsEarlyWhenRequiredPropertyIsBlank()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "cube-update.csv");
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,CubeName,Purpose,RefreshMode",
+            "1,,Sales metrics,Manual",
+        });
+
+        try
+        {
+            var before = LoadEntityRows(workspaceRoot, "Cube")
+                .Single(row => string.Equals((string?)row.Attribute("Id"), "1", StringComparison.OrdinalIgnoreCase));
+            var beforeName = before.Element("CubeName")?.Value;
+
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Cube",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains(
+                "leaves required property 'CubeName' blank on entity 'Cube'",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+
+            var after = LoadEntityRows(workspaceRoot, "Cube")
+                .Single(row => string.Equals((string?)row.Attribute("Id"), "1", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(beforeName, after.Element("CubeName")?.Value);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(csvRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_FailsEarlyWhenRequiredRelationshipIsBlank()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "orders-update.csv");
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,OrderNumber,ProductId,SupplierId,WarehouseId,StatusText",
+            "ORD-001,ORD-1001,,SUP-001,WH-001,Released",
+        });
+
+        try
+        {
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.ProductId",
+                "--target",
+                "Product",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, refactor.ExitCode);
+
+            var before = LoadEntityRows(workspaceRoot, "Order")
+                .Single(row => string.Equals((string?)row.Attribute("Id"), "ORD-001", StringComparison.OrdinalIgnoreCase));
+            var beforeProductId = (string?)before.Attribute("ProductId");
+
+            var import = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Order",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.NotEqual(0, import.ExitCode);
+            Assert.Contains(
+                "leaves required relationship 'ProductId' blank on entity 'Order'",
+                import.CombinedOutput,
+                StringComparison.Ordinal);
+
+            var after = LoadEntityRows(workspaceRoot, "Order")
+                .Single(row => string.Equals((string?)row.Attribute("Id"), "ORD-001", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(beforeProductId, (string?)after.Attribute("ProductId"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(csvRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_FailsEarlyWhenNewRowOmitsRequiredColumns()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var csvRoot = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"));
+        var csvPath = Path.Combine(csvRoot, "cube-new-row.csv");
+        Directory.CreateDirectory(csvRoot);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Purpose,RefreshMode",
+            "999,Ad hoc analysis,Manual",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Cube",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains(
+                "cannot create new 'Cube' because required property 'CubeName' is missing from the import columns",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+
+            Assert.DoesNotContain(
+                LoadEntityRows(workspaceRoot, "Cube"),
+                row => string.Equals((string?)row.Attribute("Id"), "999", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(csvRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ImportCsv_ExistingWorkspace_AddsNewEntityAndRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var csvPath = Path.Combine(Path.GetTempPath(), "metadata-import-csv", Guid.NewGuid().ToString("N"), "landing.csv");
+        Directory.CreateDirectory(Path.GetDirectoryName(csvPath)!);
+        await File.WriteAllLinesAsync(csvPath, new[]
+        {
+            "Id,Label,IsActive",
+            "10,Alpha,true",
+            "20,Beta,false",
+        });
+
+        try
+        {
+            var result = await RunCliAsync(
+                "import",
+                "csv",
+                csvPath,
+                "--entity",
+                "Landing",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            var model = XDocument.Load(modelPath);
+            Assert.Contains(
+                model.Descendants("Entity"),
+                entity => string.Equals((string?)entity.Attribute("name"), "Landing", StringComparison.Ordinal));
+
+            var rows = LoadEntityRows(workspaceRoot, "Landing");
+            Assert.Equal(2, rows.Count);
+            Assert.Equal("Alpha", rows[0].Element("Label")?.Value);
+            Assert.Equal("true", rows[0].Element("IsActive")?.Value);
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(Path.GetDirectoryName(csvPath)!);
+        }
+    }
+
+    [Fact]
+    public async Task ModelDropRelationship_RewritesInstanceUsageAndSucceeds()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "drop-relationship",
+                "Measure",
+                "Cube",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            var model = XDocument.Load(modelPath);
+            var measureEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Measure", StringComparison.OrdinalIgnoreCase));
+            var measureRelationships = measureEntity
+                .Element("RelationshipList")?
+                .Elements("Relationship") ?? Enumerable.Empty<XElement>();
+            Assert.DoesNotContain(
+                measureRelationships,
+                relationship => string.Equals((string?)relationship.Attribute("entity"), "Cube", StringComparison.OrdinalIgnoreCase));
+
+            var measureRows = LoadEntityRows(workspaceRoot, "Measure");
+            foreach (var row in measureRows)
+            {
+                Assert.Null(row.Attribute("CubeId"));
+            }
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelDropEntity_FailsWhenEntityHasRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "drop-entity",
+                "Cube",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Cannot drop entity Cube", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Cube has", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("contains(Id,'')", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Where:", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Hint:", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelDropEntity_FailsWhenInboundRelationshipsExist()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "Parent", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "Child", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-property", "Child", "Name", "--required", "true", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("insert", "Child", "1", "--set", "Name=Default Child", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-relationship", "Parent", "Child", "--default-id", "1", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("delete", "Child", "1", "--workspace", workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "drop-entity",
+                "Child",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Entity 'Child' has inbound relationships", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Inbound relationships:", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Parent", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Where:", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Hint:", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddRelationship_BackfillsExistingRows_WithDefaultId()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Cube",
+                "System",
+                "--default-id",
+                "1",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            var model = XDocument.Load(modelPath);
+            var cubeEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Cube", StringComparison.OrdinalIgnoreCase));
+            var cubeRelationships = cubeEntity
+                .Element("RelationshipList")?
+                .Elements("Relationship") ?? Enumerable.Empty<XElement>();
+            Assert.Contains(
+                cubeRelationships,
+                relationship => string.Equals((string?)relationship.Attribute("entity"), "System", StringComparison.OrdinalIgnoreCase));
+
+            var cubeRows = LoadEntityRows(workspaceRoot, "Cube");
+            foreach (var row in cubeRows)
+            {
+                Assert.Equal("1", (string?)row.Attribute("SystemId"));
+            }
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddRelationship_AllowsMissingDefaultId_WhenSourceHasNoRows()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "FromEntity", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "ToEntity", "--workspace", workspaceRoot)).ExitCode);
+
+            var addRelationship = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "FromEntity",
+                "ToEntity",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, addRelationship.ExitCode);
+            Assert.Contains("Ok", addRelationship.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("DefaultId:", addRelationship.CombinedOutput, StringComparison.Ordinal);
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddRelationship_RequiresDefaultId_WhenSourceHasRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Cube",
+                "System",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("requires a target for existing records", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Cube.SystemId", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddRelationship_AllowsOptionalRelationshipWithoutDefaultId_WhenSourceHasRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Cube",
+                "System",
+                "--required",
+                "false",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var cubeEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Cube", StringComparison.OrdinalIgnoreCase));
+            var cubeRelationships = cubeEntity
+                .Element("RelationshipList")?
+                .Elements("Relationship") ?? Enumerable.Empty<XElement>();
+            Assert.Contains(
+                cubeRelationships,
+                relationship =>
+                    string.Equals((string?)relationship.Attribute("entity"), "System", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals((string?)relationship.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+
+            foreach (var row in LoadEntityRows(workspaceRoot, "Cube"))
+            {
+                Assert.Null(GetFieldValue(row, "SystemId"));
+            }
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_RewritesRowsAndOptionallyDropsSourceProperty()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, refactor.ExitCode);
+            Assert.Contains("Ok", refactor.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var orderEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                orderEntity
+                    .Element("PropertyList")?
+                    .Elements("Property") ?? Enumerable.Empty<XElement>(),
+                property => string.Equals((string?)property.Attribute("name"), "WarehouseId", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                orderEntity
+                    .Element("RelationshipList")?
+                    .Elements("Relationship") ?? Enumerable.Empty<XElement>(),
+                relationship =>
+                    string.Equals((string?)relationship.Attribute("entity"), "Warehouse", StringComparison.OrdinalIgnoreCase) &&
+                    relationship.Attribute("role") == null);
+
+            var orderRows = LoadEntityRows(workspaceRoot, "Order");
+            foreach (var row in orderRows)
+            {
+                var warehouseId = (string?)row.Attribute("WarehouseId");
+                Assert.False(string.IsNullOrWhiteSpace(warehouseId));
+                Assert.Null(row.Element("WarehouseId"));
+            }
+
+            var suggestAfter = await RunCliAsync("model", "suggest", "--workspace", workspaceRoot);
+            Assert.Equal(0, suggestAfter.ExitCode);
+            Assert.DoesNotContain("Ok", suggestAfter.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "Order.WarehouseId -> Warehouse (lookup: Warehouse.Id)",
+                suggestAfter.StdOut,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenTargetLookupHasDuplicates_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var warehousePath = Path.Combine(workspaceRoot, "instances", "Warehouse.xml");
+            var warehouseDocument = XDocument.Load(warehousePath);
+            var warehouses = warehouseDocument.Descendants("Warehouse").ToList();
+            Assert.True(warehouses.Count >= 2);
+            warehouses[1].Element("WarehouseName")?.SetValue("Seattle Main");
+            warehouseDocument.Save(warehousePath);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "WarehouseName",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Target lookup 'Warehouse.WarehouseName' contains duplicate value 'Seattle Main'.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenSourceHasBlank_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var orderPath = Path.Combine(workspaceRoot, "instances", "Order.xml");
+            var orderDocument = XDocument.Load(orderPath);
+            var firstOrder = orderDocument.Descendants("Order")
+                .First(element => string.Equals((string?)element.Attribute("Id"), "ORD-001", StringComparison.Ordinal));
+            firstOrder.Element("WarehouseId")?.SetValue(string.Empty);
+            orderDocument.Save(orderPath);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Required property 'Order.WarehouseId' is missing or empty at record 'ORD-001'.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_AllowsBlankSource_WhenSourcePropertyIsOptional()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var optional = await RunCliAsync(
+                "model",
+                "set-property-required",
+                "Order",
+                "WarehouseId",
+                "--required",
+                "false",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, optional.ExitCode);
+
+            var orderPath = Path.Combine(workspaceRoot, "instances", "Order.xml");
+            var orderDocument = XDocument.Load(orderPath);
+            var firstOrder = orderDocument.Descendants("Order")
+                .First(element => string.Equals((string?)element.Attribute("Id"), "ORD-001", StringComparison.Ordinal));
+            firstOrder.Element("WarehouseId")?.SetValue(string.Empty);
+            orderDocument.Save(orderPath);
+
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, refactor.ExitCode);
+            Assert.Contains("Ok", refactor.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var orderEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                orderEntity
+                    .Element("PropertyList")?
+                    .Elements("Property") ?? Enumerable.Empty<XElement>(),
+                property => string.Equals((string?)property.Attribute("name"), "WarehouseId", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                orderEntity
+                    .Element("RelationshipList")?
+                    .Elements("Relationship") ?? Enumerable.Empty<XElement>(),
+                relationship =>
+                    string.Equals((string?)relationship.Attribute("entity"), "Warehouse", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals((string?)relationship.Attribute("isRequired"), "false", StringComparison.OrdinalIgnoreCase));
+
+            var orderRows = LoadEntityRows(workspaceRoot, "Order");
+            var blankSourceRow = orderRows.Single(row => string.Equals((string?)row.Attribute("Id"), "ORD-001", StringComparison.Ordinal));
+            Assert.Null(GetFieldValue(blankSourceRow, "WarehouseId"));
+            foreach (var row in orderRows.Where(row => !string.Equals((string?)row.Attribute("Id"), "ORD-001", StringComparison.Ordinal)))
+            {
+                Assert.False(string.IsNullOrWhiteSpace((string?)row.Attribute("WarehouseId")));
+                Assert.Null(row.Element("WarehouseId"));
+            }
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenSourceValueIsUnmatched_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "instance",
+                "update",
+                "Order",
+                "ORD-001",
+                "--set",
+                "WarehouseId=WH-404",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Value 'WH-404' from 'Order.WarehouseId' does not resolve through 'Warehouse.Id'.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_PreserveProperty_WorksWhenRoleAvoidsCollision()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        try
+        {
+            var refactor = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.ProductId",
+                "--target",
+                "Product",
+                "--lookup",
+                "Id",
+                "--role",
+                "ProductRef",
+                "--preserve-property",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, refactor.ExitCode);
+            Assert.Contains("Property dropped: no", refactor.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var orderEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                orderEntity
+                    .Element("PropertyList")?
+                    .Elements("Property") ?? Enumerable.Empty<XElement>(),
+                property => string.Equals((string?)property.Attribute("name"), "ProductId", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                orderEntity
+                    .Element("RelationshipList")?
+                    .Elements("Relationship") ?? Enumerable.Empty<XElement>(),
+                relationship =>
+                    string.Equals((string?)relationship.Attribute("entity"), "Product", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals((string?)relationship.Attribute("role"), "ProductRef", StringComparison.OrdinalIgnoreCase));
+
+            var orderRows = LoadEntityRows(workspaceRoot, "Order");
+            foreach (var row in orderRows)
+            {
+                Assert.False(string.IsNullOrWhiteSpace((string?)row.Attribute("ProductRefId")));
+                Assert.False(string.IsNullOrWhiteSpace(row.Element("ProductId")?.Value));
+            }
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenExistingRelationshipValueConflicts_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            var modelDocument = XDocument.Load(modelPath);
+            var orderEntity = modelDocument.Descendants("Entity")
+                .First(element => string.Equals((string?)element.Attribute("name"), "Order", StringComparison.OrdinalIgnoreCase));
+            var relationships = orderEntity.Element("RelationshipList");
+            if (relationships == null)
+            {
+                relationships = new XElement("RelationshipList");
+                orderEntity.Add(relationships);
+            }
+
+            relationships.Add(new XElement("Relationship",
+                new XAttribute("entity", "Warehouse"),
+                new XAttribute("role", "WarehouseRef")));
+            modelDocument.Save(modelPath);
+
+            var orderPath = Path.Combine(workspaceRoot, "instances", "Order.xml");
+            var orderDocument = XDocument.Load(orderPath);
+            foreach (var row in orderDocument.Descendants("Order"))
+            {
+                var sourceWarehouseId = row.Element("WarehouseId")?.Value;
+                row.SetAttributeValue(
+                    "WarehouseRefId",
+                    string.Equals(sourceWarehouseId, "WH-002", StringComparison.Ordinal)
+                        ? "WH-001"
+                        : "WH-002");
+            }
+            orderDocument.Save(orderPath);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--role",
+                "WarehouseRef",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Existing relationship 'Order.WarehouseRefId' conflicts at record",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_DropSourcePropertyFailsWhenPropertyMissing_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.DoesNotExist",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Property 'Order.DoesNotExist' was not found.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_FailsWhenRefactorWouldCreateCycle_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempRefactorCycleWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "B.ACode",
+                "--target",
+                "A",
+                "--lookup",
+                "Code",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Required relationship cycle detected from entity 'A'.", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Required relationship cycle detected from entity 'B'.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_AllowsExplicitOneToOneLookup()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-refactor-one-to-one-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "A", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "B", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-property", "A", "Code", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-property", "B", "ACode", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("insert", "A", "1", "--set", "Code=A1", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("insert", "B", "1", "--set", "ACode=A1", "--workspace", workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "B.ACode",
+                "--target",
+                "A",
+                "--lookup",
+                "Code",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var bEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "B", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                bEntity
+                    .Element("PropertyList")?
+                    .Elements("Property") ?? Enumerable.Empty<XElement>(),
+                property => string.Equals((string?)property.Attribute("name"), "ACode", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                bEntity
+                    .Element("RelationshipList")?
+                    .Elements("Relationship") ?? Enumerable.Empty<XElement>(),
+                relationship => string.Equals((string?)relationship.Attribute("entity"), "A", StringComparison.OrdinalIgnoreCase));
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorPropertyToRelationship_BackfillsExistingRelationship()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-refactor-existing-relationship-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "A", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "B", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-property", "A", "Code", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-property", "B", "ACode", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("insert", "A", "1", "--set", "Code=A1", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("insert", "B", "1", "--set", "ACode=A1", "--workspace", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-relationship", "B", "A", "--required", "false", "--workspace", workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "B.ACode",
+                "--target",
+                "A",
+                "--lookup",
+                "Code",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var bEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "B", StringComparison.OrdinalIgnoreCase));
+            Assert.Single(
+                bEntity
+                    .Element("RelationshipList")?
+                    .Elements("Relationship")
+                    .Where(relationship => string.Equals((string?)relationship.Attribute("entity"), "A", StringComparison.OrdinalIgnoreCase)) ??
+                Enumerable.Empty<XElement>());
+
+            var bRow = LoadEntityRows(workspaceRoot, "B").Single();
+            Assert.Null(GetFieldValue(bRow, "ACode"));
+            Assert.Equal("1", (string?)bRow.Attribute("AId"));
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_RoundTripsBackToLandingShape()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+
+            var demote = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, demote.ExitCode);
+            Assert.Contains("Ok", demote.StdOut, StringComparison.Ordinal);
+
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenRelationshipMissing_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Relationship 'Order->Warehouse' was not found.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenPropertyAlreadyExists_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--property",
+                "StatusText",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Property 'Order.StatusText' already exists.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenAnyRowHasMissingFk_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+
+            var orderPath = Path.Combine(workspaceRoot, "instances", "Order.xml");
+            var orderDocument = XDocument.Load(orderPath);
+            var firstOrder = orderDocument.Descendants("Order")
+                .First(element => string.Equals((string?)element.Attribute("Id"), "ORD-001", StringComparison.Ordinal));
+            firstOrder.Attribute("WarehouseId")?.Remove();
+            orderDocument.Save(orderPath);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Entity 'Order' row 'ORD-001' is missing required relationship 'WarehouseId'.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRelationshipToProperty_FailsWhenPropertyNameCollidesWithExistingRowAttribute_AndDoesNotWrite()
+    {
+        var workspaceRoot = await CreateTempSuggestDemoWorkspaceAsync();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-refactor-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.WarehouseId",
+                "--target",
+                "Warehouse",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "refactor",
+                "property-to-relationship",
+                "--source",
+                "Order.SupplierId",
+                "--target",
+                "Supplier",
+                "--lookup",
+                "Id",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "refactor",
+                "relationship-to-property",
+                "--source",
+                "Order",
+                "--target",
+                "Warehouse",
+                "--property",
+                "SupplierId",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Property 'Order.SupplierId' already exists.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRenameEntity_UpdatesRelationshipsInstanceFieldsAndWorkspaceConfig()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithEntityStorageRenameFixture();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "rename-entity",
+                "SystemType",
+                "PlatformType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            Assert.DoesNotContain(
+                model.Descendants("Entity"),
+                element => string.Equals((string?)element.Attribute("name"), "SystemType", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                model.Descendants("Entity"),
+                element => string.Equals((string?)element.Attribute("name"), "PlatformType", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                model.Descendants("Relationship"),
+                element => string.Equals((string?)element.Attribute("entity"), "PlatformType", StringComparison.OrdinalIgnoreCase));
+
+            var workspaceConfig = WorkspaceMetaFile.Read(workspaceRoot);
+            Assert.Contains(
+                workspaceConfig.Configuration.EntityStorage,
+                storage => string.Equals(storage.EntityName, "PlatformType", StringComparison.OrdinalIgnoreCase));
+
+            var systemRows = LoadEntityRows(workspaceRoot, "System");
+            Assert.All(systemRows, row =>
+            {
+                Assert.NotNull(row.Attribute("PlatformTypeId"));
+                Assert.Null(row.Attribute("SystemTypeId"));
+            });
+
+            Assert.True(File.Exists(Path.Combine(workspaceRoot, "instances", "PlatformType.xml")));
+            Assert.False(File.Exists(Path.Combine(workspaceRoot, "instances", "SystemType.xml")));
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRenameEntity_RoleRelationship_DoesNotRenameRoleField()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithRoleRenameFixture();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "rename-entity",
+                "SystemType",
+                "PlatformType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            Assert.Contains(
+                model.Descendants("Relationship"),
+                element =>
+                    string.Equals((string?)element.Attribute("entity"), "PlatformType", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals((string?)element.Attribute("role"), "PrimarySystemType", StringComparison.OrdinalIgnoreCase));
+
+            var systemRows = LoadEntityRows(workspaceRoot, "System");
+            Assert.All(systemRows, row =>
+            {
+                Assert.NotNull(row.Attribute("PrimarySystemTypeId"));
+                Assert.Null(row.Attribute("PlatformTypeId"));
+            });
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRefactorRenameEntity_CollisionFailsAndIsAtomic()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithRenameCollisionFixture();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-rename-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "rename-entity",
+                "SystemType",
+                "PlatformType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Relationship 'System.PlatformType' conflicts with an existing member.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRenameRelationship_SetsRoleAndRewritesUsageName()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "rename-relationship",
+                "System",
+                "SystemType",
+                "--role",
+                "PrimarySystemType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            Assert.Contains(
+                model.Descendants("Relationship"),
+                element =>
+                    string.Equals((string?)element.Attribute("entity"), "SystemType", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals((string?)element.Attribute("role"), "PrimarySystemType", StringComparison.OrdinalIgnoreCase));
+
+            var systemRows = LoadEntityRows(workspaceRoot, "System");
+            Assert.All(systemRows, row =>
+            {
+                Assert.NotNull(row.Attribute("PrimarySystemTypeId"));
+                Assert.Null(row.Attribute("SystemTypeId"));
+            });
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRenameRelationship_ClearsRoleAndRewritesUsageName()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithRoleRenameFixture();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "rename-relationship",
+                "System",
+                "SystemType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.StdOut, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            Assert.Contains(
+                model.Descendants("Relationship"),
+                element =>
+                    string.Equals((string?)element.Attribute("entity"), "SystemType", StringComparison.OrdinalIgnoreCase) &&
+                    element.Attribute("role") == null);
+
+            var systemRows = LoadEntityRows(workspaceRoot, "System");
+            Assert.All(systemRows, row =>
+            {
+                Assert.NotNull(row.Attribute("SystemTypeId"));
+                Assert.Null(row.Attribute("PrimarySystemTypeId"));
+            });
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRenameRelationship_CollisionFailsAndIsAtomic()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithRelationshipRenameCollisionFixture();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-rename-relationship-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "rename-relationship",
+                "System",
+                "SystemType",
+                "--role",
+                "PrimarySystemType",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains(
+                "Relationship 'System.PrimarySystemType' conflicts with an existing member.",
+                result.CombinedOutput,
+                StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceRelationshipSet_AllowsRoleSelector()
+    {
+        var workspaceRoot = CreateTempWorkspaceWithRoleRenameFixture();
+        try
+        {
+            var result = await RunCliAsync(
+                "instance",
+                "relationship",
+                "set",
+                "System",
+                "1",
+                "--to",
+                "PrimarySystemType",
+                "2",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var systemRows = LoadEntityRows(workspaceRoot, "System");
+            var system = systemRows.Single(row => string.Equals((string?)row.Attribute("Id"), "1", StringComparison.Ordinal));
+            Assert.Equal("2", (string?)system.Attribute("PrimarySystemTypeId"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceRenameId_RenamesRowAndInboundRelationships()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "instance",
+                "rename-id",
+                "Cube",
+                "1",
+                "Cube-001",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.StdOut, StringComparison.Ordinal);
+
+            var cubeRows = LoadEntityRows(workspaceRoot, "Cube");
+            Assert.Contains(cubeRows, row => string.Equals((string?)row.Attribute("Id"), "Cube-001", StringComparison.Ordinal));
+            Assert.DoesNotContain(cubeRows, row => string.Equals((string?)row.Attribute("Id"), "1", StringComparison.Ordinal));
+
+            var measureRows = LoadEntityRows(workspaceRoot, "Measure");
+            Assert.Contains(measureRows, row => string.Equals((string?)row.Attribute("CubeId"), "Cube-001", StringComparison.Ordinal));
+            Assert.DoesNotContain(measureRows, row => string.Equals((string?)row.Attribute("CubeId"), "1", StringComparison.Ordinal));
+
+            var systemCubeRows = LoadEntityRows(workspaceRoot, "SystemCube");
+            Assert.Contains(systemCubeRows, row => string.Equals((string?)row.Attribute("CubeId"), "Cube-001", StringComparison.Ordinal));
+            Assert.DoesNotContain(systemCubeRows, row => string.Equals((string?)row.Attribute("CubeId"), "1", StringComparison.Ordinal));
+
+            var check = await RunCliAsync("status", "--workspace", workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceRenameId_FailsOnCollision_AndIsAtomic()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-rename-id-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "instance",
+                "rename-id",
+                "Cube",
+                "1",
+                "2",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Record 'Cube:2' already exists.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddProperty_BackfillsExistingRows_WhenRequiredAndDefaultValueProvided()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-property",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--default-value",
+                "General",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelPath = Path.Combine(workspaceRoot, "model.xml");
+            var model = XDocument.Load(modelPath);
+            var cubeEntity = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Cube", StringComparison.OrdinalIgnoreCase));
+            var cubeProperties = cubeEntity
+                .Element("PropertyList")?
+                .Elements("Property") ?? Enumerable.Empty<XElement>();
+            Assert.Contains(
+                cubeProperties,
+                property => string.Equals((string?)property.Attribute("name"), "Category", StringComparison.OrdinalIgnoreCase));
+
+            var cubeRows = LoadEntityRows(workspaceRoot, "Cube");
+            foreach (var row in cubeRows)
+            {
+                Assert.Equal("General", row.Element("Category")?.Value);
+            }
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddProperty_RequiresDefaultValue_WhenRequiredAndEntityHasRows()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "add-property",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("requires a value for existing records", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Cube.Category", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelAddProperty_AllowsMissingDefaultValue_WhenEntityHasNoRows()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync("model", "add-entity", "Thing", "--workspace", workspaceRoot)).ExitCode);
+
+            var addProperty = await RunCliAsync(
+                "model",
+                "add-property",
+                "Thing",
+                "Name",
+                "--required",
+                "true",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, addProperty.ExitCode);
+            Assert.DoesNotContain("DefaultValue:", addProperty.CombinedOutput, StringComparison.Ordinal);
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelDropEntity_RemovesEmptyEntity()
+    {
+        var workspaceRoot = Path.Combine(
+            Path.GetTempPath(),
+            "metadata-studio-tests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync("create", "--xml", workspaceRoot)).ExitCode);
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-entity",
+                    "Temporary",
+                    "--workspace",
+                    workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "drop-entity",
+                "Temporary",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            Assert.DoesNotContain(
+                model.Descendants("Entity"),
+                entity => string.Equals(
+                    (string?)entity.Attribute("name"),
+                    "Temporary",
+                    StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(
+                0,
+                (await RunCliAsync("status", "--workspace", workspaceRoot)).ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelDropProperty_RemovesModelPropertyAndInstanceValues()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-property",
+                    "Cube",
+                    "Category",
+                    "--required",
+                    "false",
+                    "--default-value",
+                    "General",
+                    "--workspace",
+                    workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "drop-property",
+                "Cube",
+                "Category",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var cube = model
+                .Descendants("Entity")
+                .Single(element => string.Equals(
+                    (string?)element.Attribute("name"),
+                    "Cube",
+                    StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                cube.Descendants("Property"),
+                property => string.Equals(
+                    (string?)property.Attribute("name"),
+                    "Category",
+                    StringComparison.OrdinalIgnoreCase));
+            Assert.All(
+                LoadEntityRows(workspaceRoot, "Cube"),
+                row => Assert.Null(row.Element("Category")));
+
+            Assert.Equal(
+                0,
+                (await RunCliAsync("status", "--workspace", workspaceRoot)).ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSetPropertyRequired_RequiresDefaultValue_WhenExistingRowsAreMissingValues()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-set-property-required-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-property",
+                    "Cube",
+                    "Category",
+                    "--required",
+                    "false",
+                    "--workspace",
+                    workspaceRoot)).ExitCode);
+
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "set-property-required",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("requires a value for existing records", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Cube.Category", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSetPropertyRequired_BackfillsExistingRows_WhenDefaultValueProvided()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-property",
+                    "Cube",
+                    "Category",
+                    "--required",
+                    "false",
+                    "--workspace",
+                    workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "set-property-required",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--default-value",
+                "General",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var property = model
+                .Descendants("Entity")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Cube", StringComparison.OrdinalIgnoreCase))
+                .Element("PropertyList")!
+                .Elements("Property")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Category", StringComparison.OrdinalIgnoreCase));
+            Assert.Null(property.Attribute("isRequired"));
+
+            foreach (var row in LoadEntityRows(workspaceRoot, "Cube"))
+            {
+                Assert.Equal("General", row.Element("Category")?.Value);
+            }
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSetPropertyRequired_AllowsRequiredWithoutDefault_WhenExistingRowsAlreadyHaveValues()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-property",
+                    "Cube",
+                    "Category",
+                    "--required",
+                    "false",
+                    "--default-value",
+                    "General",
+                    "--workspace",
+                    workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "set-property-required",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.DoesNotContain("DefaultValue:", result.CombinedOutput, StringComparison.Ordinal);
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSetPropertyRequired_TreatsExplicitEmptyTextAsPresent()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            Assert.Equal(
+                0,
+                (await RunCliAsync(
+                    "model",
+                    "add-property",
+                    "Cube",
+                    "Category",
+                    "--required",
+                    "false",
+                    "--default-value",
+                    string.Empty,
+                    "--workspace",
+                    workspaceRoot)).ExitCode);
+
+            var result = await RunCliAsync(
+                "model",
+                "set-property-required",
+                "Cube",
+                "Category",
+                "--required",
+                "true",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.All(
+                LoadEntityRows(workspaceRoot, "Cube"),
+                row => Assert.Equal(string.Empty, row.Element("Category")?.Value));
+            Assert.Equal(
+                0,
+                (await RunCliAsync("status", "--workspace", workspaceRoot)).ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelSetPropertyRequired_RejectsDefaultValue_WhenSettingOptional()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "set-property-required",
+                "Cube",
+                "CubeName",
+                "--required",
+                "false",
+                "--default-value",
+                "Ignored",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("--default-value is only valid with --required true", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRenameProperty_RewritesModelAndInstanceValues()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var before = LoadEntityRows(workspaceRoot, "Cube")
+                .ToDictionary(
+                    row => row.Attribute("Id")!.Value,
+                    row => row.Element("Purpose")?.Value,
+                    StringComparer.OrdinalIgnoreCase);
+
+            var result = await RunCliAsync(
+                "model",
+                "rename-property",
+                "Cube",
+                "Purpose",
+                "BusinessPurpose",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            var model = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            var cube = model
+                .Descendants("Entity")
+                .Single(element => string.Equals(
+                    (string?)element.Attribute("name"),
+                    "Cube",
+                    StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                cube.Descendants("Property"),
+                property => string.Equals(
+                    (string?)property.Attribute("name"),
+                    "Purpose",
+                    StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                cube.Descendants("Property"),
+                property => string.Equals(
+                    (string?)property.Attribute("name"),
+                    "BusinessPurpose",
+                    StringComparison.OrdinalIgnoreCase));
+
+            foreach (var row in LoadEntityRows(workspaceRoot, "Cube"))
+            {
+                Assert.Null(row.Element("Purpose"));
+                Assert.Equal(
+                    before[row.Attribute("Id")!.Value],
+                    row.Element("BusinessPurpose")?.Value);
+            }
+
+            Assert.Equal(
+                0,
+                (await RunCliAsync("status", "--workspace", workspaceRoot)).ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRenameModel_UpdatesModelAndInstanceRoots()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "model",
+                "rename-model",
+                "EnterpriseBIPlatform",
+                "AnalyticsModel",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+
+            var modelDocument = XDocument.Load(Path.Combine(workspaceRoot, "model.xml"));
+            Assert.Equal("AnalyticsModel", modelDocument.Root?.Attribute("name")?.Value);
+
+            var cubeDocument = XDocument.Load(Path.Combine(workspaceRoot, "instances", "Cube.xml"));
+            Assert.Equal("AnalyticsModel", cubeDocument.Root?.Name.LocalName);
+
+            var check = await RunCliAsync(
+                "status",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, check.ExitCode);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ModelRenameModel_FailsWhenWorkspaceModelDoesNotMatchRequestedSource()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var expectedWorkspace = Path.Combine(Path.GetTempPath(), "metadata-rename-model-expected", Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(workspaceRoot, expectedWorkspace);
+
+            var result = await RunCliAsync(
+                "model",
+                "rename-model",
+                "WrongModel",
+                "AnalyticsModel",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Workspace model is 'EnterpriseBIPlatform', not 'WrongModel'.", result.CombinedOutput, StringComparison.Ordinal);
+            AssertDirectoryBytesEqual(expectedWorkspace, workspaceRoot);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(expectedWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task ExportCsv_ExportsEntityRows_WithIdRelationshipsAndProperties()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        var csvPath = Path.Combine(Path.GetTempPath(), "metadata-export-csv", Guid.NewGuid().ToString("N"), "systemcube.csv");
+        try
+        {
+            var result = await RunCliAsync(
+                "export",
+                "csv",
+                "SystemCube",
+                "--out",
+                csvPath,
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Ok", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.True(File.Exists(csvPath), "Expected CSV file to be written.");
+
+            var lines = await File.ReadAllLinesAsync(csvPath);
+            Assert.NotEmpty(lines);
+            Assert.Equal("Id,CubeId,SystemId,ProcessingMode", lines[0]);
+            Assert.Contains(lines, line => line.StartsWith("1,1,1,", StringComparison.Ordinal));
+            Assert.Contains(lines, line => line.StartsWith("2,2,2,", StringComparison.Ordinal));
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+            DeleteDirectorySafe(Path.GetDirectoryName(csvPath)!);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_FailsWithHumanBlockers_WhenRelationshipUsageWouldBreak()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "delete",
+                "Cube",
+                "2",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("Cannot delete Cube 2", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("Blocked by existing relationships (", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("references Cube 2", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("SystemCube 2 references Cube 2", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Where:", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Hint:", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("instance.relationship.orphan", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("contains(Id,'')", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task RowRelationship_Set_ReplacesExistingUsageDeterministically()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var listBeforeSet = await RunCliAsync(
+                "instance",
+                "relationship",
+                "list",
+                "Measure",
+                "1",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, listBeforeSet.ExitCode);
+            Assert.Contains("Cube 1", listBeforeSet.StdOut, StringComparison.Ordinal);
+
+            var setResult = await RunCliAsync(
+                "instance",
+                "relationship",
+                "set",
+                "Measure",
+                "1",
+                "--to",
+                "Cube",
+                "2",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, setResult.ExitCode);
+
+            var listAfterSet = await RunCliAsync(
+                "instance",
+                "relationship",
+                "list",
+                "Measure",
+                "1",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(0, listAfterSet.ExitCode);
+            Assert.Contains("Cube 2", listAfterSet.StdOut, StringComparison.Ordinal);
+            Assert.DoesNotContain("Cube 1", listAfterSet.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceUpdate_PreservesEmptyPropertyAndClearsOptionalRelationship()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "add-entity",
+                "Step",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "add-property",
+                "Step",
+                "Name",
+                "--required",
+                "false",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Step",
+                "Step",
+                "--role",
+                "PreviousStep",
+                "--required",
+                "false",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "insert",
+                "Step",
+                "First",
+                "--set",
+                "Name=First",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "insert",
+                "Step",
+                "Second",
+                "--set",
+                "Name=Second",
+                "--set",
+                "PreviousStepId=First",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+
+            var update = await RunCliAsync(
+                "instance",
+                "update",
+                "Step",
+                "Second",
+                "--set",
+                "Name=",
+                "--set",
+                "PreviousStepId=",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.True(update.ExitCode == 0, update.CombinedOutput);
+            var workspace = await XmlWorkspaceReader.OpenAsync(workspaceRoot);
+            var second = workspace.Instance.GetOrCreateEntityRecords("Step")
+                .Single(record => string.Equals(
+                    record.Id,
+                    "Second",
+                    StringComparison.OrdinalIgnoreCase));
+            Assert.True(second.Values.TryGetValue("Name", out var name));
+            Assert.Equal(string.Empty, name);
+            Assert.False(second.RelationshipIds.ContainsKey("PreviousStepId"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task RowRelationship_Clear_IsNotExposed()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var clearResult = await RunCliAsync(
+                "instance",
+                "relationship",
+                "clear",
+                "Measure",
+                "1",
+                "--workspace",
+                workspaceRoot);
+            Assert.Equal(1, clearResult.ExitCode);
+            Assert.Contains("Unknown command 'instance relationship clear'.", clearResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task Insert_FailsWhenRequiredRelationshipIsMissing()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var result = await RunCliAsync(
+                "insert",
+                "Measure",
+                "99",
+                "--set",
+                "MeasureName=Missing Cube Relationship",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("insert is missing required relationship 'CubeId'", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("--set CubeId=<Id>", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task BulkInsert_FailsWhenRequiredRelationshipColumnIsMissing()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var tsvPath = Path.Combine(workspaceRoot, "measure-missing-cube.tsv");
+            await File.WriteAllTextAsync(
+                tsvPath,
+                "Id\tMeasureName\n99\tMissing Cube Relationship\n");
+
+            var result = await RunCliAsync(
+                "bulk-insert",
+                "Measure",
+                "--from",
+                "tsv",
+                "--file",
+                tsvPath,
+                "--workspace",
+                workspaceRoot);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("bulk-insert row 1 is missing required relationship 'CubeId'", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Set column 'CubeId' to a target Id", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task BulkInsert_ResolvesForwardOptionalRelationshipAndAllowsBlankValue()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "add-entity",
+                "Step",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Step",
+                "Cube",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+            Assert.Equal(0, (await RunCliAsync(
+                "model",
+                "add-relationship",
+                "Step",
+                "Step",
+                "--role",
+                "PreviousStep",
+                "--required",
+                "false",
+                "--workspace",
+                workspaceRoot)).ExitCode);
+
+            var tsvPath = Path.Combine(workspaceRoot, "steps.tsv");
+            await File.WriteAllTextAsync(
+                tsvPath,
+                "Id\tCubeId\tPreviousStepId\nSecond\t1\tFirst\nFirst\t1\t\n");
+
+            var result = await RunCliAsync(
+                "bulk-insert",
+                "Step",
+                "--from",
+                "tsv",
+                "--file",
+                tsvPath,
+                "--strict",
+                "--workspace",
+                workspaceRoot);
+
+            Assert.True(result.ExitCode == 0, result.CombinedOutput);
+
+            var workspace = await XmlWorkspaceReader.OpenAsync(workspaceRoot);
+            var stepsById = workspace.Instance.GetOrCreateEntityRecords("Step")
+                .ToDictionary(row => row.Id, StringComparer.OrdinalIgnoreCase);
+            Assert.Equal("1", stepsById["First"].RelationshipIds["CubeId"]);
+            Assert.False(stepsById["First"].RelationshipIds.ContainsKey("PreviousStepId"));
+            Assert.Equal("First", stepsById["Second"].RelationshipIds["PreviousStepId"]);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceDiff_FailsWhenRightWorkspaceHasMissingRequiredRelationshipUsage()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        try
+        {
+            var measureShardPath = Path.Combine(rightWorkspace, "instances", "Measure.xml");
+            var measureShard = XDocument.Load(measureShardPath);
+            var measureOne = measureShard
+                .Descendants("Measure")
+                .Single(element => string.Equals((string?)element.Attribute("Id"), "1", StringComparison.OrdinalIgnoreCase));
+            measureOne.SetAttributeValue("CubeId", null);
+            measureShard.Save(measureShardPath);
+
+            var result = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+
+            Assert.Equal(4, result.ExitCode);
+            Assert.Contains("missing required relationship 'CubeId'", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task GraphInbound_OutputIsDeterministic()
+    {
+        var workspaceRoot = CreateTempWorkspaceFromSamples();
+        try
+        {
+            var first = await RunCliAsync(
+                "graph",
+                "inbound",
+                "Cube",
+                "--workspace",
+                workspaceRoot,
+                "--top",
+                "20");
+            var second = await RunCliAsync(
+                "graph",
+                "inbound",
+                "Cube",
+                "--workspace",
+                workspaceRoot,
+                "--top",
+                "20");
+
+            Assert.Equal(0, first.ExitCode);
+            Assert.Equal(0, second.ExitCode);
+            Assert.Equal(first.StdOut, second.StdOut);
+            Assert.Contains("Measure", first.StdOut, StringComparison.Ordinal);
+            Assert.Contains("SystemCube", first.StdOut, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(workspaceRoot);
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceDiff_ReturnsDifferencesAndPersistsDiffWorkspace()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        try
+        {
+            var updateResult = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "Purpose=Diff sample changed",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, updateResult.ExitCode);
+
+            var insertResult = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Diff Cube",
+                "--set",
+                "Purpose=Diff sample",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertResult.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+
+            Assert.Equal(1, diffResult.ExitCode);
+            Assert.Contains("Instance diff: differences found.", diffResult.StdOut, StringComparison.Ordinal);
+            var diffPathMatch = Regex.Match(diffResult.StdOut, @"(?m)^DiffWorkspace:\s*(.+)$");
+            Assert.True(diffPathMatch.Success, $"Expected diff workspace path in output:{Environment.NewLine}{diffResult.StdOut}");
+
+            var diffWorkspacePath = diffPathMatch.Groups[1].Value.Trim();
+            Assert.True(Directory.Exists(diffWorkspacePath));
+
+            var statusResult = await RunCliAsync("status", "--workspace", diffWorkspacePath);
+            Assert.Equal(0, statusResult.ExitCode);
+            Assert.Contains("InstanceDiffModelEqual", statusResult.StdOut, StringComparison.Ordinal);
+
+            Assert.NotEmpty(LoadEntityRows(diffWorkspacePath, "ModelLeftPropertyInstanceNotInRight"));
+            Assert.NotEmpty(LoadEntityRows(diffWorkspacePath, "ModelRightPropertyInstanceNotInLeft"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceDiff_UsesIdentityIds_AndReferenceColumnsPointToExistingIds()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var updateResult = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "Purpose=Identity shape verification",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, updateResult.ExitCode);
+
+            var diffResult = await RunCliAsync("instance", "diff", leftWorkspace, rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var modelIds = AssertIdentityIds(diffWorkspacePath, "Model");
+            var diffIds = AssertIdentityIds(diffWorkspacePath, "Diff");
+            var entityIds = AssertIdentityIds(diffWorkspacePath, "Entity");
+            var propertyIds = AssertIdentityIds(diffWorkspacePath, "Property");
+            var leftRowIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftEntityInstance");
+            var rightRowIds = AssertIdentityIds(diffWorkspacePath, "ModelRightEntityInstance");
+            var leftPropertyInstanceIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftPropertyInstance");
+            var rightPropertyInstanceIds = AssertIdentityIds(diffWorkspacePath, "ModelRightPropertyInstance");
+            var leftEntityNotInRightIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftEntityInstanceNotInRight");
+            var rightEntityNotInLeftIds = AssertIdentityIds(diffWorkspacePath, "ModelRightEntityInstanceNotInLeft");
+            var leftNotInRightIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftPropertyInstanceNotInRight");
+            var rightNotInLeftIds = AssertIdentityIds(diffWorkspacePath, "ModelRightPropertyInstanceNotInLeft");
+
+            _ = leftEntityNotInRightIds;
+            _ = rightEntityNotInLeftIds;
+            _ = leftNotInRightIds;
+            _ = rightNotInLeftIds;
+
+            AssertReferenceValuesExist(diffWorkspacePath, "Diff", "ModelId", modelIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "Entity", "ModelId", modelIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "Property", "EntityId", entityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftEntityInstance", "DiffId", diffIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightEntityInstance", "DiffId", diffIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftEntityInstance", "EntityId", entityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightEntityInstance", "EntityId", entityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftPropertyInstance", "ModelLeftEntityInstanceId", leftRowIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightPropertyInstance", "ModelRightEntityInstanceId", rightRowIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftPropertyInstance", "PropertyId", propertyIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightPropertyInstance", "PropertyId", propertyIds);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelLeftEntityInstanceNotInRight",
+                "ModelLeftEntityInstanceId",
+                leftRowIds,
+                allowEmptyRows: true);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelRightEntityInstanceNotInLeft",
+                "ModelRightEntityInstanceId",
+                rightRowIds,
+                allowEmptyRows: true);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelLeftPropertyInstanceNotInRight",
+                "ModelLeftPropertyInstanceId",
+                leftPropertyInstanceIds,
+                allowEmptyRows: true);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelRightPropertyInstanceNotInLeft",
+                "ModelRightPropertyInstanceId",
+                rightPropertyInstanceIds,
+                allowEmptyRows: true);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceDiff_FailsHardWhenModelsDiffer()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        try
+        {
+            var modelResult = await RunCliAsync(
+                "model",
+                "add-property",
+                "Cube",
+                "ModelDiffOnlyProperty",
+                "--required",
+                "false",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, modelResult.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+
+            Assert.Equal(4, diffResult.ExitCode);
+            Assert.Contains("matching model contracts", diffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("diff-aligned", diffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_AppliesDiffWorkspace()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var insertResult = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Diff Cube",
+                "--set",
+                "Purpose=Diff sample",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertResult.ExitCode);
+
+            var cubeIdsBeforeMerge = LoadEntityRows(leftWorkspace, "Cube")
+                .Select(row => (string?)row.Attribute("Id"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+            Assert.DoesNotContain("99", cubeIdsBeforeMerge);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            var diffPathMatch = Regex.Match(diffResult.StdOut, @"(?m)^DiffWorkspace:\s*(.+)$");
+            Assert.True(diffPathMatch.Success);
+            diffWorkspacePath = diffPathMatch.Groups[1].Value.Trim();
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(0, mergeResult.ExitCode);
+            Assert.Contains("Ok", mergeResult.CombinedOutput, StringComparison.Ordinal);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "99",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Diff Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+
+            var cubeIdsAfterMerge = LoadEntityRows(leftWorkspace, "Cube")
+                .Select(row => (string?)row.Attribute("Id"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(
+                cubeIdsBeforeMerge.Concat(new[] { "99" }).OrderBy(id => id, StringComparer.Ordinal),
+                cubeIdsAfterMerge);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_FailsOnIncomingIdCollisionWithoutRemapping()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var insertRight = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Diff Cube",
+                "--set",
+                "Purpose=Diff sample",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertRight.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var insertLeft = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Local Cube",
+                "--set",
+                "Purpose=Target-local row",
+                "--set",
+                "RefreshMode=Scheduled",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, insertLeft.ExitCode);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(1, mergeResult.ExitCode);
+            Assert.Contains("precondition failed", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "99",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Local Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Diff Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_FailsOnFingerprintMismatch()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var insertRight = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Diff Cube",
+                "--set",
+                "Purpose=Diff sample",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertRight.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            var diffPathMatch = Regex.Match(diffResult.StdOut, @"(?m)^DiffWorkspace:\s*(.+)$");
+            Assert.True(diffPathMatch.Success);
+            diffWorkspacePath = diffPathMatch.Groups[1].Value.Trim();
+
+            var mutateLeft = await RunCliAsync(
+                "insert",
+                "Cube",
+                "100",
+                "--set",
+                "CubeName=Conflict Cube",
+                "--set",
+                "Purpose=Merge conflict sample",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, mutateLeft.ExitCode);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(1, mergeResult.ExitCode);
+            Assert.Contains("precondition failed", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Next:", mergeResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_RejectsAutoIdOption()
+    {
+        var result = await RunCliAsync(
+            "instance",
+            "merge",
+            ".\\LeftWorkspace",
+            ".\\RightWorkspace.instance-diff",
+            "--auto-id");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Cannot continue.", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("applied", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_FailsHardWhenDiffContainsModelDeltas()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var insertResult = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Diff Cube",
+                "--set",
+                "Purpose=Diff sample",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertResult.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var diffShardPath = Path.Combine(diffWorkspacePath, "instances", "Diff.xml");
+            var diffShard = XDocument.Load(diffShardPath);
+            var summaryRow = diffShard.Descendants("Diff").Single();
+            summaryRow.SetAttributeValue("ModelId", null);
+            summaryRow.Element("ModelId")?.Remove();
+            diffShard.Save(diffShardPath);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge",
+                leftWorkspace,
+                diffWorkspacePath);
+
+            Assert.Equal(4, mergeResult.ExitCode);
+            Assert.Contains("missing required relationship", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("ModelId", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Insert_AllowsOpaqueStringIds()
+    {
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        try
+        {
+            var insertResult = await RunCliAsync(
+                "insert",
+                "Cube",
+                "b|a",
+                "--set",
+                "CubeName=Pipe Cube",
+                "--set",
+                "Purpose=Opaque id test",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertResult.ExitCode);
+
+            var viewResult = await RunCliAsync(
+                "view",
+                "instance",
+                "Cube",
+                "b|a",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, viewResult.ExitCode);
+            Assert.Contains("Pipe Cube", viewResult.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectorySafe(rightWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceDiffAligned_ReturnsCleanWhenMappedSubsetEqual()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var alignmentWorkspace = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        string? diffWorkspacePath = null;
+        try
+        {
+            var renamePropertyResult = await RunCliAsync(
+                "model",
+                "rename-property",
+                "Cube",
+                "Purpose",
+                "BusinessPurpose",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, renamePropertyResult.ExitCode);
+
+            await CreateAlignmentWorkspaceAsync(
+                alignmentWorkspace,
+                modelLeftName: "EnterpriseBIPlatform",
+                modelRightName: "EnterpriseBIPlatform",
+                leftEntityName: "Cube",
+                rightEntityName: "Cube",
+                propertyMappings: new (string Left, string Right)[]
+                {
+                    ("CubeName", "CubeName"),
+                    ("Purpose", "BusinessPurpose"),
+                    ("RefreshMode", "RefreshMode"),
+                });
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff-aligned",
+                leftWorkspace,
+                rightWorkspace,
+                alignmentWorkspace);
+            Assert.Equal(0, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+            Assert.Contains("no differences", diffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(alignmentWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceDiffAligned_UsesIdentityIds_AndReferenceColumnsPointToExistingIds()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var alignmentWorkspace = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        string? diffWorkspacePath = null;
+        try
+        {
+            var renamePropertyResult = await RunCliAsync(
+                "model",
+                "rename-property",
+                "Cube",
+                "Purpose",
+                "BusinessPurpose",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, renamePropertyResult.ExitCode);
+
+            await CreateAlignmentWorkspaceAsync(
+                alignmentWorkspace,
+                modelLeftName: "EnterpriseBIPlatform",
+                modelRightName: "EnterpriseBIPlatform",
+                leftEntityName: "Cube",
+                rightEntityName: "Cube",
+                propertyMappings: new (string Left, string Right)[]
+                {
+                    ("CubeName", "CubeName"),
+                    ("Purpose", "BusinessPurpose"),
+                    ("RefreshMode", "RefreshMode"),
+                });
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff-aligned",
+                leftWorkspace,
+                rightWorkspace,
+                alignmentWorkspace);
+            Assert.Equal(0, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var modelIds = AssertIdentityIds(diffWorkspacePath, "Model");
+            var modelLeftIds = AssertIdentityIds(diffWorkspacePath, "ModelLeft");
+            var modelRightIds = AssertIdentityIds(diffWorkspacePath, "ModelRight");
+            var alignmentIds = AssertIdentityIds(diffWorkspacePath, "Alignment");
+            var modelLeftEntityIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftEntity");
+            var modelRightEntityIds = AssertIdentityIds(diffWorkspacePath, "ModelRightEntity");
+            var modelLeftPropertyIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftProperty");
+            var modelRightPropertyIds = AssertIdentityIds(diffWorkspacePath, "ModelRightProperty");
+            var entityMapIds = AssertIdentityIds(diffWorkspacePath, "EntityMap");
+            var propertyMapIds = AssertIdentityIds(diffWorkspacePath, "PropertyMap");
+            var leftRowIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftEntityInstance");
+            var rightRowIds = AssertIdentityIds(diffWorkspacePath, "ModelRightEntityInstance");
+            var leftPropertyInstanceIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftPropertyInstance");
+            var rightPropertyInstanceIds = AssertIdentityIds(diffWorkspacePath, "ModelRightPropertyInstance");
+            var leftEntityNotInRightIds = AssertIdentityIds(diffWorkspacePath, "ModelLeftEntityInstanceNotInRight");
+            var rightEntityNotInLeftIds = AssertIdentityIds(diffWorkspacePath, "ModelRightEntityInstanceNotInLeft");
+
+            _ = alignmentIds;
+            _ = entityMapIds;
+            _ = propertyMapIds;
+            _ = leftEntityNotInRightIds;
+            _ = rightEntityNotInLeftIds;
+
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeft", "ModelId", modelIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRight", "ModelId", modelIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "Alignment", "ModelLeftId", modelLeftIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "Alignment", "ModelRightId", modelRightIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftEntity", "ModelLeftId", modelLeftIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightEntity", "ModelRightId", modelRightIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftProperty", "ModelLeftEntityId", modelLeftEntityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightProperty", "ModelRightEntityId", modelRightEntityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "EntityMap", "ModelLeftEntityId", modelLeftEntityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "EntityMap", "ModelRightEntityId", modelRightEntityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "PropertyMap", "ModelLeftPropertyId", modelLeftPropertyIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "PropertyMap", "ModelRightPropertyId", modelRightPropertyIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftEntityInstance", "ModelLeftEntityId", modelLeftEntityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightEntityInstance", "ModelRightEntityId", modelRightEntityIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftPropertyInstance", "ModelLeftEntityInstanceId", leftRowIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightPropertyInstance", "ModelRightEntityInstanceId", rightRowIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelLeftPropertyInstance", "ModelLeftPropertyId", modelLeftPropertyIds);
+            AssertReferenceValuesExist(diffWorkspacePath, "ModelRightPropertyInstance", "ModelRightPropertyId", modelRightPropertyIds);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelLeftEntityInstanceNotInRight",
+                "ModelLeftEntityInstanceId",
+                leftRowIds,
+                allowEmptyRows: true);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelRightEntityInstanceNotInLeft",
+                "ModelRightEntityInstanceId",
+                rightRowIds,
+                allowEmptyRows: true);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelLeftPropertyInstanceNotInRight",
+                "ModelLeftPropertyInstanceId",
+                leftPropertyInstanceIds,
+                allowEmptyRows: true);
+            AssertReferenceValuesExist(
+                diffWorkspacePath,
+                "ModelRightPropertyInstanceNotInLeft",
+                "ModelRightPropertyInstanceId",
+                rightPropertyInstanceIds,
+                allowEmptyRows: true);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(alignmentWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceDiff_FailsOnBlankAndDuplicateIds()
+    {
+        var blankLeftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var blankRightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var duplicateLeftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var duplicateRightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        try
+        {
+            var blankInstancePath = Path.Combine(blankLeftWorkspace, "instances", "Cube.xml");
+            var blankInstance = XDocument.Load(blankInstancePath);
+            blankInstance.Descendants("Cube").First().SetAttributeValue("Id", string.Empty);
+            blankInstance.Save(blankInstancePath);
+
+            var blankDiffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                blankLeftWorkspace,
+                blankRightWorkspace);
+            Assert.Equal(4, blankDiffResult.ExitCode);
+            Assert.Contains("missing valid Id", blankDiffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+
+            var duplicateInstancePath = Path.Combine(duplicateLeftWorkspace, "instances", "Cube.xml");
+            var duplicateInstance = XDocument.Load(duplicateInstancePath);
+            var cubes = duplicateInstance.Descendants("Cube").Take(2).ToList();
+            Assert.True(cubes.Count == 2);
+            cubes[1].SetAttributeValue("Id", (string?)cubes[0].Attribute("Id") ?? string.Empty);
+            duplicateInstance.Save(duplicateInstancePath);
+
+            var duplicateDiffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                duplicateLeftWorkspace,
+                duplicateRightWorkspace);
+            Assert.Equal(4, duplicateDiffResult.ExitCode);
+            Assert.Contains("duplicate Id", duplicateDiffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(blankLeftWorkspace);
+            DeleteDirectorySafe(blankRightWorkspace);
+            DeleteDirectorySafe(duplicateLeftWorkspace);
+            DeleteDirectorySafe(duplicateRightWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceMerge_RejectsMultipleSummaryRows()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var insertResult = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Diff Cube",
+                "--set",
+                "Purpose=Summary-row test",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertResult.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var summaryShardPath = Path.Combine(diffWorkspacePath, "instances", "Diff.xml");
+            var summaryShard = XDocument.Load(summaryShardPath);
+            var summaryRow = summaryShard.Descendants("Diff").Single();
+            var duplicateSummaryRow = new XElement(summaryRow);
+            duplicateSummaryRow.SetAttributeValue("Id", "2");
+            summaryRow.Parent!.Add(duplicateSummaryRow);
+            summaryShard.Save(summaryShardPath);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(4, mergeResult.ExitCode);
+            Assert.Contains("must contain exactly one 'Diff' row", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceDiff_TreatsMissingAndExplicitEmptyAsDifferent()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        const string propertyName = "MissingVsEmptyProp";
+        try
+        {
+            var addLeftProperty = await RunCliAsync(
+                "model",
+                "add-property",
+                "Cube",
+                propertyName,
+                "--required",
+                "false",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, addLeftProperty.ExitCode);
+
+            var addRightProperty = await RunCliAsync(
+                "model",
+                "add-property",
+                "Cube",
+                propertyName,
+                "--required",
+                "false",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, addRightProperty.ExitCode);
+
+            var setRightEmpty = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                propertyName + "=",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, setRightEmpty.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            Assert.NotEmpty(LoadEntityRows(diffWorkspacePath, "ModelRightPropertyInstanceNotInLeft"));
+            Assert.Empty(LoadEntityRows(diffWorkspacePath, "ModelLeftPropertyInstanceNotInRight"));
+
+            var propertyShardPath = Path.Combine(diffWorkspacePath, "instances", "Property.xml");
+            var rightPropertyShardPath = Path.Combine(diffWorkspacePath, "instances", "ModelRightPropertyInstance.xml");
+            var propertyShard = XDocument.Load(propertyShardPath);
+            var optionalPropertyId = propertyShard
+                .Descendants("Property")
+                .Single(element => string.Equals(GetFieldValue(element, "Name"), propertyName, StringComparison.OrdinalIgnoreCase))
+                .Attribute("Id")?.Value;
+            Assert.False(string.IsNullOrWhiteSpace(optionalPropertyId));
+
+            var rightPropertyShard = XDocument.Load(rightPropertyShardPath);
+            Assert.Contains(
+                rightPropertyShard.Descendants("ModelRightPropertyInstance"),
+                element =>
+                    string.Equals(GetFieldValue(element, "PropertyId"), optionalPropertyId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(GetFieldValue(element, "Value"), string.Empty, StringComparison.Ordinal));
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceMerge_PreservesMissingVsExplicitEmptyInBothDirections()
+    {
+        var missingWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var emptyWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var reverseMissingWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffToEmptyWorkspace = null;
+        string? diffToMissingWorkspace = null;
+        const string propertyName = "MissingVsEmptyProp";
+        try
+        {
+            foreach (var workspacePath in new[] { missingWorkspace, emptyWorkspace, reverseMissingWorkspace })
+            {
+                var addProperty = await RunCliAsync(
+                    "model",
+                    "add-property",
+                    "Cube",
+                    propertyName,
+                    "--required",
+                    "false",
+                    "--workspace",
+                    workspacePath);
+                Assert.Equal(0, addProperty.ExitCode);
+            }
+
+            var setEmpty = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                propertyName + "=",
+                "--workspace",
+                emptyWorkspace);
+            Assert.Equal(0, setEmpty.ExitCode);
+
+            var diffToEmpty = await RunCliAsync(
+                "instance",
+                "diff",
+                missingWorkspace,
+                emptyWorkspace);
+            Assert.Equal(1, diffToEmpty.ExitCode);
+            diffToEmptyWorkspace = ExtractDiffWorkspacePath(diffToEmpty.StdOut);
+
+            var mergeToEmpty = await RunCliAsync(
+                "instance",
+                "merge",
+                missingWorkspace,
+                diffToEmptyWorkspace);
+            Assert.Equal(0, mergeToEmpty.ExitCode);
+
+            var missingCubeShard = XDocument.Load(Path.Combine(missingWorkspace, "instances", "Cube.xml"));
+            var missingCubeOne = missingCubeShard
+                .Descendants("Cube")
+                .Single(element => string.Equals((string?)element.Attribute("Id"), "1", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(string.Empty, missingCubeOne.Element(propertyName)?.Value);
+
+            var diffToMissing = await RunCliAsync(
+                "instance",
+                "diff",
+                emptyWorkspace,
+                reverseMissingWorkspace);
+            Assert.Equal(1, diffToMissing.ExitCode);
+            diffToMissingWorkspace = ExtractDiffWorkspacePath(diffToMissing.StdOut);
+
+            var mergeToMissing = await RunCliAsync(
+                "instance",
+                "merge",
+                emptyWorkspace,
+                diffToMissingWorkspace);
+            Assert.Equal(0, mergeToMissing.ExitCode);
+
+            var emptyCubeShard = XDocument.Load(Path.Combine(emptyWorkspace, "instances", "Cube.xml"));
+            var emptyCubeOne = emptyCubeShard
+                .Descendants("Cube")
+                .Single(element => string.Equals((string?)element.Attribute("Id"), "1", StringComparison.OrdinalIgnoreCase));
+            Assert.Null(emptyCubeOne.Element(propertyName));
+        }
+        finally
+        {
+            DeleteDirectorySafe(missingWorkspace);
+            DeleteDirectorySafe(emptyWorkspace);
+            DeleteDirectorySafe(reverseMissingWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffToEmptyWorkspace))
+            {
+                DeleteDirectorySafe(diffToEmptyWorkspace);
+            }
+
+            if (!string.IsNullOrWhiteSpace(diffToMissingWorkspace))
+            {
+                DeleteDirectorySafe(diffToMissingWorkspace);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceMerge_RejectsDiffWhenModelRightPropertyInstanceValueIsMissing()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        string? diffWorkspacePath = null;
+        try
+        {
+            var updateRight = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "Purpose=Tampered diff test",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, updateRight.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var rightPropertyShardPath = Path.Combine(
+                diffWorkspacePath,
+                "instances",
+                "ModelRightPropertyInstance.xml");
+            var rightPropertyShard = XDocument.Load(rightPropertyShardPath);
+            var tampered = rightPropertyShard
+                .Descendants("ModelRightPropertyInstance")
+                .FirstOrDefault(element => element.Element("Value") != null);
+            Assert.NotNull(tampered);
+            tampered!.Element("Value")!.Remove();
+            rightPropertyShard.Save(rightPropertyShardPath);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(4, mergeResult.ExitCode);
+            Assert.Contains("missing required value 'Value'", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceMergeAligned_AppliesMappedRightSnapshot()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var alignmentWorkspace = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        string? diffWorkspacePath = null;
+        try
+        {
+            await CreateAlignmentWorkspaceAsync(
+                alignmentWorkspace,
+                modelLeftName: "EnterpriseBIPlatform",
+                modelRightName: "EnterpriseBIPlatform",
+                leftEntityName: "Cube",
+                rightEntityName: "Cube",
+                propertyMappings: new (string Left, string Right)[]
+                {
+                    ("CubeName", "CubeName"),
+                    ("Purpose", "Purpose"),
+                    ("RefreshMode", "RefreshMode"),
+                });
+
+            var updateRight = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "2",
+                "--set",
+                "Purpose=Aligned merge update",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, updateRight.ExitCode);
+
+            var insertRight = await RunCliAsync(
+                "insert",
+                "Cube",
+                "99",
+                "--set",
+                "CubeName=Aligned Merge Cube",
+                "--set",
+                "Purpose=Added by merge-aligned",
+                "--set",
+                "RefreshMode=Manual",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, insertRight.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff-aligned",
+                leftWorkspace,
+                rightWorkspace,
+                alignmentWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge-aligned",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(0, mergeResult.ExitCode);
+
+            var mergedCubeShard = XDocument.Load(Path.Combine(leftWorkspace, "instances", "Cube.xml"));
+            var updatedCube = mergedCubeShard
+                .Descendants("Cube")
+                .Single(element => string.Equals((string?)element.Attribute("Id"), "2", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal("Aligned merge update", GetFieldValue(updatedCube, "Purpose"));
+
+            var insertedCube = mergedCubeShard
+                .Descendants("Cube")
+                .SingleOrDefault(element => string.Equals((string?)element.Attribute("Id"), "99", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(insertedCube);
+            Assert.Equal("Aligned Merge Cube", GetFieldValue(insertedCube!, "CubeName"));
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(alignmentWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceMergeAligned_FailsWhenTargetDoesNotMatchLeftSnapshot()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var alignmentWorkspace = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        string? diffWorkspacePath = null;
+        try
+        {
+            await CreateAlignmentWorkspaceAsync(
+                alignmentWorkspace,
+                modelLeftName: "EnterpriseBIPlatform",
+                modelRightName: "EnterpriseBIPlatform",
+                leftEntityName: "Cube",
+                rightEntityName: "Cube",
+                propertyMappings: new (string Left, string Right)[]
+                {
+                    ("CubeName", "CubeName"),
+                    ("Purpose", "Purpose"),
+                });
+
+            var updateRight = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "Purpose=Right snapshot value",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, updateRight.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff-aligned",
+                leftWorkspace,
+                rightWorkspace,
+                alignmentWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var driftTarget = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "Purpose=Target drift",
+                "--workspace",
+                leftWorkspace);
+            Assert.Equal(0, driftTarget.ExitCode);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge-aligned",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(1, mergeResult.ExitCode);
+            Assert.Contains("precondition failed", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(alignmentWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceMergeAligned_RejectsMalformedDiffWorkspace()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var alignmentWorkspace = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        string? diffWorkspacePath = null;
+        try
+        {
+            await CreateAlignmentWorkspaceAsync(
+                alignmentWorkspace,
+                modelLeftName: "EnterpriseBIPlatform",
+                modelRightName: "EnterpriseBIPlatform",
+                leftEntityName: "Cube",
+                rightEntityName: "Cube",
+                propertyMappings: new (string Left, string Right)[]
+                {
+                    ("CubeName", "CubeName"),
+                    ("Purpose", "Purpose"),
+                });
+
+            var updateRight = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "Purpose=Tampered aligned diff",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, updateRight.ExitCode);
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff-aligned",
+                leftWorkspace,
+                rightWorkspace,
+                alignmentWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var alignmentShardPath = Path.Combine(diffWorkspacePath, "instances", "Alignment.xml");
+            var alignmentShard = XDocument.Load(alignmentShardPath);
+            var alignmentRow = alignmentShard.Descendants("Alignment").Single();
+            alignmentRow.Attribute("ModelRightId")?.Remove();
+            alignmentRow.Element("ModelRightId")?.Remove();
+            alignmentShard.Save(alignmentShardPath);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge-aligned",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(4, mergeResult.ExitCode);
+            Assert.Contains("ModelRightId", mergeResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(alignmentWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceDiff_RepeatedRuns_AreByteDeterministic()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var firstSnapshot = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        string? diffWorkspacePath = null;
+        try
+        {
+            var updateRight = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                "Purpose=Deterministic diff content",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, updateRight.ExitCode);
+
+            var firstDiff = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, firstDiff.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(firstDiff.StdOut);
+            CopyDirectory(diffWorkspacePath, firstSnapshot);
+
+            var secondDiff = await RunCliAsync(
+                "instance",
+                "diff",
+                leftWorkspace,
+                rightWorkspace);
+            Assert.Equal(1, secondDiff.ExitCode);
+
+            AssertDirectoryBytesEqual(firstSnapshot, diffWorkspacePath);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(firstSnapshot);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InstanceDiffAligned_RejectsIdPropertyMappings()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var alignmentWorkspace = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            await CreateAlignmentWorkspaceAsync(
+                alignmentWorkspace,
+                modelLeftName: "EnterpriseBIPlatform",
+                modelRightName: "EnterpriseBIPlatform",
+                leftEntityName: "Cube",
+                rightEntityName: "Cube",
+                propertyMappings: new (string Left, string Right)[]
+                {
+                    ("Id", "Id"),
+                    ("CubeName", "CubeName"),
+                });
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff-aligned",
+                leftWorkspace,
+                rightWorkspace,
+                alignmentWorkspace);
+            Assert.Equal(4, diffResult.ExitCode);
+            Assert.Contains("missing aligned property 'Id'", diffResult.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(alignmentWorkspace);
+        }
+    }
+
+    [Fact]
+    public async Task InstanceMergeAligned_PreservesMissingVsExplicitEmpty()
+    {
+        var leftWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var rightWorkspace = await CreateTempCanonicalWorkspaceFromSamplesAsync();
+        var alignmentWorkspace = Path.Combine(Path.GetTempPath(), "metadata-studio-tests", Guid.NewGuid().ToString("N"));
+        string? diffWorkspacePath = null;
+        const string propertyName = "AlignedMissingVsEmpty";
+        try
+        {
+            foreach (var workspacePath in new[] { leftWorkspace, rightWorkspace })
+            {
+                var addProperty = await RunCliAsync(
+                    "model",
+                    "add-property",
+                    "Cube",
+                    propertyName,
+                    "--required",
+                    "false",
+                    "--workspace",
+                    workspacePath);
+                Assert.Equal(0, addProperty.ExitCode);
+            }
+
+            var setRightEmpty = await RunCliAsync(
+                "instance",
+                "update",
+                "Cube",
+                "1",
+                "--set",
+                propertyName + "=",
+                "--workspace",
+                rightWorkspace);
+            Assert.Equal(0, setRightEmpty.ExitCode);
+
+            await CreateAlignmentWorkspaceAsync(
+                alignmentWorkspace,
+                modelLeftName: "EnterpriseBIPlatform",
+                modelRightName: "EnterpriseBIPlatform",
+                leftEntityName: "Cube",
+                rightEntityName: "Cube",
+                propertyMappings: new (string Left, string Right)[]
+                {
+                    ("CubeName", "CubeName"),
+                    (propertyName, propertyName),
+                });
+
+            var diffResult = await RunCliAsync(
+                "instance",
+                "diff-aligned",
+                leftWorkspace,
+                rightWorkspace,
+                alignmentWorkspace);
+            Assert.Equal(1, diffResult.ExitCode);
+            diffWorkspacePath = ExtractDiffWorkspacePath(diffResult.StdOut);
+
+            var mergeResult = await RunCliAsync(
+                "instance",
+                "merge-aligned",
+                leftWorkspace,
+                diffWorkspacePath);
+            Assert.Equal(0, mergeResult.ExitCode);
+
+            var cubeShard = XDocument.Load(Path.Combine(leftWorkspace, "instances", "Cube.xml"));
+            var cubeOne = cubeShard
+                .Descendants("Cube")
+                .Single(element => string.Equals((string?)element.Attribute("Id"), "1", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(cubeOne.Element(propertyName));
+            Assert.Equal(string.Empty, cubeOne.Element(propertyName)!.Value);
+        }
+        finally
+        {
+            DeleteDirectorySafe(leftWorkspace);
+            DeleteDirectorySafe(rightWorkspace);
+            DeleteDirectorySafe(alignmentWorkspace);
+            if (!string.IsNullOrWhiteSpace(diffWorkspacePath))
+            {
+                DeleteDirectorySafe(diffWorkspacePath);
+            }
+        }
+    }
+
+    private static Task<(int ExitCode, string StdOut, string StdErr, string CombinedOutput)> RunCliAsync(
+        params string[] arguments) =>
+        RunCliAsyncCore(standardInput: null, arguments);
+
+    private static Task<(int ExitCode, string StdOut, string StdErr, string CombinedOutput)> RunCliWithStandardInputAsync(
+        string standardInput,
+        params string[] arguments) =>
+        RunCliAsyncCore(standardInput, arguments);
+
+    private static async Task<(int ExitCode, string StdOut, string StdErr, string CombinedOutput)> RunCliAsyncCore(
+        string? standardInput,
+        IReadOnlyList<string> arguments)
+    {
+        var repoRoot = FindRepositoryRoot();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = CliTestHost.DotNetHost,
+            RedirectStandardInput = standardInput != null,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = repoRoot,
+        };
+
+        CliTestHost.AddAssemblyArgument(startInfo, "meta");
+
+        var effectiveArguments = arguments.ToList();
+        if (effectiveArguments.Count >= 2 &&
+            string.Equals(effectiveArguments[0], "instance", StringComparison.OrdinalIgnoreCase) &&
+            (string.Equals(effectiveArguments[1], "diff", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(effectiveArguments[1], "diff-aligned", StringComparison.OrdinalIgnoreCase)) &&
+            !effectiveArguments.Any(argument =>
+                string.Equals(argument, "--output-xml", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(argument, "--output-csharp", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(argument, "--output-sql", StringComparison.OrdinalIgnoreCase)))
+        {
+            effectiveArguments.Add("--output-xml");
+            effectiveArguments.Add(Path.Combine(
+                Path.GetTempPath(),
+                "metadata-studio-tests",
+                $"{Guid.NewGuid():N}-instance-diff"));
+        }
+
+        foreach (var argument in effectiveArguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        if (standardInput != null)
+        {
+            startInfo.StandardInputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        }
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+
+        if (standardInput != null)
+        {
+            await process.StandardInput.WriteAsync(standardInput).ConfigureAwait(false);
+            process.StandardInput.Close();
+        }
+
+        var stdOutTask = process.StandardOutput.ReadToEndAsync();
+        var stdErrTask = process.StandardError.ReadToEndAsync();
+        await WaitForProcessExitAsync(process, startInfo, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+
+        var stdOut = await stdOutTask.ConfigureAwait(false);
+        var stdErr = await stdErrTask.ConfigureAwait(false);
+        return (process.ExitCode, stdOut, stdErr, stdOut + Environment.NewLine + stdErr);
+    }
+
+    private static async Task WaitForProcessExitAsync(
+        Process process,
+        ProcessStartInfo startInfo,
+        TimeSpan timeout)
+    {
+        using var timeoutSource = new CancellationTokenSource(timeout);
+        try
+        {
+            await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception)
+        {
+            TryKillProcessTree(process);
+            process.WaitForExit();
+            throw new TimeoutException(
+                $"Timed out waiting for process: {startInfo.FileName} {string.Join(' ', startInfo.ArgumentList)}",
+                exception);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                TryKillProcessTree(process);
+                process.WaitForExit();
+            }
+        }
+    }
+
+    private static void TryKillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (NotSupportedException)
+        {
+        }
+    }
+
+    private static HashSet<string> AssertIdentityIds(string workspacePath, string entityName)
+    {
+        var rows = LoadEntityRows(workspacePath, entityName);
+        var parsedIds = rows
+            .Select(row =>
+            {
+                var idText = (string?)row.Attribute("Id");
+                Assert.False(string.IsNullOrWhiteSpace(idText), $"{entityName} row is missing Id.");
+                Assert.True(int.TryParse(idText, out _), $"{entityName} row Id '{idText}' is not numeric.");
+                return int.Parse(idText!, System.Globalization.CultureInfo.InvariantCulture);
+            })
+            .OrderBy(id => id)
+            .ToArray();
+        Assert.Equal(Enumerable.Range(1, parsedIds.Length), parsedIds);
+        return rows
+            .Select(row => (string)row.Attribute("Id")!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void AssertReferenceValuesExist(
+        string workspacePath,
+        string entityName,
+        string referenceAttributeName,
+        IReadOnlySet<string> targetIds,
+        bool allowEmptyRows = false)
+    {
+        var rows = LoadEntityRows(workspacePath, entityName);
+        if (!rows.Any())
+        {
+            Assert.True(allowEmptyRows, $"{entityName} has no rows but rows were expected.");
+            return;
+        }
+
+        foreach (var row in rows)
+        {
+            var reference = GetFieldValue(row, referenceAttributeName);
+            Assert.False(
+                string.IsNullOrWhiteSpace(reference),
+                $"{entityName} row '{(string?)row.Attribute("Id")}' is missing '{referenceAttributeName}'.");
+            Assert.Contains(reference!, targetIds);
+        }
+    }
+
+    private static string? GetFieldValue(XElement row, string fieldName)
+    {
+        var attributeValue = (string?)row.Attribute(fieldName);
+        if (!string.IsNullOrWhiteSpace(attributeValue) || row.Attribute(fieldName) != null)
+        {
+            return attributeValue;
+        }
+
+        var element = row.Element(fieldName);
+        return element?.Value;
+    }
+
+    private static IReadOnlyList<XElement> LoadEntityRows(string workspacePath, string entityName)
+    {
+        var shardPath = Path.Combine(workspacePath, "instances", entityName + ".xml");
+        if (!File.Exists(shardPath))
+        {
+            return Array.Empty<XElement>();
+        }
+
+        var document = XDocument.Load(shardPath);
+        return document.Descendants(entityName).ToList();
+    }
+
+    private static void CopyDirectory(string sourcePath, string destinationPath)
+    {
+        if (Directory.Exists(destinationPath))
+        {
+            Directory.Delete(destinationPath, recursive: true);
+        }
+
+        Directory.CreateDirectory(destinationPath);
+        foreach (var directory in Directory.GetDirectories(sourcePath, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(sourcePath, directory);
+            Directory.CreateDirectory(Path.Combine(destinationPath, relative));
+        }
+
+        foreach (var file in Directory.GetFiles(sourcePath, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(sourcePath, file);
+            var destinationFile = Path.Combine(destinationPath, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
+            File.Copy(file, destinationFile, overwrite: true);
+        }
+    }
+
+    private static void AssertDirectoryBytesEqual(string expectedPath, string actualPath)
+    {
+        var expectedFiles = Directory.GetFiles(expectedPath, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(expectedPath, path))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var actualFiles = Directory.GetFiles(actualPath, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(actualPath, path))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        Assert.Equal(expectedFiles, actualFiles);
+
+        foreach (var relativePath in expectedFiles)
+        {
+            var expectedBytes = File.ReadAllBytes(Path.Combine(expectedPath, relativePath));
+            var actualBytes = File.ReadAllBytes(Path.Combine(actualPath, relativePath));
+            Assert.True(
+                expectedBytes.AsSpan().SequenceEqual(actualBytes),
+                $"File '{relativePath}' differs between expected and actual directories.");
+        }
+    }
+
+    private static async Task CreateAlignmentWorkspaceAsync(
+        string workspaceRoot,
+        string modelLeftName,
+        string modelRightName,
+        string leftEntityName,
+        string rightEntityName,
+        IReadOnlyList<(string Left, string Right)> propertyMappings)
+    {
+        if (propertyMappings.Count == 0)
+        {
+            throw new InvalidOperationException("Alignment test helper requires at least one property mapping.");
+        }
+
+        var repoRoot = FindRepositoryRoot();
+        var metadataRoot = workspaceRoot;
+        var instanceRoot = Path.Combine(metadataRoot, "instances");
+        Directory.CreateDirectory(instanceRoot);
+        File.Copy(
+            Path.Combine(repoRoot, "Meta", "Workspaces", "InstanceDiff.Alignment", "model.xml"),
+            Path.Combine(metadataRoot, "model.xml"),
+            overwrite: true);
+        WorkspaceMetaFile.WriteXml(workspaceRoot);
+
+        var openedWorkspace = await XmlWorkspaceReader
+            .OpenAsync(workspaceRoot)
+            .ConfigureAwait(false);
+        var workspace = openedWorkspace.State.Clone();
+        workspace.Instance.ModelName = workspace.Model.Name;
+
+        AddRow("Model", "1", ("Name", modelLeftName));
+        AddRow("Model", "2", ("Name", modelRightName));
+        AddRow("ModelLeft", "1", ("ModelId", "1"));
+        AddRow("ModelRight", "1", ("ModelId", "2"));
+        AddRow(
+            "Alignment",
+            "1",
+            ("Name", "TestAlignment"),
+            ("ModelLeftId", "1"),
+            ("ModelRightId", "1"));
+
+        AddRow(
+            "ModelLeftEntity",
+            "1",
+            ("Name", leftEntityName),
+            ("ModelLeftId", "1"));
+        AddRow(
+            "ModelRightEntity",
+            "1",
+            ("Name", rightEntityName),
+            ("ModelRightId", "1"));
+        AddRow(
+            "EntityMap",
+            "1",
+            ("ModelLeftEntityId", "1"),
+            ("ModelRightEntityId", "1"));
+
+        for (var index = 0; index < propertyMappings.Count; index++)
+        {
+            var ordinal = (index + 1).ToString();
+            var leftPropertyId = ordinal;
+            var rightPropertyId = ordinal;
+            AddRow(
+                "ModelLeftProperty",
+                leftPropertyId,
+                ("Name", propertyMappings[index].Left),
+                ("ModelLeftEntityId", "1"));
+            AddRow(
+                "ModelRightProperty",
+                rightPropertyId,
+                ("Name", propertyMappings[index].Right),
+                ("ModelRightEntityId", "1"));
+            AddRow(
+                "PropertyMap",
+                ordinal,
+                ("ModelLeftPropertyId", leftPropertyId),
+                ("ModelRightPropertyId", rightPropertyId));
+        }
+
+        await XmlWorkspaceWriter.WriteNewAsync(workspace, workspaceRoot).ConfigureAwait(false);
+
+        void AddRow(
+            string entityName,
+            string id,
+            params (string Key, string Value)[] values)
+        {
+            var entity = workspace.Model.FindEntity(entityName)
+                         ?? throw new InvalidOperationException($"Alignment helper is missing entity '{entityName}'.");
+            var propertyNames = entity.Properties
+                .Select(item => item.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var relationshipNames = entity.Relationships
+                .Select(item => item.GetColumnName())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var row = new GenericRecord
+            {
+                Id = id,
+            };
+            foreach (var (key, value) in values)
+            {
+                if (relationshipNames.Contains(key))
+                {
+                    row.RelationshipIds[key] = value;
+                    continue;
+                }
+
+                if (propertyNames.Contains(key))
+                {
+                    row.Values[key] = value;
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    $"Alignment helper cannot map field '{key}' for entity '{entityName}'.");
+            }
+
+            workspace.Instance.GetOrCreateEntityRecords(entityName).Add(row);
+        }
+    }
+
+    private static async Task<string> CreateTempSuggestDemoWorkspaceAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "metadata-suggest-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        DeleteDirectorySafe(root);
+        return await TestWorkspaceFactory.CreateTempSuggestDemoWorkspaceAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<string> CreateTempRefactorCycleWorkspaceAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "metadata-refactor-cycle-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        Assert.Equal(0, (await RunCliAsync("create", "--xml", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-entity", "A", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-entity", "B", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-property", "A", "Code", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-property", "B", "Code", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-property", "B", "ACode", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("insert", "B", "1", "--set", "Code=B1", "--set", "ACode=A1", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("model", "add-relationship", "A", "B", "--default-id", "1", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("insert", "A", "1", "--set", "Code=A1", "--set", "BId=1", "--workspace", root)).ExitCode);
+        Assert.Equal(0, (await RunCliAsync("status", "--workspace", root)).ExitCode);
+
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithEntityStorageRenameFixture()
+    {
+        var root = CreateTempWorkspaceFromSamples();
+        var workspaceConfig = WorkspaceMetaFile.Read(root).Configuration;
+        workspaceConfig.EntityStorage.Add(new Meta.Surfaces.Configuration.EntityStorage
+        {
+            Id = "1",
+            WorkspaceId = workspaceConfig.Workspace.Single().Id,
+            EntityName = "SystemType",
+            StorageKind = "Sharded",
+            FilePath = "instances/SystemType.xml",
+        });
+        WorkspaceMetaFile.WriteXml(root, workspaceConfig);
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithRoleRenameFixture()
+    {
+        var root = CreateTempWorkspaceFromSamples();
+
+        var modelPath = Path.Combine(root, "model.xml");
+        var modelDocument = XDocument.Load(modelPath);
+        var systemEntity = modelDocument
+            .Descendants("Entity")
+            .Single(element => string.Equals((string?)element.Attribute("name"), "System", StringComparison.OrdinalIgnoreCase));
+        var relationship = systemEntity
+            .Descendants("Relationship")
+            .Single(element => string.Equals((string?)element.Attribute("entity"), "SystemType", StringComparison.OrdinalIgnoreCase));
+        relationship.SetAttributeValue("role", "PrimarySystemType");
+        modelDocument.Save(modelPath);
+
+        var systemPath = Path.Combine(root, "instances", "System.xml");
+        var systemDocument = XDocument.Load(systemPath);
+        foreach (var row in systemDocument.Descendants("System"))
+        {
+            var current = (string?)row.Attribute("SystemTypeId");
+            row.SetAttributeValue("PrimarySystemTypeId", current);
+            row.Attribute("SystemTypeId")?.Remove();
+        }
+
+        systemDocument.Save(systemPath);
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithRenameCollisionFixture()
+    {
+        var root = CreateTempWorkspaceFromSamples();
+
+        var modelPath = Path.Combine(root, "model.xml");
+        var modelDocument = XDocument.Load(modelPath);
+        var systemEntity = modelDocument
+            .Descendants("Entity")
+            .Single(element => string.Equals((string?)element.Attribute("name"), "System", StringComparison.OrdinalIgnoreCase));
+        var relationships = systemEntity.Element("RelationshipList");
+        Assert.NotNull(relationships);
+        relationships!.Add(new XElement("Relationship",
+            new XAttribute("entity", "Cube"),
+            new XAttribute("role", "PlatformType")));
+        modelDocument.Save(modelPath);
+
+        var systemPath = Path.Combine(root, "instances", "System.xml");
+        var systemDocument = XDocument.Load(systemPath);
+        foreach (var row in systemDocument.Descendants("System"))
+        {
+            row.SetAttributeValue("PlatformTypeId", "1");
+        }
+
+        systemDocument.Save(systemPath);
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithRelationshipRenameCollisionFixture()
+    {
+        var root = CreateTempWorkspaceFromSamples();
+
+        var modelPath = Path.Combine(root, "model.xml");
+        var modelDocument = XDocument.Load(modelPath);
+        var systemEntity = modelDocument
+            .Descendants("Entity")
+            .Single(element => string.Equals((string?)element.Attribute("name"), "System", StringComparison.OrdinalIgnoreCase));
+        var properties = systemEntity.Element("PropertyList");
+        Assert.NotNull(properties);
+        properties!.Add(new XElement(
+            "Property",
+            new XAttribute("name", "PrimarySystemTypeId"),
+            new XAttribute("isRequired", "false")));
+        modelDocument.Save(modelPath);
+
+        return root;
+    }
+
+    private static string CreateTempWorkspaceWithMissingRequiredRelationship()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "metadata-invalid-load-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "instances"));
+        WriteXmlWorkspaceDescriptor(root);
+
+        File.WriteAllText(
+            Path.Combine(root, "model.xml"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Model name="Mini">
+              <EntityList>
+                <Entity name="Warehouse" />
+                <Entity name="Order">
+                  <RelationshipList>
+                    <Relationship entity="Warehouse" />
+                  </RelationshipList>
+                </Entity>
+              </EntityList>
+            </Model>
+            """);
+
+        File.WriteAllText(
+            Path.Combine(root, "instances", "Warehouse.xml"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Mini>
+              <WarehouseList>
+                <Warehouse Id="WH-001" />
+              </WarehouseList>
+            </Mini>
+            """);
+
+        File.WriteAllText(
+            Path.Combine(root, "instances", "Order.xml"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Mini>
+              <OrderList>
+                <Order Id="ORD-001" />
+              </OrderList>
+            </Mini>
+            """);
+
+        return root;
+    }
+
+    private static string CreateTempWorkspaceFromSamples()
+    {
+        return TestWorkspaceFactory.CreateTempWorkspaceFromCanonicalSample();
+    }
+
+    private static void WriteXmlWorkspaceDescriptor(string workspaceRoot)
+    {
+        WorkspaceMetaFile.WriteXml(workspaceRoot);
+    }
+
+    private static async Task<string> CreateTempCanonicalWorkspaceFromSamplesAsync()
+    {
+        return await TestWorkspaceFactory.CreateTempCanonicalWorkspaceFromCanonicalSampleAsync().ConfigureAwait(false);
+    }
+
+    private static void DeleteDirectorySafe(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
+        }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(directory))
+        {
+            if (File.Exists(Path.Combine(directory, "Metadata.Framework.sln")))
+            {
+                return directory;
+            }
+
+            var parent = Directory.GetParent(directory);
+            if (parent == null)
+            {
+                break;
+            }
+
+            directory = parent.FullName;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root from test base directory.");
+    }
+
+    private static string ExtractDiffWorkspacePath(string output)
+    {
+        var diffPathMatch = Regex.Match(output, @"(?m)^DiffWorkspace:\s*(.+)$");
+        Assert.True(diffPathMatch.Success, $"Expected diff workspace path in output:{Environment.NewLine}{output}");
+        return diffPathMatch.Groups[1].Value.Trim();
+    }
+
+    private static string ExtractUsageClause(string output)
+    {
+        var usageMatch = Regex.Match(output, @"(?m)^Usage:\s*(?:\r?\n\s*)?(meta .+)$");
+        Assert.True(usageMatch.Success, $"Expected usage clause in output:{Environment.NewLine}{output}");
+        return $"Usage: {usageMatch.Groups[1].Value.Trim()}";
+    }
+
+    private static string ReadMetaCliSurface(string repositoryRoot)
+    {
+        var instancesDirectory = Path.Combine(repositoryRoot, "Meta", "Cli", "meta.MetaCli", "instances");
+        return string.Join(
+            Environment.NewLine,
+            Directory
+                .EnumerateFiles(instancesDirectory, "*.xml")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
+    }
+}
+
+
+
+
+
+
+
+
