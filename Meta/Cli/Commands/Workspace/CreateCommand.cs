@@ -1,3 +1,5 @@
+using Meta.Operations.Domain;
+
 internal sealed partial class CliRuntime
 {
     async Task<int> CreateWorkspaceAsync(
@@ -13,9 +15,15 @@ internal sealed partial class CliRuntime
                     "Error: --with-instances requires --source-workspace.");
             }
 
+            var modelName = RequiredValue("name").Trim();
+            if (!MetaName.TryValidate(modelName, out var nameError))
+            {
+                return PrintArgumentError($"Error: --name is invalid. {nameError}");
+            }
+
             var model = new GenericModel
             {
-                Name = "MetadataModel",
+                Name = modelName,
             };
             var emptyInstance = new GenericInstance
             {

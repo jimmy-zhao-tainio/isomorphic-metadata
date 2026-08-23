@@ -1781,7 +1781,7 @@ public sealed class SqlXmlIsomorphicRoundTripTests
         }
     }
 
-    private static async Task<string?> ResolveSqlTestConnectionStringAsync()
+    internal static async Task<string?> ResolveSqlTestConnectionStringAsync()
     {
         var candidates = new List<string>();
         var envOverride = Environment.GetEnvironmentVariable("Meta_SQL_TEST_CONNECTION");
@@ -2156,7 +2156,7 @@ public sealed class SqlXmlIsomorphicRoundTripTests
         return new InMemoryWorkspace(model, instance);
     }
 
-    private static async Task DropDatabaseIfExistsAsync(string baseConnectionString, string databaseName)
+    internal static async Task DropDatabaseIfExistsAsync(string baseConnectionString, string databaseName)
     {
         if (string.IsNullOrWhiteSpace(baseConnectionString) || string.IsNullOrWhiteSpace(databaseName))
         {

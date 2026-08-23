@@ -22,6 +22,9 @@
     <OptionToken Id="token-create-csharp" OptionId="option-create-csharp">
       <Token>--csharp</Token>
     </OptionToken>
+    <OptionToken Id="token-create-name" OptionId="option-create-name">
+      <Token>--name</Token>
+    </OptionToken>
     <OptionToken Id="token-create-source-workspace" OptionId="option-create-source-workspace">
       <Token>--source-workspace</Token>
     </OptionToken>

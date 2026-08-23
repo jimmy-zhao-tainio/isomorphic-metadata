@@ -7,6 +7,11 @@
       <IsRequired>true</IsRequired>
       <Name>output</Name>
     </ParameterGroup>
+    <ParameterGroup Id="group-create-source" ExecutableCommandId="exec-create">
+      <Description>Choose a new model name or a source workspace to copy.</Description>
+      <IsRequired>true</IsRequired>
+      <Name>source</Name>
+    </ParameterGroup>
     <ParameterGroup Id="group-import-csv-target" ExecutableCommandId="exec-import-csv">
       <Description>Choose one workspace target.</Description>
       <IsRequired>false</IsRequired>

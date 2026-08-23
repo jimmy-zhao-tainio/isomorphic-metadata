@@ -30,6 +30,10 @@
       <IsRequired>false</IsRequired>
       <Name>csharp</Name>
     </Parameter>
+    <Parameter Id="param-create-name" ValueShapeId="shape-text">
+      <Description>Name of the new model.</Description>
+      <Name>name</Name>
+    </Parameter>
     <Parameter Id="param-create-source-workspace" ValueShapeId="shape-path">
       <Description>Source workspace to copy.</Description>
       <IsRepeatable>false</IsRepeatable>

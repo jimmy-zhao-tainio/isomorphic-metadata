@@ -2,6 +2,8 @@
 <MetaCli>
   <ParameterGroupMemberList>
     <ParameterGroupMember Id="member-create-csharp" ParameterGroupId="group-create-output" ParameterId="param-create-csharp" PreviousMemberId="member-create-xml" />
+    <ParameterGroupMember Id="member-create-name" ParameterGroupId="group-create-source" ParameterId="param-create-name" />
+    <ParameterGroupMember Id="member-create-source-workspace" ParameterGroupId="group-create-source" ParameterId="param-create-source-workspace" PreviousMemberId="member-create-name" />
     <ParameterGroupMember Id="member-create-sql" ParameterGroupId="group-create-output" ParameterId="param-create-sql" PreviousMemberId="member-create-csharp" />
     <ParameterGroupMember Id="member-create-xml" ParameterGroupId="group-create-output" ParameterId="param-create-xml" />
     <ParameterGroupMember Id="member-import-csv-target-first" ParameterGroupId="group-import-csv-target" ParameterId="param-workspace" />
