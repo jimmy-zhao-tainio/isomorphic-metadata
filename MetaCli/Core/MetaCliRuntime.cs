@@ -174,7 +174,8 @@ public sealed class MetaCliRuntime<TModel>
         ArgumentException.ThrowIfNullOrWhiteSpace(executableCommandId);
         ArgumentNullException.ThrowIfNull(handler);
         handlers[executableCommandId.Trim()] = HandlerBinding
-            .WithWorkspace(handler) with { PersistModelChanges = false };
+            .WithWorkspace(handler) with
+        { PersistModelChanges = false };
         return this;
     }
 
@@ -185,7 +186,8 @@ public sealed class MetaCliRuntime<TModel>
         ArgumentException.ThrowIfNullOrWhiteSpace(executableCommandId);
         ArgumentNullException.ThrowIfNull(handler);
         handlers[executableCommandId.Trim()] = HandlerBinding
-            .WithWorkspace(handler) with { PersistModelChanges = false };
+            .WithWorkspace(handler) with
+        { PersistModelChanges = false };
         return this;
     }
 
@@ -275,9 +277,9 @@ public sealed class MetaCliRuntime<TModel>
         ArgumentNullException.ThrowIfNull(handler);
         handlers[executableCommandId.Trim()] = HandlerBinding
             .WithWorkspaces(workspaces, handler) with
-            {
-                PrimaryWorkspaceOptional = true,
-            };
+        {
+            PrimaryWorkspaceOptional = true,
+        };
         return this;
     }
 

@@ -582,6 +582,16 @@ public sealed class CSharpWorkspaceOwnershipTests
         Assert.Empty(errors);
     }
 
+    [Fact]
+    public void GeneratedSourceUsesFormatterCompatibleNullForgivingOperators()
+    {
+        var source = Assert.Single(
+            MetaCSharpWriter.Write(DemoState()).Sources.Values);
+
+        Assert.Contains(" = null!;", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(" = null !;", source, StringComparison.Ordinal);
+    }
+
     private static InMemoryWorkspace DemoState()
     {
         var state = WorkspaceTestData.BuildState();

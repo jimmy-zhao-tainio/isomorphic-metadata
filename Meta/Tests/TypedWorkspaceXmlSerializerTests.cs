@@ -311,7 +311,7 @@ public sealed class TypedWorkspaceXmlSerializerTests
             var exception = Assert.Throws<InvalidDataException>(
                 () => TypedWorkspaceXmlSerializer.Load<TestTypedModel>(workspacePath));
 
-        Assert.Contains("workspace.meta", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("workspace.meta", exception.Message, StringComparison.Ordinal);
             Assert.Empty(Directory.EnumerateFileSystemEntries(workspacePath));
         }
         finally

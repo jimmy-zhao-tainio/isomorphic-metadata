@@ -4,6 +4,7 @@ using Meta.Operations;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Meta.Surfaces.CSharp;
 
@@ -43,7 +44,10 @@ public static class MetaCSharpWriter
                 string.Join(" | ", syntaxErrors));
         }
 
-        var normalizedSource = tree.GetRoot().NormalizeWhitespace().ToFullString();
+        var normalizedRoot = tree.GetRoot().NormalizeWhitespace();
+        var normalizedSource = new FormatterCompatibleWhitespaceRewriter()
+            .Visit(normalizedRoot)!
+            .ToFullString();
         EnsureCompiles(normalizedSource);
 
         return new MetaCSharp(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -351,6 +355,24 @@ public static class MetaCSharpWriter
             throw new InvalidOperationException(
                 "C# writer produced code that does not compile. " +
                 string.Join(" | ", errors));
+        }
+    }
+
+    private sealed class FormatterCompatibleWhitespaceRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitPostfixUnaryExpression(
+            PostfixUnaryExpressionSyntax node)
+        {
+            var visited = (PostfixUnaryExpressionSyntax)base
+                .VisitPostfixUnaryExpression(node)!;
+            if (!visited.IsKind(SyntaxKind.SuppressNullableWarningExpression))
+            {
+                return visited;
+            }
+
+            return visited
+                .WithOperand(visited.Operand.WithTrailingTrivia())
+                .WithOperatorToken(visited.OperatorToken.WithLeadingTrivia());
         }
     }
 }

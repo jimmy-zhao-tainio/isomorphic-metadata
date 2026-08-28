@@ -591,10 +591,10 @@ public sealed class MetaDocsValidationService
             yield break;
         }
 
-            foreach (var command in MetaDocsOrdering.ByPrevious(
-                     children.Where(subject => MetaDocsVocabulary.IsSubjectType(subject, "CliCommand")),
-                     static subject => subject.PreviousSubject,
-                     static subject => subject.DisplayName))
+        foreach (var command in MetaDocsOrdering.ByPrevious(
+                 children.Where(subject => MetaDocsVocabulary.IsSubjectType(subject, "CliCommand")),
+                 static subject => subject.PreviousSubject,
+                 static subject => subject.DisplayName))
         {
             yield return command;
             foreach (var descendant in CliCommandDescendants(activeChildrenByParent, command.Id))
